@@ -35,90 +35,92 @@ struct TimeLapseRecorderView: View {
                 VStack(spacing: 24) {
                     Spacer()
 
-                    // Camera preview
-                    ZStack {
-                        CameraPreview(session: recorder.captureSession)
-                            .frame(height: 600)
-                            .cornerRadius(AppTheme.cornerRadius)
+                    // Camera preview (only shown when not finished recording)
+                    if recorder.recordedVideoURL == nil {
+                        ZStack {
+                            CameraPreview(session: recorder.captureSession)
+                                .frame(height: 600)
+                                .cornerRadius(AppTheme.cornerRadius)
 
-                        // Camera flip button (shown when not recording)
-                        if !recorder.isRecording && recorder.recordedVideoURL == nil {
-                            VStack {
-                                HStack {
-                                    Spacer()
+                            // Camera flip button (shown when not recording)
+                            if !recorder.isRecording {
+                                VStack {
+                                    HStack {
+                                        Spacer()
 
-                                    Button {
-                                        recorder.switchCamera()
-                                    } label: {
-                                        Image(systemName: "arrow.triangle.2.circlepath.camera")
-                                            .font(.title2)
-                                            .foregroundColor(.white)
-                                            .padding(12)
-                                            .background(Color.black.opacity(0.5))
-                                            .clipShape(Circle())
-                                    }
-                                }
-                                .padding()
-
-                                Spacer()
-                            }
-                        }
-
-                        // Recording overlay
-                        if recorder.isRecording {
-                            VStack {
-                                HStack {
-                                    // Recording indicator with capture rate
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        HStack(spacing: 8) {
-                                            Circle()
-                                                .fill(Color.red)
-                                                .frame(width: 12, height: 12)
-
-                                            Text("TIMELAPSE")
-                                                .font(AppTheme.headlineFont)
+                                        Button {
+                                            recorder.switchCamera()
+                                        } label: {
+                                            Image(systemName: "arrow.triangle.2.circlepath.camera")
+                                                .font(.title2)
                                                 .foregroundColor(.white)
-                                                .shadow(color: .black, radius: 2)
+                                                .padding(12)
+                                                .background(Color.black.opacity(0.5))
+                                                .clipShape(Circle())
                                         }
-
-                                        Text(recorder.currentCaptureRate)
-                                            .font(.system(size: 12, weight: .medium, design: .rounded))
-                                            .foregroundColor(.white.opacity(0.8))
                                     }
                                     .padding()
-                                    .background(Color.black.opacity(0.5))
-                                    .cornerRadius(8)
 
                                     Spacer()
+                                }
+                            }
 
-                                    // Duration + Frame count
-                                    VStack(alignment: .trailing, spacing: 4) {
-                                        Text(formattedDuration)
-                                            .font(.system(size: 20, weight: .bold, design: .rounded))
-                                            .foregroundColor(isApproachingLimit ? .orange : .white)
+                            // Recording overlay
+                            if recorder.isRecording {
+                                VStack {
+                                    HStack {
+                                        // Recording indicator with capture rate
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            HStack(spacing: 8) {
+                                                Circle()
+                                                    .fill(Color.red)
+                                                    .frame(width: 12, height: 12)
 
-                                        Text("\(recorder.frameCount) frames")
-                                            .font(.system(size: 12, weight: .medium, design: .rounded))
-                                            .foregroundColor(.white.opacity(0.8))
+                                                Text("TIMELAPSE")
+                                                    .font(AppTheme.headlineFont)
+                                                    .foregroundColor(.white)
+                                                    .shadow(color: .black, radius: 2)
+                                            }
 
-                                        if isApproachingLimit {
-                                            Text("Max 4h")
-                                                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                                .foregroundColor(.orange)
+                                            Text(recorder.currentCaptureRate)
+                                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                                .foregroundColor(.white.opacity(0.8))
                                         }
+                                        .padding()
+                                        .background(Color.black.opacity(0.5))
+                                        .cornerRadius(8)
+
+                                        Spacer()
+
+                                        // Duration + Frame count
+                                        VStack(alignment: .trailing, spacing: 4) {
+                                            Text(formattedDuration)
+                                                .font(.system(size: 20, weight: .bold, design: .rounded))
+                                                .foregroundColor(isApproachingLimit ? .orange : .white)
+
+                                            Text("\(recorder.frameCount) frames")
+                                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                                .foregroundColor(.white.opacity(0.8))
+
+                                            if isApproachingLimit {
+                                                Text("Max 4h")
+                                                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                                    .foregroundColor(.orange)
+                                            }
+                                        }
+                                        .padding()
+                                        .background(Color.black.opacity(0.5))
+                                        .cornerRadius(8)
                                     }
                                     .padding()
-                                    .background(Color.black.opacity(0.5))
-                                    .cornerRadius(8)
-                                }
-                                .padding()
 
-                                Spacer()
+                                    Spacer()
+                                }
                             }
                         }
+                        .playfulCard()
+                        .padding(.horizontal)
                     }
-                    .playfulCard()
-                    .padding(.horizontal)
 
                     Spacer()
 
