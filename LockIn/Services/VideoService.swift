@@ -149,20 +149,30 @@ class VideoService {
 
     func generateThumbnail(from url: URL) async throws -> UIImage {
         let asset = AVURLAsset(url: url)
+
+        // For remote URLs, ensure the asset is loaded
+        try await asset.load(.duration)
+
         let imageGenerator = AVAssetImageGenerator(asset: asset)
         imageGenerator.appliesPreferredTrackTransform = true
+        imageGenerator.requestedTimeToleranceBefore = .zero
+        imageGenerator.requestedTimeToleranceAfter = .zero
 
-        // Generate thumbnail at 1 second into the video
-        let time = CMTime(seconds: 1, preferredTimescale: 60)
+        // Generate thumbnail at 1 second into the video (or at start if video is shorter)
+        let duration = try await asset.load(.duration)
+        let thumbnailTime = min(CMTime(seconds: 1, preferredTimescale: 60), duration)
 
         // Use continuation for iOS 17 compatibility
         return try await withCheckedThrowingContinuation { continuation in
-            imageGenerator.generateCGImageAsynchronously(for: time) { cgImage, actualTime, error in
+            imageGenerator.generateCGImageAsynchronously(for: thumbnailTime) { cgImage, actualTime, error in
                 if let error = error {
+                    print("❌ Thumbnail generation error: \(error)")
                     continuation.resume(throwing: error)
                 } else if let cgImage = cgImage {
+                    print("✅ Generated thumbnail for video")
                     continuation.resume(returning: UIImage(cgImage: cgImage))
                 } else {
+                    print("❌ No CGImage returned")
                     continuation.resume(throwing: VideoServiceError.thumbnailGenerationFailed)
                 }
             }

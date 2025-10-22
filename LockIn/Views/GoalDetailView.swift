@@ -305,6 +305,8 @@ struct StudySessionCard: View {
     let session: StudySession
     let subtasks: [Subtask]
 
+    @State private var thumbnail: UIImage?
+
     private var subtaskName: String? {
         guard let subtaskId = session.subtaskId else { return nil }
         return subtasks.first(where: { $0.id == subtaskId })?.title
@@ -312,15 +314,33 @@ struct StudySessionCard: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            // Video thumbnail placeholder
+            // Video thumbnail
             ZStack {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(AppTheme.primaryGradient)
                     .frame(width: 80, height: 60)
 
+                if let thumbnail = thumbnail {
+                    Image(uiImage: thumbnail)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 80, height: 60)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                } else {
+                    ProgressView()
+                        .tint(.white)
+                }
+
+                // Play button overlay
                 Image(systemName: "play.circle.fill")
                     .font(.title)
                     .foregroundColor(.white)
+                    .shadow(color: .black.opacity(0.5), radius: 4)
+            }
+            .onAppear {
+                Task {
+                    await loadThumbnail()
+                }
             }
 
             // Session info
@@ -363,6 +383,24 @@ struct StudySessionCard: View {
         .padding()
         .playfulCard()
         .padding(.horizontal)
+    }
+
+    private func loadThumbnail() async {
+        do {
+            // Get video URL from Convex
+            guard let videoUrlString = try await ConvexService.shared.getVideoUrl(storageId: session.videoStorageId),
+                  let videoUrl = URL(string: videoUrlString) else {
+                return
+            }
+
+            // Generate thumbnail
+            let generatedThumbnail = try await VideoService.shared.generateThumbnail(from: videoUrl)
+            await MainActor.run {
+                self.thumbnail = generatedThumbnail
+            }
+        } catch {
+            print("❌ Failed to generate thumbnail: \(error)")
+        }
     }
 }
 
