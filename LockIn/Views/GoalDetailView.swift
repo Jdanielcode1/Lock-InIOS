@@ -12,7 +12,6 @@ struct GoalDetailView: View {
     let goal: Goal
 
     @StateObject private var viewModel: GoalDetailViewModel
-    @State private var showingVideoRecorder = false
     @State private var showingVideoPicker = false
     @State private var showingTimeLapseRecorder = false
     @State private var showingAddSubtask = false
@@ -97,47 +96,27 @@ struct GoalDetailView: View {
 
                     // Add Study Session Buttons
                     VStack(spacing: 12) {
-                        HStack(spacing: 12) {
-                            // Record Button
-                            Button {
-                                showingVideoRecorder = true
-                            } label: {
-                                VStack(spacing: 8) {
-                                    Image(systemName: "video.fill")
-                                        .font(.title2)
-                                    Text("Record")
-                                        .font(AppTheme.captionFont)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding()
+                        // Timelapse Button
+                        Button {
+                            showingTimeLapseRecorder = true
+                        } label: {
+                            VStack(spacing: 8) {
+                                Image(systemName: "timer")
+                                    .font(.title2)
+                                Text("Timelapse")
+                                    .font(AppTheme.captionFont)
                             }
-                            .background(AppTheme.primaryGradient)
-                            .foregroundColor(.white)
-                            .cornerRadius(AppTheme.smallCornerRadius)
-                            .shadow(color: AppTheme.primaryPurple.opacity(0.3), radius: 8, x: 0, y: 4)
-
-                            // Timelapse Button
-                            Button {
-                                showingTimeLapseRecorder = true
-                            } label: {
-                                VStack(spacing: 8) {
-                                    Image(systemName: "timer")
-                                        .font(.title2)
-                                    Text("Timelapse")
-                                        .font(AppTheme.captionFont)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                            }
-                            .background(LinearGradient(
-                                colors: [AppTheme.primaryYellow, AppTheme.primaryRed],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ))
-                            .foregroundColor(.white)
-                            .cornerRadius(AppTheme.smallCornerRadius)
-                            .shadow(color: AppTheme.primaryYellow.opacity(0.3), radius: 8, x: 0, y: 4)
+                            .frame(maxWidth: .infinity)
+                            .padding()
                         }
+                        .background(LinearGradient(
+                            colors: [AppTheme.primaryYellow, AppTheme.primaryRed],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ))
+                        .foregroundColor(.white)
+                        .cornerRadius(AppTheme.smallCornerRadius)
+                        .shadow(color: AppTheme.primaryYellow.opacity(0.3), radius: 8, x: 0, y: 4)
 
                         // Upload Button
                         Button {
@@ -205,7 +184,7 @@ struct GoalDetailView: View {
                             ForEach(viewModel.subtasks) { subtask in
                                 Button {
                                     selectedSubtask = subtask
-                                    showingVideoRecorder = true
+                                    showingTimeLapseRecorder = true
                                 } label: {
                                     SubtaskCard(subtask: subtask)
                                 }
@@ -245,9 +224,6 @@ struct GoalDetailView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showingVideoRecorder) {
-            CameraRecorderView(goalId: goal.id, subtaskId: selectedSubtask?.id)
-        }
         .sheet(isPresented: $showingTimeLapseRecorder) {
             TimeLapseRecorderView(goalId: goal.id, subtaskId: selectedSubtask?.id)
         }
@@ -256,11 +232,6 @@ struct GoalDetailView: View {
         }
         .sheet(isPresented: $showingAddSubtask) {
             AddSubtaskSheet(goalId: goal.id)
-        }
-        .onChange(of: showingVideoRecorder) { _, isShowing in
-            if !isShowing {
-                selectedSubtask = nil
-            }
         }
         .onChange(of: showingTimeLapseRecorder) { _, isShowing in
             if !isShowing {
