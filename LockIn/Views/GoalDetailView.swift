@@ -14,6 +14,7 @@ struct GoalDetailView: View {
     @StateObject private var viewModel: GoalDetailViewModel
     @State private var showingVideoRecorder = false
     @State private var showingVideoPicker = false
+    @State private var showingTimeLapseRecorder = false
     @State private var showingAddSubtask = false
     @State private var selectedSubtask: Subtask?
 
@@ -62,12 +63,12 @@ struct GoalDetailView: View {
                         VStack(spacing: 8) {
                             Text(goal.title)
                                 .font(AppTheme.titleFont)
-                                .foregroundColor(AppTheme.textPrimary)
+                                .foregroundColor(.gray)  // ← Changed to gray
                                 .multilineTextAlignment(.center)
 
                             Text(goal.description)
                                 .font(AppTheme.bodyFont)
-                                .foregroundColor(AppTheme.textSecondary)
+                                .foregroundColor(.gray)  // ← Changed to gray
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal)
                         }
@@ -95,24 +96,48 @@ struct GoalDetailView: View {
                     .padding(.horizontal)
 
                     // Add Study Session Buttons
-                    HStack(spacing: 12) {
-                        // Record Button
-                        Button {
-                            showingVideoRecorder = true
-                        } label: {
-                            VStack(spacing: 8) {
-                                Image(systemName: "video.fill")
-                                    .font(.title2)
-                                Text("Record")
-                                    .font(AppTheme.captionFont)
+                    VStack(spacing: 12) {
+                        HStack(spacing: 12) {
+                            // Record Button
+                            Button {
+                                showingVideoRecorder = true
+                            } label: {
+                                VStack(spacing: 8) {
+                                    Image(systemName: "video.fill")
+                                        .font(.title2)
+                                    Text("Record")
+                                        .font(AppTheme.captionFont)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding()
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding()
+                            .background(AppTheme.primaryGradient)
+                            .foregroundColor(.white)
+                            .cornerRadius(AppTheme.smallCornerRadius)
+                            .shadow(color: AppTheme.primaryPurple.opacity(0.3), radius: 8, x: 0, y: 4)
+
+                            // Timelapse Button
+                            Button {
+                                showingTimeLapseRecorder = true
+                            } label: {
+                                VStack(spacing: 8) {
+                                    Image(systemName: "timer")
+                                        .font(.title2)
+                                    Text("Timelapse")
+                                        .font(AppTheme.captionFont)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                            }
+                            .background(LinearGradient(
+                                colors: [AppTheme.primaryYellow, AppTheme.primaryRed],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ))
+                            .foregroundColor(.white)
+                            .cornerRadius(AppTheme.smallCornerRadius)
+                            .shadow(color: AppTheme.primaryYellow.opacity(0.3), radius: 8, x: 0, y: 4)
                         }
-                        .background(AppTheme.primaryGradient)
-                        .foregroundColor(.white)
-                        .cornerRadius(AppTheme.smallCornerRadius)
-                        .shadow(color: AppTheme.primaryPurple.opacity(0.3), radius: 8, x: 0, y: 4)
 
                         // Upload Button
                         Button {
@@ -121,7 +146,7 @@ struct GoalDetailView: View {
                             VStack(spacing: 8) {
                                 Image(systemName: "square.and.arrow.up")
                                     .font(.title2)
-                                Text("Upload")
+                                Text("Upload Video")
                                     .font(AppTheme.captionFont)
                             }
                             .frame(maxWidth: .infinity)
@@ -223,18 +248,26 @@ struct GoalDetailView: View {
         .sheet(isPresented: $showingVideoRecorder) {
             CameraRecorderView(goalId: goal.id, subtaskId: selectedSubtask?.id)
         }
+        .sheet(isPresented: $showingTimeLapseRecorder) {
+            TimeLapseRecorderView(goalId: goal.id, subtaskId: selectedSubtask?.id)
+        }
         .sheet(isPresented: $showingVideoPicker) {
             VideoRecorderView(goalId: goal.id, subtaskId: selectedSubtask?.id)
         }
         .sheet(isPresented: $showingAddSubtask) {
             AddSubtaskSheet(goalId: goal.id)
         }
-        .onChange(of: showingVideoRecorder) { isShowing in
+        .onChange(of: showingVideoRecorder) { _, isShowing in
             if !isShowing {
                 selectedSubtask = nil
             }
         }
-        .onChange(of: showingVideoPicker) { isShowing in
+        .onChange(of: showingTimeLapseRecorder) { _, isShowing in
+            if !isShowing {
+                selectedSubtask = nil
+            }
+        }
+        .onChange(of: showingVideoPicker) { _, isShowing in
             if !isShowing {
                 selectedSubtask = nil
             }

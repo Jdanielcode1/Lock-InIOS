@@ -37,30 +37,10 @@ struct VideoPlayerView: View {
                     // Custom video player view
                     VideoPlayerRepresentable(player: player)
                         .ignoresSafeArea()
-
-                    // Overlay UI
-                    VStack {
-                        HStack {
-                            Spacer()
-
-                            // Speed indicator
-                            Text("6x")
-                                .font(.system(size: 14, weight: .bold, design: .rounded))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Color.black.opacity(0.6))
-                                .cornerRadius(8)
-                                .padding()
-                        }
-                        Spacer()
-                    }
                 }
                 .onAppear {
-                    // Play at 6x speed for time-lapse effect
                     player.play()
-                    player.rate = 6.0
-                    print("🎬 Started playback at 6x speed")
+                    print("🎬 Started playback")
                 }
                 .onDisappear {
                     player.pause()
@@ -167,8 +147,10 @@ class VideoPlayerViewModel: ObservableObject {
                             print("✅ Player ready to play!")
                             print("📹 Video size: \(item.presentationSize)")
                             print("⏱️ Video duration: \(CMTimeGetSeconds(item.duration)) seconds")
-                            if let tracks = item.asset.tracks(withMediaType: .video).first {
-                                print("🎬 Video track: \(tracks)")
+                            Task {
+                                if let tracks = try? await item.asset.loadTracks(withMediaType: .video).first {
+                                    print("🎬 Video track: \(tracks)")
+                                }
                             }
                         case .failed:
                             print("❌ Player failed!")

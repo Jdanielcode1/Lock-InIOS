@@ -26,6 +26,7 @@ class VideoService {
         let seconds = CMTimeGetSeconds(duration)
         let minutes = seconds / 60.0
 
+        print("⏱️ Video duration: \(minutes) min")
         return minutes
     }
 
@@ -120,7 +121,7 @@ class VideoService {
 
         // Use continuation for iOS 17 compatibility
         return try await withCheckedThrowingContinuation { continuation in
-            exportSession.exportAsynchronously { [exportSession] in
+            exportSession.exportAsynchronously {
                 print("📊 Export status: \(exportSession.status.rawValue)")
 
                 switch exportSession.status {
