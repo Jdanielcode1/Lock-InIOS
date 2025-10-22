@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		DC08D6182EA6D25B0030C1D4 /* ConvexMobile in Frameworks */ = {isa = PBXBuildFile; productRef = DC08D6172EA6D25B0030C1D4 /* ConvexMobile */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		DC3054942EA6CA6700C66B51 /* LockIn.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LockIn.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DC08D6182EA6D25B0030C1D4 /* ConvexMobile in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +70,7 @@
 			);
 			name = LockIn;
 			packageProductDependencies = (
+				DC08D6172EA6D25B0030C1D4 /* ConvexMobile */,
 			);
 			productName = LockIn;
 			productReference = DC3054942EA6CA6700C66B51 /* LockIn.app */;
@@ -94,6 +100,9 @@
 			);
 			mainGroup = DC30548B2EA6CA6700C66B51;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				DC08D6162EA6D25B0030C1D4 /* XCRemoteSwiftPackageReference "convex-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DC3054952EA6CA6700C66B51 /* Products */;
 			projectDirPath = "";
@@ -255,11 +264,15 @@
 				DEVELOPMENT_TEAM = 4YQKZWWFP6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Record time-lapse videos of your study sessions to track your progress";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Record audio with your study session videos";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save and import study session videos";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -284,11 +297,15 @@
 				DEVELOPMENT_TEAM = 4YQKZWWFP6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Record time-lapse videos of your study sessions to track your progress";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Record audio with your study session videos";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save and import study session videos";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -324,6 +341,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		DC08D6162EA6D25B0030C1D4 /* XCRemoteSwiftPackageReference "convex-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/get-convex/convex-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.5.6;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		DC08D6172EA6D25B0030C1D4 /* ConvexMobile */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC08D6162EA6D25B0030C1D4 /* XCRemoteSwiftPackageReference "convex-swift" */;
+			productName = ConvexMobile;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = DC30548C2EA6CA6700C66B51 /* Project object */;
 }
