@@ -21,11 +21,13 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     private var currentVideoInput: AVCaptureDeviceInput?
     private var currentCameraPosition: AVCaptureDevice.Position = .front
 
-    var capturedFrames: [CGImage] = []
+    var capturedFrameURLs: [URL] = []
+    private var frameStorageDirectory: URL?
     private var startTime: Date?
     private var lastCaptureTime: Date?
     private var frameInterval: TimeInterval = 0.5 // Dynamic: starts at 2 fps
     private let outputFPS: Int32 = 30 // Playback at 30 fps
+    private let maxRecordingDuration: TimeInterval = 4 * 60 * 60 // 4 hours in seconds
 
     private var recordingTimer: Timer?
     private let videoQueue = DispatchQueue(label: "com.lockin.timelapse.video")
@@ -79,7 +81,7 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
     func startRecording() {
         isRecording = true
-        capturedFrames.removeAll()
+        capturedFrameURLs.removeAll()
         frameCount = 0
         recordingDuration = 0
         startTime = Date()
@@ -87,16 +89,31 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         frameInterval = 0.5 // Start at 2 fps
         currentCaptureRate = "2 fps"
 
+        // Create temporary directory for frame storage
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+
+        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        frameStorageDirectory = tempDir
+
+        print("📁 Created frame storage directory: \(tempDir.path)")
+
         // Start timer to update duration and frame interval
         recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self = self, let start = self.startTime else { return }
                 self.recordingDuration = Date().timeIntervalSince(start)
                 self.updateFrameInterval()
+
+                // Check if max duration reached (4 hours)
+                if self.recordingDuration >= self.maxRecordingDuration {
+                    print("⏰ Maximum recording duration reached (4 hours). Stopping recording...")
+                    self.stopRecording()
+                }
             }
         }
 
-        print("🎬 Started timelapse recording at 2 fps")
+        print("🎬 Started timelapse recording at 2 fps (max 4 hours)")
     }
 
     private func updateFrameInterval() {
@@ -136,7 +153,7 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     }
 
     private func createVideo() async {
-        guard !capturedFrames.isEmpty else {
+        guard !capturedFrameURLs.isEmpty else {
             print("❌ No frames captured")
             return
         }
@@ -145,24 +162,35 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("mov")
 
-        print("🎥 Creating timelapse video from \(capturedFrames.count) frames at \(outputFPS) fps")
+        print("🎥 Creating timelapse video from \(capturedFrameURLs.count) frames at \(outputFPS) fps")
 
         do {
-            try await createVideoFromFrames(frames: capturedFrames, outputURL: outputURL, fps: outputFPS)
+            try await createVideoFromFrames(frameURLs: capturedFrameURLs, outputURL: outputURL, fps: outputFPS)
             await MainActor.run {
                 self.recordedVideoURL = outputURL
             }
             print("✅ Timelapse video created at: \(outputURL)")
+
+            // Clean up temporary frame files
+            if let storageDir = frameStorageDirectory {
+                try? FileManager.default.removeItem(at: storageDir)
+                print("🗑️ Cleaned up frame storage directory")
+            }
         } catch {
             print("❌ Failed to create video: \(error)")
         }
     }
 
-    nonisolated private func createVideoFromFrames(frames: [CGImage], outputURL: URL, fps: Int32) async throws {
-        guard let firstFrame = frames.first else { return }
+    nonisolated private func createVideoFromFrames(frameURLs: [URL], outputURL: URL, fps: Int32) async throws {
+        // Load first frame to get dimensions
+        guard let firstFrameData = try? Data(contentsOf: frameURLs[0]),
+              let firstImage = UIImage(data: firstFrameData),
+              let firstCGImage = firstImage.cgImage else {
+            throw NSError(domain: "TimeLapseRecorder", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to load first frame"])
+        }
 
-        let width = firstFrame.width
-        let height = firstFrame.height
+        let width = firstCGImage.width
+        let height = firstCGImage.height
 
         let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mov)
 
@@ -178,6 +206,10 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
         let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
         writerInput.expectsMediaDataInRealTime = false
+
+        // For portrait orientation (phone held vertically), apply 90-degree clockwise rotation
+        // iPhone captures landscape natively, so we rotate to display as portrait
+        writerInput.transform = CGAffineTransform(rotationAngle: .pi / 2)
 
         let sourceBufferAttributes: [String: Any] = [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32ARGB,
@@ -204,7 +236,7 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
             writerInput.requestMediaDataWhenReady(on: queue) {
                 while writerInput.isReadyForMoreMediaData {
-                    if frameIndex >= frames.count {
+                    if frameIndex >= frameURLs.count {
                         writerInput.markAsFinished()
                         writer.finishWriting {
                             continuation.resume()
@@ -214,7 +246,11 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
                     let presentationTime = CMTimeMultiply(frameDuration, multiplier: Int32(frameIndex))
 
-                    if let pixelBuffer = TimeLapseRecorder.createPixelBuffer(from: frames[Int(frameIndex)], width: width, height: height) {
+                    // Load frame from disk
+                    if let frameData = try? Data(contentsOf: frameURLs[Int(frameIndex)]),
+                       let frameImage = UIImage(data: frameData),
+                       let cgImage = frameImage.cgImage,
+                       let pixelBuffer = TimeLapseRecorder.createPixelBuffer(from: cgImage, width: width, height: height) {
                         adaptor.append(pixelBuffer, withPresentationTime: presentationTime)
                     }
 
@@ -290,18 +326,31 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     }
 
     func clearFrames() {
-        capturedFrames.removeAll()
+        capturedFrameURLs.removeAll()
         frameCount = 0
         recordedVideoURL = nil
+
+        // Clean up temporary frame storage
+        if let storageDir = frameStorageDirectory {
+            try? FileManager.default.removeItem(at: storageDir)
+            frameStorageDirectory = nil
+        }
     }
 
     func cleanup() {
         stopRecording()
         captureSession.stopRunning()
-        capturedFrames.removeAll()
+        capturedFrameURLs.removeAll()
 
+        // Clean up recorded video
         if let url = recordedVideoURL {
             try? FileManager.default.removeItem(at: url)
+        }
+
+        // Clean up temporary frame storage
+        if let storageDir = frameStorageDirectory {
+            try? FileManager.default.removeItem(at: storageDir)
+            frameStorageDirectory = nil
         }
     }
 }
@@ -315,6 +364,7 @@ extension TimeLapseRecorder: AVCaptureVideoDataOutputSampleBufferDelegate {
     ) {
         Task { @MainActor in
             guard isRecording else { return }
+            guard let storageDir = frameStorageDirectory else { return }
 
             let now = Date()
 
@@ -343,11 +393,18 @@ extension TimeLapseRecorder: AVCaptureVideoDataOutputSampleBufferDelegate {
             let context = CIContext(options: [.useSoftwareRenderer: false])
             guard let cgImage = context.createCGImage(scaledImage, from: scaledImage.extent) else { return }
 
-            capturedFrames.append(cgImage)
-            frameCount = capturedFrames.count
+            // Save frame to disk as JPEG
+            let frameURL = storageDir.appendingPathComponent("frame_\(frameCount).jpg")
+            let uiImage = UIImage(cgImage: cgImage)
 
-            if frameCount % 10 == 0 {
-                print("📸 Captured \(frameCount) frames")
+            if let jpegData = uiImage.jpegData(compressionQuality: 0.8) {
+                try? jpegData.write(to: frameURL)
+                capturedFrameURLs.append(frameURL)
+                frameCount = capturedFrameURLs.count
+
+                if frameCount % 10 == 0 {
+                    print("📸 Captured \(frameCount) frames")
+                }
             }
         }
     }

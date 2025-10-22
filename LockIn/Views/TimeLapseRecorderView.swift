@@ -95,11 +95,17 @@ struct TimeLapseRecorderView: View {
                                     VStack(alignment: .trailing, spacing: 4) {
                                         Text(formattedDuration)
                                             .font(.system(size: 20, weight: .bold, design: .rounded))
-                                            .foregroundColor(.white)
+                                            .foregroundColor(isApproachingLimit ? .orange : .white)
 
                                         Text("\(recorder.frameCount) frames")
                                             .font(.system(size: 12, weight: .medium, design: .rounded))
                                             .foregroundColor(.white.opacity(0.8))
+
+                                        if isApproachingLimit {
+                                            Text("Max 4h")
+                                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                                .foregroundColor(.orange)
+                                        }
                                     }
                                     .padding()
                                     .background(Color.black.opacity(0.5))
@@ -158,9 +164,19 @@ struct TimeLapseRecorderView: View {
     }
 
     var formattedDuration: String {
-        let minutes = Int(recorder.recordingDuration) / 60
+        let hours = Int(recorder.recordingDuration) / 3600
+        let minutes = (Int(recorder.recordingDuration) % 3600) / 60
         let seconds = Int(recorder.recordingDuration) % 60
-        return String(format: "%02d:%02d", minutes, seconds)
+
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            return String(format: "%02d:%02d", minutes, seconds)
+        }
+    }
+
+    var isApproachingLimit: Bool {
+        recorder.recordingDuration >= 3.5 * 60 * 60 // 3.5 hours
     }
 
     var recordingButton: some View {
