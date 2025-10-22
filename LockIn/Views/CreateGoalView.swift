@@ -54,6 +54,7 @@ struct CreateGoalView: View {
 
                                 TextField("e.g., Learn Swift", text: $title)
                                     .textFieldStyle(PlayfulTextFieldStyle())
+                                    .foregroundColor(.black)
                             }
 
                             // Description field
@@ -64,6 +65,7 @@ struct CreateGoalView: View {
 
                                 TextField("What do you want to achieve?", text: $description, axis: .vertical)
                                     .textFieldStyle(PlayfulTextFieldStyle())
+                                    .foregroundColor(.black)
                                     .lineLimit(3...6)
                             }
 
@@ -76,6 +78,7 @@ struct CreateGoalView: View {
                                 HStack {
                                     TextField("30", text: $targetHours)
                                         .textFieldStyle(PlayfulTextFieldStyle())
+                                        .foregroundColor(.black)
                                         .keyboardType(.decimalPad)
 
                                     Text("hours")
@@ -144,6 +147,8 @@ struct CreateGoalView: View {
 struct PlayfulTextFieldStyle: TextFieldStyle {
     func _body(configuration: TextField<Self._Label>) -> some View {
         configuration
+            .foregroundColor(.black)
+            .tint(AppTheme.primaryPurple)
             .padding()
             .background(AppTheme.lightPurple.opacity(0.1))
             .cornerRadius(AppTheme.smallCornerRadius)

@@ -16,23 +16,15 @@ class VideoService {
 
     // MARK: - Video Duration
 
-    /// Get video duration in minutes, with optional time-lapse conversion
+    /// Get video duration in minutes
     /// - Parameters:
     ///   - url: URL of the video file
-    ///   - isTimeLapse: If true, applies 6x multiplier (iPhone time-lapse style)
     /// - Returns: Duration in minutes
-    func getVideoDuration(url: URL, isTimeLapse: Bool = false) async throws -> Double {
+    func getVideoDuration(url: URL) async throws -> Double {
         let asset = AVURLAsset(url: url)
         let duration = try await asset.load(.duration)
         let seconds = CMTimeGetSeconds(duration)
         let minutes = seconds / 60.0
-
-        // iPhone time-lapse records at 2fps and plays at 30fps
-        // This creates a 15x speed-up, but accounting for frame capture,
-        // the real-time to video ratio is approximately 6x for videos under 10 minutes
-        if isTimeLapse {
-            return minutes * 6.0
-        }
 
         return minutes
     }
@@ -182,13 +174,12 @@ class VideoService {
         videoURL: URL,
         goalId: String,
         subtaskId: String?,
-        isTimeLapse: Bool = true,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> String {
         let convexService = await ConvexService.shared
 
-        // 1. Get video duration (apply time-lapse conversion if needed)
-        let durationMinutes = try await getVideoDuration(url: videoURL, isTimeLapse: isTimeLapse)
+        // 1. Get video duration
+        let durationMinutes = try await getVideoDuration(url: videoURL)
 
         // 2. Compress video
         let compressedURL = try await compressVideo(url: videoURL)

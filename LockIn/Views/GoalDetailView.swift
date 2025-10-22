@@ -14,6 +14,8 @@ struct GoalDetailView: View {
     @StateObject private var viewModel: GoalDetailViewModel
     @State private var showingVideoRecorder = false
     @State private var showingVideoPicker = false
+    @State private var showingAddSubtask = false
+    @State private var selectedSubtask: Subtask?
 
     init(goal: Goal) {
         self.goal = goal
@@ -132,6 +134,67 @@ struct GoalDetailView: View {
                     }
                     .padding(.horizontal)
 
+                    // Subtasks Section
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Subtasks")
+                                .font(AppTheme.headlineFont)
+                                .foregroundColor(AppTheme.textPrimary)
+
+                            Spacer()
+
+                            Button {
+                                showingAddSubtask = true
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "plus.circle.fill")
+                                    Text("Add")
+                                }
+                                .font(AppTheme.captionFont)
+                                .foregroundStyle(AppTheme.primaryGradient)
+                            }
+                        }
+                        .padding(.horizontal)
+
+                        if viewModel.subtasks.isEmpty {
+                            // Empty state
+                            VStack(spacing: 12) {
+                                Image(systemName: "checklist")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(AppTheme.textSecondary.opacity(0.5))
+
+                                Text("No subtasks yet")
+                                    .font(AppTheme.bodyFont)
+                                    .foregroundColor(AppTheme.textSecondary)
+
+                                Text("Break down your goal into smaller tasks")
+                                    .font(AppTheme.captionFont)
+                                    .foregroundColor(AppTheme.textSecondary.opacity(0.7))
+                                    .multilineTextAlignment(.center)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 40)
+                            .playfulCard()
+                            .padding(.horizontal)
+                        } else {
+                            ForEach(viewModel.subtasks) { subtask in
+                                Button {
+                                    selectedSubtask = subtask
+                                    showingVideoRecorder = true
+                                } label: {
+                                    SubtaskCard(subtask: subtask)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .padding(.horizontal)
+                            }
+                            .onDelete { indexSet in
+                                Task {
+                                    await viewModel.deleteSubtasks(at: indexSet)
+                                }
+                            }
+                        }
+                    }
+
                     // Study Sessions List
                     if !viewModel.studySessions.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
@@ -142,7 +205,7 @@ struct GoalDetailView: View {
 
                             ForEach(viewModel.studySessions) { session in
                                 NavigationLink(destination: VideoPlayerView(session: session)) {
-                                    StudySessionCard(session: session)
+                                    StudySessionCard(session: session, subtasks: viewModel.subtasks)
                                 }
                             }
                             .onDelete { indexSet in
@@ -158,10 +221,23 @@ struct GoalDetailView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingVideoRecorder) {
-            CameraRecorderView(goalId: goal.id, subtaskId: nil)
+            CameraRecorderView(goalId: goal.id, subtaskId: selectedSubtask?.id)
         }
         .sheet(isPresented: $showingVideoPicker) {
-            VideoRecorderView(goalId: goal.id, subtaskId: nil)
+            VideoRecorderView(goalId: goal.id, subtaskId: selectedSubtask?.id)
+        }
+        .sheet(isPresented: $showingAddSubtask) {
+            AddSubtaskSheet(goalId: goal.id)
+        }
+        .onChange(of: showingVideoRecorder) { isShowing in
+            if !isShowing {
+                selectedSubtask = nil
+            }
+        }
+        .onChange(of: showingVideoPicker) { isShowing in
+            if !isShowing {
+                selectedSubtask = nil
+            }
         }
     }
 }
@@ -194,6 +270,12 @@ struct StatCard: View {
 
 struct StudySessionCard: View {
     let session: StudySession
+    let subtasks: [Subtask]
+
+    private var subtaskName: String? {
+        guard let subtaskId = session.subtaskId else { return nil }
+        return subtasks.first(where: { $0.id == subtaskId })?.title
+    }
 
     var body: some View {
         HStack(spacing: 16) {
@@ -213,6 +295,17 @@ struct StudySessionCard: View {
                 Text(session.formattedDuration)
                     .font(AppTheme.headlineFont)
                     .foregroundColor(AppTheme.textPrimary)
+
+                // Show subtask name if available
+                if let subtaskName = subtaskName {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checklist")
+                            .font(.caption)
+                        Text(subtaskName)
+                            .font(AppTheme.captionFont)
+                    }
+                    .foregroundStyle(AppTheme.energyGradient)
+                }
 
                 Text(session.uploadedDate, style: .date)
                     .font(AppTheme.captionFont)
@@ -280,6 +373,17 @@ class GoalDetailViewModel: ObservableObject {
                 try await convexService.deleteStudySession(id: session.id)
             } catch {
                 print("❌ Failed to delete study session: \(error)")
+            }
+        }
+    }
+
+    func deleteSubtasks(at indexSet: IndexSet) async {
+        for index in indexSet {
+            let subtask = subtasks[index]
+            do {
+                try await convexService.deleteSubtask(id: subtask.id)
+            } catch {
+                print("❌ Failed to delete subtask: \(error)")
             }
         }
     }

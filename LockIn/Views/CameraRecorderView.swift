@@ -28,30 +28,12 @@ struct CameraRecorderView: View {
                 AppTheme.background.ignoresSafeArea()
 
                 VStack(spacing: 24) {
-                    // Header
-                    VStack(spacing: 12) {
-                        Image(systemName: "video.circle.fill")
-                            .font(.system(size: 80))
-                            .foregroundStyle(AppTheme.energyGradient)
-
-                        Text("Record Study Session")
-                            .font(AppTheme.titleFont)
-                            .foregroundColor(AppTheme.textPrimary)
-
-                        Text("Record yourself studying in time-lapse mode")
-                            .font(AppTheme.bodyFont)
-                            .foregroundColor(AppTheme.textSecondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                    }
-                    .padding(.top, 40)
-
                     Spacer()
 
                     // Camera preview
                     ZStack {
                         CameraPreview(session: viewModel.captureSession)
-                            .frame(height: 400)
+                            .frame(height: 600)
                             .cornerRadius(AppTheme.cornerRadius)
 
                         // Camera flip button (shown when not recording)
@@ -158,51 +140,54 @@ struct CameraRecorderView: View {
     }
 
     var recordingButton: some View {
-        Button {
-            if viewModel.isRecording {
-                viewModel.stopRecording()
-            } else {
-                viewModel.startRecording()
-            }
-        } label: {
-            ZStack {
-                Circle()
-                    .stroke(viewModel.isRecording ? Color.red : AppTheme.primaryPurple, lineWidth: 4)
-                    .frame(width: 80, height: 80)
+        HStack {
+            Spacer()
 
-                Circle()
-                    .fill(viewModel.isRecording ? Color.red : AppTheme.primaryPurple)
-                    .frame(width: 60, height: 60)
-
+            Button {
                 if viewModel.isRecording {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.white)
-                        .frame(width: 24, height: 24)
+                    viewModel.stopRecording()
                 } else {
-                    Image(systemName: "video.fill")
-                        .font(.title2)
-                        .foregroundColor(.white)
+                    viewModel.startRecording()
+                }
+            } label: {
+                ZStack {
+                    Circle()
+                        .stroke(viewModel.isRecording ? Color.red : AppTheme.primaryPurple, lineWidth: 6)
+                        .frame(width: 100, height: 100)
+
+                    Circle()
+                        .fill(viewModel.isRecording ? Color.red : AppTheme.primaryPurple)
+                        .frame(width: 80, height: 80)
+
+                    if viewModel.isRecording {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.white)
+                            .frame(width: 30, height: 30)
+                    }
                 }
             }
+
+            Spacer()
         }
     }
 
     var finishedRecordingButtons: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 40) {
             // Retake
             Button {
                 viewModel.retakeRecording()
             } label: {
-                VStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(AppTheme.cardBackground)
+                        .frame(width: 70, height: 70)
+                        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+
                     Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.title2)
-                    Text("Retake")
-                        .font(AppTheme.captionFont)
+                        .font(.system(size: 30))
+                        .foregroundColor(AppTheme.textSecondary)
                 }
-                .frame(maxWidth: .infinity)
-                .padding()
             }
-            .secondaryButton()
 
             // Upload
             Button {
@@ -213,18 +198,18 @@ struct CameraRecorderView: View {
                     }
                 }
             } label: {
-                VStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(AppTheme.primaryGradient)
+                        .frame(width: 70, height: 70)
+                        .shadow(color: AppTheme.primaryPurple.opacity(0.3), radius: 8, x: 0, y: 4)
+
                     Image(systemName: "arrow.up.circle.fill")
-                        .font(.title2)
-                    Text("Upload")
-                        .font(AppTheme.captionFont)
+                        .font(.system(size: 30))
+                        .foregroundColor(.white)
                 }
-                .frame(maxWidth: .infinity)
-                .padding()
             }
-            .primaryButton()
         }
-        .padding(.horizontal)
     }
 
     var uploadProgressView: some View {
