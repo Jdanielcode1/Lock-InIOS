@@ -39,7 +39,7 @@ struct TimeLapseRecorderView: View {
                     if recorder.recordedVideoURL == nil {
                         ZStack {
                             CameraPreview(session: recorder.captureSession)
-                                .frame(height: 600)
+                                .frame(maxWidth: .infinity, maxHeight: isLandscape ? 400 : 600)
                                 .cornerRadius(AppTheme.cornerRadius)
 
                             // Camera flip button (shown when not recording)
@@ -163,6 +163,10 @@ struct TimeLapseRecorderView: View {
         .onDisappear {
             recorder.cleanup()
         }
+    }
+
+    var isLandscape: Bool {
+        recorder.deviceOrientation == .landscapeLeft || recorder.deviceOrientation == .landscapeRight
     }
 
     var formattedDuration: String {

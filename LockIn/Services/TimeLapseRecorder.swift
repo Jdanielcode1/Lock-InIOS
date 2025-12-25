@@ -15,6 +15,7 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     @Published var frameCount: Int = 0
     @Published var recordedVideoURL: URL?
     @Published var currentCaptureRate: String = "2 fps"
+    @Published var deviceOrientation: UIDeviceOrientation = .portrait
 
     nonisolated(unsafe) let captureSession = AVCaptureSession()
     private var videoOutput: AVCaptureVideoDataOutput?
@@ -31,10 +32,35 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
     private var recordingTimer: Timer?
     private let videoQueue = DispatchQueue(label: "com.lockin.timelapse.video")
+    private var recordingOrientation: UIDeviceOrientation = .portrait
 
     func setupCamera() async {
         await requestCameraPermission()
         await configureCaptureSession()
+        startOrientationObserver()
+    }
+
+    private func startOrientationObserver() {
+        UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(orientationChanged),
+            name: UIDevice.orientationDidChangeNotification,
+            object: nil
+        )
+        updateOrientation()
+    }
+
+    @objc private func orientationChanged() {
+        updateOrientation()
+    }
+
+    private func updateOrientation() {
+        let orientation = UIDevice.current.orientation
+        // Only update for valid video orientations
+        if orientation == .portrait || orientation == .landscapeLeft || orientation == .landscapeRight {
+            deviceOrientation = orientation
+        }
     }
 
     private func requestCameraPermission() async {
@@ -88,6 +114,9 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         lastCaptureTime = nil
         frameInterval = 0.5 // Start at 2 fps
         currentCaptureRate = "2 fps"
+
+        // Capture the current orientation at the start of recording
+        recordingOrientation = deviceOrientation
 
         // Create temporary directory for frame storage
         let tempDir = FileManager.default.temporaryDirectory
@@ -207,9 +236,11 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
         writerInput.expectsMediaDataInRealTime = false
 
-        // For portrait orientation (phone held vertically), apply 90-degree clockwise rotation
-        // iPhone captures landscape natively, so we rotate to display as portrait
-        writerInput.transform = CGAffineTransform(rotationAngle: .pi / 2)
+        // Apply transform based on the orientation at recording time
+        // iPhone captures landscape natively, so we rotate accordingly
+        await MainActor.run {
+            writerInput.transform = self.transformForOrientation(self.recordingOrientation)
+        }
 
         let sourceBufferAttributes: [String: Any] = [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32ARGB,
@@ -257,6 +288,23 @@ class TimeLapseRecorder: NSObject, ObservableObject {
                     frameIndex += 1
                 }
             }
+        }
+    }
+
+    private func transformForOrientation(_ orientation: UIDeviceOrientation) -> CGAffineTransform {
+        switch orientation {
+        case .portrait:
+            // Portrait: 90-degree clockwise rotation
+            return CGAffineTransform(rotationAngle: .pi / 2)
+        case .landscapeLeft:
+            // Landscape left: No rotation needed
+            return CGAffineTransform.identity
+        case .landscapeRight:
+            // Landscape right: 180-degree rotation
+            return CGAffineTransform(rotationAngle: .pi)
+        default:
+            // Default to portrait
+            return CGAffineTransform(rotationAngle: .pi / 2)
         }
     }
 
@@ -342,6 +390,10 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         captureSession.stopRunning()
         capturedFrameURLs.removeAll()
 
+        // Stop orientation observer
+        NotificationCenter.default.removeObserver(self, name: UIDevice.orientationDidChangeNotification, object: nil)
+        UIDevice.current.endGeneratingDeviceOrientationNotifications()
+
         // Clean up recorded video
         if let url = recordedVideoURL {
             try? FileManager.default.removeItem(at: url)
@@ -352,6 +404,10 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             try? FileManager.default.removeItem(at: storageDir)
             frameStorageDirectory = nil
         }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 }
 

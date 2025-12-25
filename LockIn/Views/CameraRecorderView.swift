@@ -257,6 +257,9 @@ struct CameraPreview: UIViewRepresentable {
 
         context.coordinator.previewLayer = previewLayer
 
+        // Set initial orientation
+        updateOrientation(for: previewLayer)
+
         return view
     }
 
@@ -264,12 +267,37 @@ struct CameraPreview: UIViewRepresentable {
         if let previewLayer = context.coordinator.previewLayer {
             DispatchQueue.main.async {
                 previewLayer.frame = uiView.bounds
+                self.updateOrientation(for: previewLayer)
             }
         }
     }
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
+    }
+
+    private func updateOrientation(for layer: AVCaptureVideoPreviewLayer) {
+        guard let connection = layer.connection, connection.isVideoOrientationSupported else {
+            return
+        }
+
+        let orientation = UIDevice.current.orientation
+        let videoOrientation: AVCaptureVideoOrientation
+
+        switch orientation {
+        case .portrait:
+            videoOrientation = .portrait
+        case .portraitUpsideDown:
+            videoOrientation = .portraitUpsideDown
+        case .landscapeLeft:
+            videoOrientation = .landscapeRight // Counterintuitive but correct
+        case .landscapeRight:
+            videoOrientation = .landscapeLeft  // Counterintuitive but correct
+        default:
+            videoOrientation = .portrait
+        }
+
+        connection.videoOrientation = videoOrientation
     }
 
     class Coordinator {
