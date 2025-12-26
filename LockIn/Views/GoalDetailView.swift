@@ -220,10 +220,10 @@ struct GoalDetailView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showingTimeLapseRecorder) {
+        .fullScreenCover(isPresented: $showingTimeLapseRecorder) {
             TimeLapseRecorderView(goalId: goal.id, subtaskId: selectedSubtask?.id)
         }
-        .sheet(isPresented: $showingVideoPicker) {
+        .fullScreenCover(isPresented: $showingVideoPicker) {
             VideoRecorderView(goalId: goal.id, subtaskId: selectedSubtask?.id)
         }
         .sheet(isPresented: $showingAddSubtask) {

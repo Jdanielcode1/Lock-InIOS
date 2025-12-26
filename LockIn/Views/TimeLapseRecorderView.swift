@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AVFoundation
+import AVKit
 
 struct TimeLapseRecorderView: View {
     let goalId: String
@@ -19,6 +20,7 @@ struct TimeLapseRecorderView: View {
     @State private var uploadSuccess = false
     @State private var errorMessage: String?
     @State private var previewThumbnail: UIImage?
+    @State private var player: AVPlayer?
 
     private let videoService = VideoService.shared
 
@@ -224,34 +226,28 @@ struct TimeLapseRecorderView: View {
 
     var videoPreviewView: some View {
         ZStack {
-            // Background
-            RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
-                .fill(Color.black)
-                .frame(maxWidth: .infinity, maxHeight: isLandscape ? 400 : 600)
-
-            // Thumbnail
-            if let thumbnail = previewThumbnail {
-                Image(uiImage: thumbnail)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
+            // Video Player
+            if let player = player {
+                VideoPlayer(player: player)
+                    .aspectRatio(contentMode: .fill)
                     .frame(maxWidth: .infinity, maxHeight: isLandscape ? 400 : 600)
+                    .clipped()
                     .cornerRadius(AppTheme.cornerRadius)
             } else {
                 // Loading placeholder
-                VStack(spacing: 16) {
-                    ProgressView()
-                        .tint(.white)
-                    Text("Loading preview...")
-                        .font(AppTheme.captionFont)
-                        .foregroundColor(.white.opacity(0.8))
-                }
+                RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
+                    .fill(Color.black)
+                    .frame(maxWidth: .infinity, maxHeight: isLandscape ? 400 : 600)
+                    .overlay(
+                        VStack(spacing: 16) {
+                            ProgressView()
+                                .tint(.white)
+                            Text("Loading preview...")
+                                .font(AppTheme.captionFont)
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                    )
             }
-
-            // Play icon overlay
-            Image(systemName: "play.circle.fill")
-                .font(.system(size: 60))
-                .foregroundColor(.white.opacity(0.9))
-                .shadow(color: .black.opacity(0.5), radius: 8)
 
             // Duration badge
             VStack {
@@ -271,14 +267,20 @@ struct TimeLapseRecorderView: View {
         }
         .playfulCard()
         .onAppear {
-            loadPreviewThumbnail()
+            setupPlayer()
         }
+    }
+
+    private func setupPlayer() {
+        guard let videoURL = recorder.recordedVideoURL else { return }
+        player = AVPlayer(url: videoURL)
     }
 
     var finishedRecordingButtons: some View {
         HStack(spacing: 40) {
             // Retake
             Button {
+                player = nil
                 previewThumbnail = nil
                 recorder.clearFrames()
             } label: {
@@ -309,18 +311,6 @@ struct TimeLapseRecorderView: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 30))
                         .foregroundColor(.white)
-                }
-            }
-        }
-    }
-
-    private func loadPreviewThumbnail() {
-        guard let videoURL = recorder.recordedVideoURL else { return }
-
-        Task {
-            if let thumbnail = try? await videoService.generateThumbnail(from: videoURL) {
-                await MainActor.run {
-                    previewThumbnail = thumbnail
                 }
             }
         }
