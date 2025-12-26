@@ -23,10 +23,10 @@ export default defineSchema({
   studySessions: defineTable({
     goalId: v.id("goals"),
     subtaskId: v.optional(v.id("subtasks")),
-    videoStorageId: v.string(),
-    thumbnailStorageId: v.optional(v.string()),
+    localVideoPath: v.string(),
+    localThumbnailPath: v.optional(v.string()),
     durationMinutes: v.float64(),
-    uploadedAt: v.float64(),
+    createdAt: v.float64(),
   })
     .index("by_goal", ["goalId"])
     .index("by_subtask", ["subtaskId"]),

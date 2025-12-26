@@ -97,7 +97,6 @@ class VideoPlayerViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private let session: StudySession
-    private let convexService = ConvexService.shared
     private var playerItemObserver: NSKeyValueObservation?
 
     init(session: StudySession) {
@@ -106,121 +105,50 @@ class VideoPlayerViewModel: ObservableObject {
     }
 
     private func loadVideo() {
-        Task {
-            do {
-                isLoading = true
-                print("🎥 Loading video for storageId: \(session.videoStorageId)")
+        isLoading = true
+        print("🎥 Loading local video: \(session.localVideoPath)")
 
-                // Get video URL from Convex
-                guard let videoUrlString = try await convexService.getVideoUrl(storageId: session.videoStorageId) else {
-                    print("❌ No video URL returned from Convex")
-                    errorMessage = "Failed to get video URL - no URL returned"
-                    isLoading = false
-                    return
+        // Get local file URL from session
+        guard let videoURL = session.videoURL else {
+            print("❌ Could not construct video URL")
+            errorMessage = "Video file not found"
+            isLoading = false
+            return
+        }
+
+        // Check if file exists
+        guard FileManager.default.fileExists(atPath: videoURL.path) else {
+            print("❌ Video file does not exist at: \(videoURL.path)")
+            errorMessage = "Video file has been deleted"
+            isLoading = false
+            return
+        }
+
+        print("✅ Loading video from: \(videoURL.path)")
+
+        // Create player with local file URL
+        let playerItem = AVPlayerItem(url: videoURL)
+        let newPlayer = AVPlayer(playerItem: playerItem)
+        newPlayer.automaticallyWaitsToMinimizeStalling = false
+
+        // Observe player status
+        playerItemObserver = playerItem.observe(\.status, options: [.new]) { [weak self] item, _ in
+            Task { @MainActor in
+                switch item.status {
+                case .readyToPlay:
+                    print("✅ Local video ready to play!")
+                case .failed:
+                    print("❌ Playback failed: \(item.error?.localizedDescription ?? "Unknown")")
+                    self?.errorMessage = "Playback failed: \(item.error?.localizedDescription ?? "Unknown")"
+                default:
+                    break
                 }
-
-                print("🔗 Received video URL: \(videoUrlString)")
-
-                guard let videoUrl = URL(string: videoUrlString) else {
-                    print("❌ Invalid URL string: \(videoUrlString)")
-                    errorMessage = "Invalid video URL format"
-                    isLoading = false
-                    return
-                }
-
-                print("✅ Creating AVPlayer with URL: \(videoUrl)")
-
-                // Create player
-                let playerItem = AVPlayerItem(url: videoUrl)
-                let newPlayer = AVPlayer(playerItem: playerItem)
-
-                // Enable automatic playback
-                newPlayer.automaticallyWaitsToMinimizeStalling = false
-
-                // Observe player status
-                playerItemObserver = playerItem.observe(\.status, options: [.new, .old]) { [weak self] item, change in
-                    Task { @MainActor in
-                        print("📊 Player status changed: \(item.status.rawValue)")
-
-                        switch item.status {
-                        case .readyToPlay:
-                            print("✅ Player ready to play!")
-                            print("📹 Video size: \(item.presentationSize)")
-                            print("⏱️ Video duration: \(CMTimeGetSeconds(item.duration)) seconds")
-                            Task {
-                                if let tracks = try? await item.asset.loadTracks(withMediaType: .video).first {
-                                    print("🎬 Video track: \(tracks)")
-                                }
-                            }
-                        case .failed:
-                            print("❌ Player failed!")
-                            if let error = item.error {
-                                print("❌ Error: \(error)")
-                                print("❌ Error domain: \(error._domain)")
-                                print("❌ Error code: \(error._code)")
-                                print("❌ Localized description: \(error.localizedDescription)")
-                                if let underlyingError = (error as NSError).userInfo[NSUnderlyingErrorKey] as? Error {
-                                    print("❌ Underlying error: \(underlyingError)")
-                                }
-                            }
-
-                            // Check access log
-                            if let accessLog = item.accessLog() {
-                                print("📊 Access Log Events: \(accessLog.events.count)")
-                                for event in accessLog.events {
-                                    print("  - URI: \(event.uri ?? "nil")")
-                                    print("  - Bytes transferred: \(event.numberOfBytesTransferred)")
-                                    print("  - Stalls: \(event.numberOfStalls)")
-                                }
-                            }
-
-                            // Check error log
-                            if let errorLog = item.errorLog() {
-                                print("❌ Error Log Events: \(errorLog.events.count)")
-                                for event in errorLog.events {
-                                    print("  - Error domain: \(event.errorDomain ?? "nil")")
-                                    print("  - Error code: \(event.errorStatusCode)")
-                                    print("  - URI: \(event.uri ?? "nil")")
-                                }
-                            }
-
-                            self?.errorMessage = "Video playback failed: \(item.error?.localizedDescription ?? "Unknown error")"
-                        case .unknown:
-                            print("⏳ Player status unknown")
-                        @unknown default:
-                            print("⚠️ Unknown player status")
-                            break
-                        }
-                    }
-                }
-
-                player = newPlayer
-
-                isLoading = false
-                print("✅ Video player ready!")
-
-                // Check if URL is accessible
-                print("🔍 Checking URL accessibility...")
-                Task {
-                    do {
-                        let (data, response) = try await URLSession.shared.data(from: videoUrl)
-                        if let httpResponse = response as? HTTPURLResponse {
-                            print("📡 HTTP Status: \(httpResponse.statusCode)")
-                            print("📡 Content-Type: \(httpResponse.value(forHTTPHeaderField: "Content-Type") ?? "nil")")
-                            print("📡 Content-Length: \(httpResponse.value(forHTTPHeaderField: "Content-Length") ?? "nil")")
-                            print("📦 Downloaded \(data.count) bytes")
-                        }
-                    } catch {
-                        print("❌ Failed to fetch URL: \(error)")
-                    }
-                }
-
-            } catch {
-                print("❌ Error loading video: \(error)")
-                errorMessage = "Failed to load video: \(error.localizedDescription)"
-                isLoading = false
             }
         }
+
+        player = newPlayer
+        isLoading = false
+        print("✅ Local video player ready!")
     }
 }
 
@@ -247,10 +175,10 @@ struct VideoPlayerRepresentable: UIViewControllerRepresentable {
             _id: "1",
             goalId: "123",
             subtaskId: nil,
-            videoStorageId: "abc",
-            thumbnailStorageId: nil,
+            localVideoPath: "LockInVideos/test.mp4",
+            localThumbnailPath: nil,
             durationMinutes: 30,
-            uploadedAt: Date().timeIntervalSince1970 * 1000
+            createdAt: Date().timeIntervalSince1970 * 1000
         ))
     }
 }

@@ -18,6 +18,7 @@ struct TimeLapseRecorderView: View {
     @State private var uploadProgress: Double = 0
     @State private var uploadSuccess = false
     @State private var errorMessage: String?
+    @State private var previewThumbnail: UIImage?
 
     private let videoService = VideoService.shared
 
@@ -35,8 +36,12 @@ struct TimeLapseRecorderView: View {
                 VStack(spacing: 24) {
                     Spacer()
 
-                    // Camera preview (only shown when not finished recording)
-                    if recorder.recordedVideoURL == nil {
+                    // Camera preview or video preview
+                    if recorder.recordedVideoURL != nil {
+                        // Video preview after recording
+                        videoPreviewView
+                            .padding(.horizontal)
+                    } else {
                         ZStack {
                             CameraPreview(session: recorder.captureSession)
                                 .frame(maxWidth: .infinity, maxHeight: isLandscape ? 400 : 600)
@@ -142,7 +147,7 @@ struct TimeLapseRecorderView: View {
                         recorder.cleanup()
                         dismiss()
                     }
-                    .foregroundColor(AppTheme.primaryPurple)
+                    .foregroundColor(AppTheme.actionBlue)
                 }
             }
             .alert("Error", isPresented: .constant(errorMessage != nil)) {
@@ -198,11 +203,11 @@ struct TimeLapseRecorderView: View {
             } label: {
                 ZStack {
                     Circle()
-                        .stroke(recorder.isRecording ? Color.red : AppTheme.primaryPurple, lineWidth: 6)
+                        .stroke(recorder.isRecording ? Color.red : AppTheme.actionBlue, lineWidth: 6)
                         .frame(width: 100, height: 100)
 
                     Circle()
-                        .fill(recorder.isRecording ? Color.red : AppTheme.primaryPurple)
+                        .fill(recorder.isRecording ? Color.red : AppTheme.actionBlue)
                         .frame(width: 80, height: 80)
 
                     if recorder.isRecording {
@@ -217,10 +222,64 @@ struct TimeLapseRecorderView: View {
         }
     }
 
+    var videoPreviewView: some View {
+        ZStack {
+            // Background
+            RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
+                .fill(Color.black)
+                .frame(maxWidth: .infinity, maxHeight: isLandscape ? 400 : 600)
+
+            // Thumbnail
+            if let thumbnail = previewThumbnail {
+                Image(uiImage: thumbnail)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: isLandscape ? 400 : 600)
+                    .cornerRadius(AppTheme.cornerRadius)
+            } else {
+                // Loading placeholder
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .tint(.white)
+                    Text("Loading preview...")
+                        .font(AppTheme.captionFont)
+                        .foregroundColor(.white.opacity(0.8))
+                }
+            }
+
+            // Play icon overlay
+            Image(systemName: "play.circle.fill")
+                .font(.system(size: 60))
+                .foregroundColor(.white.opacity(0.9))
+                .shadow(color: .black.opacity(0.5), radius: 8)
+
+            // Duration badge
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Text(formattedDuration)
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.black.opacity(0.7))
+                        .cornerRadius(8)
+                        .padding()
+                }
+            }
+        }
+        .playfulCard()
+        .onAppear {
+            loadPreviewThumbnail()
+        }
+    }
+
     var finishedRecordingButtons: some View {
         HStack(spacing: 40) {
             // Retake
             Button {
+                previewThumbnail = nil
                 recorder.clearFrames()
             } label: {
                 ZStack {
@@ -235,21 +294,33 @@ struct TimeLapseRecorderView: View {
                 }
             }
 
-            // Upload
+            // Save
             Button {
                 Task {
-                    await uploadVideo()
+                    await saveVideo()
                 }
             } label: {
                 ZStack {
                     Circle()
                         .fill(AppTheme.primaryGradient)
                         .frame(width: 70, height: 70)
-                        .shadow(color: AppTheme.primaryPurple.opacity(0.3), radius: 8, x: 0, y: 4)
+                        .shadow(color: AppTheme.actionBlue.opacity(0.3), radius: 8, x: 0, y: 4)
 
-                    Image(systemName: "arrow.up.circle.fill")
+                    Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 30))
                         .foregroundColor(.white)
+                }
+            }
+        }
+    }
+
+    private func loadPreviewThumbnail() {
+        guard let videoURL = recorder.recordedVideoURL else { return }
+
+        Task {
+            if let thumbnail = try? await videoService.generateThumbnail(from: videoURL) {
+                await MainActor.run {
+                    previewThumbnail = thumbnail
                 }
             }
         }
@@ -260,7 +331,7 @@ struct TimeLapseRecorderView: View {
             // Progress ring
             ZStack {
                 Circle()
-                    .stroke(AppTheme.lightPurple.opacity(0.3), lineWidth: 12)
+                    .stroke(AppTheme.borderLight, lineWidth: 12)
                     .frame(width: 120, height: 120)
 
                 Circle()
@@ -278,14 +349,14 @@ struct TimeLapseRecorderView: View {
                     .foregroundColor(AppTheme.textPrimary)
             }
 
-            Text("Uploading...")
+            Text("Saving...")
                 .font(AppTheme.headlineFont)
                 .foregroundColor(AppTheme.textPrimary)
         }
         .padding()
     }
 
-    private func uploadVideo() async {
+    private func saveVideo() async {
         guard let videoURL = recorder.recordedVideoURL else { return }
 
         isUploading = true
@@ -294,32 +365,40 @@ struct TimeLapseRecorderView: View {
         do {
             // Use actual recording duration for study time
             let studyTimeMinutes = recorder.recordingDuration / 60.0
+            uploadProgress = 0.2
 
-            // Upload the timelapse video
-            let uploadURL = try await ConvexService.shared.generateUploadUrl()
-            uploadProgress = 0.4
+            // Save video to local storage
+            let localVideoPath = try LocalStorageService.shared.saveVideo(from: videoURL)
+            uploadProgress = 0.5
 
-            let storageId = try await ConvexService.shared.uploadVideo(url: videoURL, uploadUrl: uploadURL)
-            uploadProgress = 0.8
+            // Generate and save thumbnail
+            var localThumbnailPath: String? = nil
+            if let fullURL = LocalStorageService.shared.getFullURL(for: localVideoPath) {
+                if let thumbnail = try? await videoService.generateThumbnail(from: fullURL) {
+                    localThumbnailPath = try? LocalStorageService.shared.saveThumbnail(thumbnail)
+                }
+            }
+            uploadProgress = 0.7
 
-            // Create study session with actual recording duration
+            // Create study session with local path
             _ = try await ConvexService.shared.createStudySession(
                 goalId: goalId,
                 subtaskId: subtaskId,
-                videoStorageId: storageId,
+                localVideoPath: localVideoPath,
+                localThumbnailPath: localThumbnailPath,
                 durationMinutes: studyTimeMinutes
             )
 
             uploadProgress = 1.0
             uploadSuccess = true
 
-            // Clean up
+            // Clean up temp file
             try? FileManager.default.removeItem(at: videoURL)
 
             dismiss()
 
         } catch {
-            errorMessage = "Upload failed: \(error.localizedDescription)"
+            errorMessage = "Save failed: \(error.localizedDescription)"
             isUploading = false
             uploadProgress = 0
         }

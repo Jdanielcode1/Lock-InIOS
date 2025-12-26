@@ -8,50 +8,77 @@
 import SwiftUI
 
 struct AppTheme {
-    // MARK: - Colors
+    // MARK: - Primary Action Colors
 
-    // Primary purple shades
-    static let primaryPurple = Color(red: 0.5, green: 0.2, blue: 0.8) // Vibrant purple
-    static let lightPurple = Color(red: 0.7, green: 0.5, blue: 0.9)   // Light purple
-    static let darkPurple = Color(red: 0.3, green: 0.1, blue: 0.5)    // Dark purple
+    // Action Blue - primary actions, buttons, links
+    static let actionBlue = Color(red: 0.25, green: 0.52, blue: 0.96)       // #4085F5
+    static let actionBlueLight = Color(red: 0.35, green: 0.62, blue: 0.98) // Lighter variant
+    static let actionBlueDark = Color(red: 0.18, green: 0.42, blue: 0.82)  // Darker variant
 
-    // Playful yellow shades
-    static let primaryYellow = Color(red: 1.0, green: 0.85, blue: 0.0) // Bright yellow
-    static let lightYellow = Color(red: 1.0, green: 0.95, blue: 0.7)   // Soft yellow
-    static let darkYellow = Color(red: 0.9, green: 0.7, blue: 0.0)     // Golden yellow
+    // MARK: - Semantic Colors
 
-    // Energetic red shades
-    static let primaryRed = Color(red: 1.0, green: 0.3, blue: 0.4)    // Playful red
-    static let lightRed = Color(red: 1.0, green: 0.6, blue: 0.6)      // Soft red
-    static let darkRed = Color(red: 0.8, green: 0.1, blue: 0.2)       // Deep red
+    // Success Green - completed, achieved
+    static let successGreen = Color(red: 0.26, green: 0.70, blue: 0.46)    // #43B376
 
-    // Neutral colors
-    static let background = Color(red: 0.98, green: 0.98, blue: 1.0)  // Slightly purple-tinted white
+    // Warning Amber - due soon, medium priority
+    static let warningAmber = Color(red: 0.95, green: 0.68, blue: 0.25)    // #F2AD40
+
+    // Urgent Red - overdue, high priority (use sparingly)
+    static let urgentRed = Color(red: 0.90, green: 0.35, blue: 0.35)       // #E65959
+
+    // MARK: - Neutral Colors
+
+    // Backgrounds
+    static let background = Color(red: 0.98, green: 0.98, blue: 0.98)      // #FAFAFA - clean white
     static let cardBackground = Color.white
-    static let textPrimary = Color(red: 0.2, green: 0.2, blue: 0.3)   // Dark purple-gray
-    static let textSecondary = Color(red: 0.5, green: 0.5, blue: 0.6) // Medium gray
 
-    // Gradients
+    // Text
+    static let textPrimary = Color(red: 0.13, green: 0.13, blue: 0.14)     // #212123 - near black
+    static let textSecondary = Color(red: 0.55, green: 0.55, blue: 0.58)   // #8C8C94 - medium gray
+
+    // Borders & Dividers
+    static let borderLight = Color(red: 0.91, green: 0.91, blue: 0.92)     // #E8E8EB
+    static let borderMedium = Color(red: 0.82, green: 0.82, blue: 0.84)    // #D1D1D6
+
+    // Tab Bar
+    static let tabBarBackground = Color(red: 0.12, green: 0.12, blue: 0.14) // #1F1F23
+
+    // MARK: - Legacy Aliases (for compatibility)
+
+    static let primaryPurple = actionBlue
+    static let lightPurple = actionBlueLight
+    static let darkPurple = actionBlueDark
+    static let primaryYellow = warningAmber
+    static let primaryRed = urgentRed
+    static let lightRed = urgentRed.opacity(0.7)
+    static let darkRed = Color(red: 0.70, green: 0.25, blue: 0.25)
+
+    // MARK: - Gradients
+
+    // Primary gradient - subtle blue gradient
     static let primaryGradient = LinearGradient(
-        colors: [primaryPurple, primaryRed],
+        colors: [actionBlue, actionBlueDark],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
 
+    // Success gradient - for completed states
     static let successGradient = LinearGradient(
-        colors: [primaryYellow, lightYellow],
+        colors: [successGreen, successGreen.opacity(0.85)],
         startPoint: .leading,
         endPoint: .trailing
     )
 
+    // Energy gradient - for duration/time indicators
     static let energyGradient = LinearGradient(
-        colors: [primaryRed, primaryYellow],
+        colors: [actionBlue, actionBlueLight],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
 
+    // Calm gradient - subtle background accent
     static let calmGradient = LinearGradient(
-        colors: [lightPurple, primaryPurple],
+        colors: [actionBlueLight.opacity(0.3), actionBlue.opacity(0.1)],
         startPoint: .top,
         endPoint: .bottom
     )
@@ -65,14 +92,14 @@ struct AppTheme {
 
     // MARK: - Spacing
 
-    static let cornerRadius: CGFloat = 20
-    static let smallCornerRadius: CGFloat = 12
+    static let cornerRadius: CGFloat = 16
+    static let smallCornerRadius: CGFloat = 10
     static let padding: CGFloat = 16
     static let smallPadding: CGFloat = 8
 
     // MARK: - Shadows
 
-    static let cardShadow = Color.black.opacity(0.08)
+    static let cardShadow = Color.black.opacity(0.06)
 
     // MARK: - Animations
 
@@ -87,23 +114,23 @@ extension View {
         self
             .background(AppTheme.cardBackground)
             .cornerRadius(AppTheme.cornerRadius)
-            .shadow(color: AppTheme.cardShadow, radius: 10, x: 0, y: 4)
+            .shadow(color: AppTheme.cardShadow, radius: 8, x: 0, y: 2)
     }
 
     func primaryButton() -> some View {
         self
             .padding()
-            .background(AppTheme.primaryGradient)
+            .background(AppTheme.actionBlue)
             .foregroundColor(.white)
             .cornerRadius(AppTheme.smallCornerRadius)
-            .shadow(color: AppTheme.primaryPurple.opacity(0.3), radius: 8, x: 0, y: 4)
+            .shadow(color: AppTheme.actionBlue.opacity(0.3), radius: 6, x: 0, y: 3)
     }
 
     func secondaryButton() -> some View {
         self
             .padding()
-            .background(AppTheme.lightPurple.opacity(0.2))
-            .foregroundColor(AppTheme.primaryPurple)
+            .background(AppTheme.actionBlueLight.opacity(0.15))
+            .foregroundColor(AppTheme.actionBlue)
             .cornerRadius(AppTheme.smallCornerRadius)
     }
 }
@@ -113,25 +140,20 @@ extension View {
 extension AppTheme {
     static func progressColor(for percentage: Double) -> Color {
         switch percentage {
-        case 0..<25:
-            return primaryRed
-        case 25..<50:
-            return Color(red: 1.0, green: 0.6, blue: 0.2) // Orange
-        case 50..<75:
-            return primaryYellow
-        case 75..<100:
-            return lightPurple
+        case 0..<50:
+            return warningAmber      // In progress - amber
+        case 50..<100:
+            return actionBlue        // Good progress - blue
         default:
-            return primaryPurple // Completed
+            return successGreen      // Completed - green
         }
     }
 
     static func progressGradient(for percentage: Double) -> LinearGradient {
-        let startColor = progressColor(for: percentage)
-        let endColor = percentage >= 100 ? primaryPurple : startColor.opacity(0.7)
+        let color = progressColor(for: percentage)
 
         return LinearGradient(
-            colors: [startColor, endColor],
+            colors: [color, color.opacity(0.8)],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )

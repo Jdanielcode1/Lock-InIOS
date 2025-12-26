@@ -8,13 +8,17 @@
 import SwiftUI
 
 struct CreateGoalView: View {
-    @ObservedObject var viewModel: GoalsViewModel
+    @StateObject private var viewModel: GoalsViewModel
     @Environment(\.dismiss) var dismiss
 
     @State private var title = ""
     @State private var description = ""
     @State private var targetHours = ""
     @State private var isCreating = false
+
+    init(viewModel: GoalsViewModel? = nil) {
+        _viewModel = StateObject(wrappedValue: viewModel ?? GoalsViewModel())
+    }
 
     var isValid: Bool {
         !title.isEmpty && !description.isEmpty && Double(targetHours) != nil && (Double(targetHours) ?? 0) > 0
@@ -120,7 +124,7 @@ struct CreateGoalView: View {
                     Button("Cancel") {
                         dismiss()
                     }
-                    .foregroundColor(AppTheme.primaryPurple)
+                    .foregroundColor(AppTheme.actionBlue)
                 }
             }
         }
@@ -148,13 +152,13 @@ struct PlayfulTextFieldStyle: TextFieldStyle {
     func _body(configuration: TextField<Self._Label>) -> some View {
         configuration
             .foregroundColor(.black)
-            .tint(AppTheme.primaryPurple)
+            .tint(AppTheme.actionBlue)
             .padding()
-            .background(AppTheme.lightPurple.opacity(0.1))
+            .background(AppTheme.actionBlueLight.opacity(0.1))
             .cornerRadius(AppTheme.smallCornerRadius)
             .overlay(
                 RoundedRectangle(cornerRadius: AppTheme.smallCornerRadius)
-                    .stroke(AppTheme.primaryPurple.opacity(0.2), lineWidth: 1)
+                    .stroke(AppTheme.actionBlue.opacity(0.2), lineWidth: 1)
             )
     }
 }

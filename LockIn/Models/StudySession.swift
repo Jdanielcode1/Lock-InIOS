@@ -11,10 +11,10 @@ struct StudySession: Identifiable, Codable {
     let _id: String
     let goalId: String
     let subtaskId: String?
-    let videoStorageId: String
-    let thumbnailStorageId: String?
+    let localVideoPath: String
+    let localThumbnailPath: String?
     let durationMinutes: Double
-    let uploadedAt: Double
+    let createdAt: Double
 
     var id: String { _id }
 
@@ -22,8 +22,19 @@ struct StudySession: Identifiable, Codable {
         durationMinutes / 60
     }
 
-    var uploadedDate: Date {
-        Date(timeIntervalSince1970: uploadedAt / 1000)
+    var createdDate: Date {
+        Date(timeIntervalSince1970: createdAt / 1000)
+    }
+
+    var videoURL: URL? {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .appendingPathComponent(localVideoPath)
+    }
+
+    var thumbnailURL: URL? {
+        guard let thumbnailPath = localThumbnailPath else { return nil }
+        return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .appendingPathComponent(thumbnailPath)
     }
 
     var formattedDuration: String {
@@ -42,7 +53,7 @@ struct StudySession: Identifiable, Codable {
 struct CreateStudySessionRequest: Codable {
     let goalId: String
     let subtaskId: String?
-    let videoStorageId: String
-    let thumbnailStorageId: String?
+    let localVideoPath: String
+    let localThumbnailPath: String?
     let durationMinutes: Double
 }

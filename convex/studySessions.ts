@@ -1,21 +1,13 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
-// Mutation: Generate upload URL for video
-export const generateUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => {
-    return await ctx.storage.generateUploadUrl();
-  },
-});
-
-// Mutation: Save study session after video upload
+// Mutation: Save study session with local video path
 export const create = mutation({
   args: {
     goalId: v.id("goals"),
     subtaskId: v.optional(v.id("subtasks")),
-    videoStorageId: v.string(),
-    thumbnailStorageId: v.optional(v.string()),
+    localVideoPath: v.string(),
+    localThumbnailPath: v.optional(v.string()),
     durationMinutes: v.float64(),
   },
   handler: async (ctx, args) => {
@@ -23,10 +15,10 @@ export const create = mutation({
     const sessionId = await ctx.db.insert("studySessions", {
       goalId: args.goalId,
       subtaskId: args.subtaskId,
-      videoStorageId: args.videoStorageId,
-      thumbnailStorageId: args.thumbnailStorageId,
+      localVideoPath: args.localVideoPath,
+      localThumbnailPath: args.localThumbnailPath,
       durationMinutes: args.durationMinutes,
-      uploadedAt: Date.now(),
+      createdAt: Date.now(),
     });
 
     // Update goal progress (convert minutes to hours)
@@ -82,26 +74,14 @@ export const listBySubtask = query({
   },
 });
 
-// Mutation: Get video URL (needs to be mutation for Swift SDK one-off calls)
-export const getVideoUrl = mutation({
-  args: { storageId: v.string() },
-  handler: async (ctx, args) => {
-    return await ctx.storage.getUrl(args.storageId);
-  },
-});
-
-// Mutation: Delete a study session
+// Mutation: Delete a study session (local files deleted by iOS app)
 export const remove = mutation({
   args: { id: v.id("studySessions") },
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.id);
     if (!session) throw new Error("Study session not found");
 
-    // Delete the video from storage
-    await ctx.storage.delete(session.videoStorageId);
-    if (session.thumbnailStorageId) {
-      await ctx.storage.delete(session.thumbnailStorageId);
-    }
+    // Note: Local video/thumbnail files are deleted by the iOS app
 
     // Update goal progress (subtract hours)
     const hoursToSubtract = session.durationMinutes / 60;

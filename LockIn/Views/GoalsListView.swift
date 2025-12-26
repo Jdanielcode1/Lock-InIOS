@@ -43,24 +43,14 @@ struct GoalsListView: View {
                             }
                         }
                         .padding()
+                        .padding(.bottom, 100) // Space for floating tab bar
                     }
                 }
             }
-            .navigationTitle("Lock In")
+            .navigationTitle("Goals")
             .navigationBarTitleDisplayMode(.large)
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showingCreateGoal = true
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title2)
-                            .foregroundStyle(AppTheme.primaryGradient)
-                    }
-                }
-            }
             .sheet(isPresented: $showingCreateGoal) {
                 CreateGoalView(viewModel: viewModel)
             }
@@ -102,7 +92,7 @@ struct GoalCard: View {
             // Progress circle
             ZStack {
                 Circle()
-                    .stroke(AppTheme.lightPurple.opacity(0.3), lineWidth: 8)
+                    .stroke(AppTheme.borderLight, lineWidth: 8)
                     .frame(width: 80, height: 80)
 
                 Circle()
@@ -136,7 +126,7 @@ struct GoalCard: View {
             HStack(spacing: 4) {
                 Image(systemName: "clock.fill")
                     .font(.caption)
-                    .foregroundColor(AppTheme.primaryYellow)
+                    .foregroundColor(AppTheme.actionBlue)
 
                 Text("\(Int(goal.completedHours))/\(Int(goal.targetHours))h")
                     .font(AppTheme.captionFont)

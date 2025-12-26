@@ -14,7 +14,7 @@ class ConvexService: ObservableObject {
     static let shared = ConvexService()
 
     // TODO: Replace with your actual Convex deployment URL after running `npx convex dev`
-    private let convex = ConvexClient(deploymentUrl: "https://grateful-poodle-804.convex.cloud")
+    private let convex = ConvexClient(deploymentUrl: "https://tidy-wildcat-344.convex.cloud")
 
     private init() {}
 
@@ -72,63 +72,33 @@ class ConvexService: ObservableObject {
 
     // MARK: - Study Sessions
 
-    func generateUploadUrl() async throws -> String {
-        return try await convex.mutation("studySessions:generateUploadUrl")
-    }
-
-    func uploadVideo(url: URL, uploadUrl: String) async throws -> String {
-        print("📤 Starting upload to: \(uploadUrl)")
-
-        // Check file before upload
-        if let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
-           let fileSize = attributes[.size] as? Int64 {
-            print("📦 Uploading file size: \(fileSize) bytes")
-        }
-
-        var request = URLRequest(url: URL(string: uploadUrl)!)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 300 // 5 minutes timeout for large video uploads
-        request.setValue("video/mp4", forHTTPHeaderField: "Content-Type")
-
-        // Create custom URLSession with longer timeout
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 300
-        config.timeoutIntervalForResource = 600
-        let session = URLSession(configuration: config)
-
-        let videoData = try Data(contentsOf: url)
-        print("📦 Video data loaded: \(videoData.count) bytes")
-
-        let (data, response) = try await session.upload(for: request, from: videoData)
-
-        print("📡 Upload response received")
-
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            throw ConvexServiceError.uploadFailed
-        }
-
-        // Parse the storage ID from the response
-        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let storageId = json["storageId"] as? String {
-            return storageId
-        }
-
-        throw ConvexServiceError.invalidResponse
-    }
-
-    func createStudySession(goalId: String, subtaskId: String?, videoStorageId: String, durationMinutes: Double) async throws -> String {
-        if let subtaskId = subtaskId {
+    func createStudySession(goalId: String, subtaskId: String?, localVideoPath: String, localThumbnailPath: String?, durationMinutes: Double) async throws -> String {
+        if let subtaskId = subtaskId, let thumbnailPath = localThumbnailPath {
             return try await convex.mutation("studySessions:create", with: [
                 "goalId": goalId,
                 "subtaskId": subtaskId,
-                "videoStorageId": videoStorageId,
+                "localVideoPath": localVideoPath,
+                "localThumbnailPath": thumbnailPath,
+                "durationMinutes": durationMinutes
+            ])
+        } else if let subtaskId = subtaskId {
+            return try await convex.mutation("studySessions:create", with: [
+                "goalId": goalId,
+                "subtaskId": subtaskId,
+                "localVideoPath": localVideoPath,
+                "durationMinutes": durationMinutes
+            ])
+        } else if let thumbnailPath = localThumbnailPath {
+            return try await convex.mutation("studySessions:create", with: [
+                "goalId": goalId,
+                "localVideoPath": localVideoPath,
+                "localThumbnailPath": thumbnailPath,
                 "durationMinutes": durationMinutes
             ])
         } else {
             return try await convex.mutation("studySessions:create", with: [
                 "goalId": goalId,
-                "videoStorageId": videoStorageId,
+                "localVideoPath": localVideoPath,
                 "durationMinutes": durationMinutes
             ])
         }
@@ -140,26 +110,23 @@ class ConvexService: ObservableObject {
             .eraseToAnyPublisher()
     }
 
-    func getVideoUrl(storageId: String) async throws -> String? {
-        return try await convex.mutation("studySessions:getVideoUrl", with: ["storageId": storageId])
-    }
-
-    func deleteStudySession(id: String) async throws {
+    func deleteStudySession(id: String, localVideoPath: String, localThumbnailPath: String?) async throws {
+        // Delete from Convex
         let _: String? = try await convex.mutation("studySessions:remove", with: ["id": id])
+
+        // Delete local files
+        LocalStorageService.shared.deleteVideo(at: localVideoPath)
+        if let thumbnailPath = localThumbnailPath {
+            LocalStorageService.shared.deleteThumbnail(at: thumbnailPath)
+        }
     }
 }
 
 enum ConvexServiceError: Error {
-    case uploadFailed
-    case invalidResponse
     case notFound
 
     var localizedDescription: String {
         switch self {
-        case .uploadFailed:
-            return "Failed to upload video"
-        case .invalidResponse:
-            return "Invalid response from server"
         case .notFound:
             return "Resource not found"
         }

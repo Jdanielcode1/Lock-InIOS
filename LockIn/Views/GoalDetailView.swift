@@ -33,7 +33,7 @@ struct GoalDetailView: View {
                         // Large progress ring
                         ZStack {
                             Circle()
-                                .stroke(AppTheme.lightPurple.opacity(0.2), lineWidth: 20)
+                                .stroke(AppTheme.borderLight, lineWidth: 20)
                                 .frame(width: 200, height: 200)
 
                             Circle()
@@ -62,12 +62,12 @@ struct GoalDetailView: View {
                         VStack(spacing: 8) {
                             Text(goal.title)
                                 .font(AppTheme.titleFont)
-                                .foregroundColor(.gray)  // ← Changed to gray
+                                .foregroundColor(AppTheme.textPrimary)
                                 .multilineTextAlignment(.center)
 
                             Text(goal.description)
                                 .font(AppTheme.bodyFont)
-                                .foregroundColor(.gray)  // ← Changed to gray
+                                .foregroundColor(AppTheme.textSecondary)
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal)
                         }
@@ -78,14 +78,14 @@ struct GoalDetailView: View {
                                 icon: "clock.fill",
                                 value: "\(Int(goal.hoursRemaining))",
                                 label: "Hours Left",
-                                color: AppTheme.primaryYellow
+                                color: AppTheme.warningAmber
                             )
 
                             StatCard(
                                 icon: "video.fill",
                                 value: "\(viewModel.studySessions.count)",
                                 label: "Sessions",
-                                color: AppTheme.primaryRed
+                                color: AppTheme.actionBlue
                             )
                         }
                         .padding(.horizontal)
@@ -109,14 +109,10 @@ struct GoalDetailView: View {
                             .frame(maxWidth: .infinity)
                             .padding()
                         }
-                        .background(LinearGradient(
-                            colors: [AppTheme.primaryYellow, AppTheme.primaryRed],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ))
+                        .background(AppTheme.actionBlue)
                         .foregroundColor(.white)
                         .cornerRadius(AppTheme.smallCornerRadius)
-                        .shadow(color: AppTheme.primaryYellow.opacity(0.3), radius: 8, x: 0, y: 4)
+                        .shadow(color: AppTheme.actionBlue.opacity(0.3), radius: 8, x: 0, y: 4)
 
                         // Upload Button
                         Button {
@@ -131,10 +127,10 @@ struct GoalDetailView: View {
                             .frame(maxWidth: .infinity)
                             .padding()
                         }
-                        .background(AppTheme.energyGradient)
+                        .background(AppTheme.actionBlueLight)
                         .foregroundColor(.white)
                         .cornerRadius(AppTheme.smallCornerRadius)
-                        .shadow(color: AppTheme.primaryRed.opacity(0.3), radius: 8, x: 0, y: 4)
+                        .shadow(color: AppTheme.actionBlue.opacity(0.3), radius: 8, x: 0, y: 4)
                     }
                     .padding(.horizontal)
 
@@ -331,7 +327,7 @@ struct StudySessionCard: View {
                     .foregroundStyle(AppTheme.energyGradient)
                 }
 
-                Text(session.uploadedDate, style: .date)
+                Text(session.createdDate, style: .date)
                     .font(AppTheme.captionFont)
                     .foregroundColor(AppTheme.textSecondary)
             }
@@ -357,15 +353,25 @@ struct StudySessionCard: View {
     }
 
     private func loadThumbnail() async {
-        do {
-            // Get video URL from Convex
-            guard let videoUrlString = try await ConvexService.shared.getVideoUrl(storageId: session.videoStorageId),
-                  let videoUrl = URL(string: videoUrlString) else {
-                return
+        // Try to load cached thumbnail first
+        if let thumbnailURL = session.thumbnailURL,
+           FileManager.default.fileExists(atPath: thumbnailURL.path),
+           let data = try? Data(contentsOf: thumbnailURL),
+           let image = UIImage(data: data) {
+            await MainActor.run {
+                self.thumbnail = image
             }
+            return
+        }
 
-            // Generate thumbnail
-            let generatedThumbnail = try await VideoService.shared.generateThumbnail(from: videoUrl)
+        // Fallback: generate from video if no cached thumbnail
+        guard let videoURL = session.videoURL,
+              FileManager.default.fileExists(atPath: videoURL.path) else {
+            return
+        }
+
+        do {
+            let generatedThumbnail = try await VideoService.shared.generateThumbnail(from: videoURL)
             await MainActor.run {
                 self.thumbnail = generatedThumbnail
             }
@@ -412,7 +418,11 @@ class GoalDetailViewModel: ObservableObject {
         for index in indexSet {
             let session = studySessions[index]
             do {
-                try await convexService.deleteStudySession(id: session.id)
+                try await convexService.deleteStudySession(
+                    id: session.id,
+                    localVideoPath: session.localVideoPath,
+                    localThumbnailPath: session.localThumbnailPath
+                )
             } catch {
                 print("❌ Failed to delete study session: \(error)")
             }

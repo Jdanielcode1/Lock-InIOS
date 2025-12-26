@@ -15,6 +15,9 @@ struct CameraRecorderView: View {
 
     @Environment(\.dismiss) var dismiss
     @StateObject private var viewModel: CameraRecorderViewModel
+    @State private var previewThumbnail: UIImage?
+
+    private let videoService = VideoService.shared
 
     init(goalId: String, subtaskId: String?) {
         self.goalId = goalId
@@ -30,73 +33,78 @@ struct CameraRecorderView: View {
                 VStack(spacing: 24) {
                     Spacer()
 
-                    // Camera preview
-                    ZStack {
-                        CameraPreview(session: viewModel.captureSession)
-                            .frame(height: 600)
-                            .cornerRadius(AppTheme.cornerRadius)
+                    // Camera preview or video preview
+                    if viewModel.recordedVideoURL != nil {
+                        videoPreviewView
+                            .padding(.horizontal)
+                    } else {
+                        ZStack {
+                            CameraPreview(session: viewModel.captureSession)
+                                .frame(height: 600)
+                                .cornerRadius(AppTheme.cornerRadius)
 
-                        // Camera flip button (shown when not recording)
-                        if !viewModel.isRecording && viewModel.recordedVideoURL == nil {
-                            VStack {
-                                HStack {
-                                    Spacer()
+                            // Camera flip button (shown when not recording)
+                            if !viewModel.isRecording {
+                                VStack {
+                                    HStack {
+                                        Spacer()
 
-                                    Button {
-                                        viewModel.switchCamera()
-                                    } label: {
-                                        Image(systemName: "arrow.triangle.2.circlepath.camera")
-                                            .font(.title2)
-                                            .foregroundColor(.white)
-                                            .padding(12)
-                                            .background(Color.black.opacity(0.5))
-                                            .clipShape(Circle())
-                                    }
-                                }
-                                .padding()
-
-                                Spacer()
-                            }
-                        }
-
-                        // Recording overlay
-                        if viewModel.isRecording {
-                            VStack {
-                                HStack {
-                                    // Recording indicator
-                                    HStack(spacing: 8) {
-                                        Circle()
-                                            .fill(Color.red)
-                                            .frame(width: 12, height: 12)
-                                            .opacity(viewModel.recordingPulse ? 1.0 : 0.3)
-
-                                        Text("REC")
-                                            .font(AppTheme.headlineFont)
-                                            .foregroundColor(.white)
-                                            .shadow(color: .black, radius: 2)
+                                        Button {
+                                            viewModel.switchCamera()
+                                        } label: {
+                                            Image(systemName: "arrow.triangle.2.circlepath.camera")
+                                                .font(.title2)
+                                                .foregroundColor(.white)
+                                                .padding(12)
+                                                .background(Color.black.opacity(0.5))
+                                                .clipShape(Circle())
+                                        }
                                     }
                                     .padding()
-                                    .background(Color.black.opacity(0.5))
-                                    .cornerRadius(8)
 
                                     Spacer()
+                                }
+                            }
 
-                                    // Timer
-                                    Text(viewModel.formattedDuration)
-                                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                                        .foregroundColor(.white)
+                            // Recording overlay
+                            if viewModel.isRecording {
+                                VStack {
+                                    HStack {
+                                        // Recording indicator
+                                        HStack(spacing: 8) {
+                                            Circle()
+                                                .fill(Color.red)
+                                                .frame(width: 12, height: 12)
+                                                .opacity(viewModel.recordingPulse ? 1.0 : 0.3)
+
+                                            Text("REC")
+                                                .font(AppTheme.headlineFont)
+                                                .foregroundColor(.white)
+                                                .shadow(color: .black, radius: 2)
+                                        }
                                         .padding()
                                         .background(Color.black.opacity(0.5))
                                         .cornerRadius(8)
-                                }
-                                .padding()
 
-                                Spacer()
+                                        Spacer()
+
+                                        // Timer
+                                        Text(viewModel.formattedDuration)
+                                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                                            .foregroundColor(.white)
+                                            .padding()
+                                            .background(Color.black.opacity(0.5))
+                                            .cornerRadius(8)
+                                    }
+                                    .padding()
+
+                                    Spacer()
+                                }
                             }
                         }
+                        .playfulCard()
+                        .padding(.horizontal)
                     }
-                    .playfulCard()
-                    .padding(.horizontal)
 
                     Spacer()
 
@@ -118,7 +126,7 @@ struct CameraRecorderView: View {
                         viewModel.cancelRecording()
                         dismiss()
                     }
-                    .foregroundColor(AppTheme.primaryPurple)
+                    .foregroundColor(AppTheme.actionBlue)
                 }
             }
             .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
@@ -152,11 +160,11 @@ struct CameraRecorderView: View {
             } label: {
                 ZStack {
                     Circle()
-                        .stroke(viewModel.isRecording ? Color.red : AppTheme.primaryPurple, lineWidth: 6)
+                        .stroke(viewModel.isRecording ? Color.red : AppTheme.actionBlue, lineWidth: 6)
                         .frame(width: 100, height: 100)
 
                     Circle()
-                        .fill(viewModel.isRecording ? Color.red : AppTheme.primaryPurple)
+                        .fill(viewModel.isRecording ? Color.red : AppTheme.actionBlue)
                         .frame(width: 80, height: 80)
 
                     if viewModel.isRecording {
@@ -171,10 +179,64 @@ struct CameraRecorderView: View {
         }
     }
 
+    var videoPreviewView: some View {
+        ZStack {
+            // Background
+            RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
+                .fill(Color.black)
+                .frame(height: 600)
+
+            // Thumbnail
+            if let thumbnail = previewThumbnail {
+                Image(uiImage: thumbnail)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(height: 600)
+                    .cornerRadius(AppTheme.cornerRadius)
+            } else {
+                // Loading placeholder
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .tint(.white)
+                    Text("Loading preview...")
+                        .font(AppTheme.captionFont)
+                        .foregroundColor(.white.opacity(0.8))
+                }
+            }
+
+            // Play icon overlay
+            Image(systemName: "play.circle.fill")
+                .font(.system(size: 60))
+                .foregroundColor(.white.opacity(0.9))
+                .shadow(color: .black.opacity(0.5), radius: 8)
+
+            // Duration badge
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Text(viewModel.formattedDuration)
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.black.opacity(0.7))
+                        .cornerRadius(8)
+                        .padding()
+                }
+            }
+        }
+        .playfulCard()
+        .onAppear {
+            loadPreviewThumbnail()
+        }
+    }
+
     var finishedRecordingButtons: some View {
         HStack(spacing: 40) {
             // Retake
             Button {
+                previewThumbnail = nil
                 viewModel.retakeRecording()
             } label: {
                 ZStack {
@@ -189,10 +251,10 @@ struct CameraRecorderView: View {
                 }
             }
 
-            // Upload
+            // Save
             Button {
                 Task {
-                    await viewModel.uploadVideo()
+                    await viewModel.saveVideo()
                     if viewModel.uploadSuccess {
                         dismiss()
                     }
@@ -202,11 +264,23 @@ struct CameraRecorderView: View {
                     Circle()
                         .fill(AppTheme.primaryGradient)
                         .frame(width: 70, height: 70)
-                        .shadow(color: AppTheme.primaryPurple.opacity(0.3), radius: 8, x: 0, y: 4)
+                        .shadow(color: AppTheme.actionBlue.opacity(0.3), radius: 8, x: 0, y: 4)
 
-                    Image(systemName: "arrow.up.circle.fill")
+                    Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 30))
                         .foregroundColor(.white)
+                }
+            }
+        }
+    }
+
+    private func loadPreviewThumbnail() {
+        guard let videoURL = viewModel.recordedVideoURL else { return }
+
+        Task {
+            if let thumbnail = try? await videoService.generateThumbnail(from: videoURL) {
+                await MainActor.run {
+                    previewThumbnail = thumbnail
                 }
             }
         }
@@ -217,7 +291,7 @@ struct CameraRecorderView: View {
             // Progress ring
             ZStack {
                 Circle()
-                    .stroke(AppTheme.lightPurple.opacity(0.3), lineWidth: 12)
+                    .stroke(AppTheme.borderLight, lineWidth: 12)
                     .frame(width: 120, height: 120)
 
                 Circle()
@@ -235,7 +309,7 @@ struct CameraRecorderView: View {
                     .foregroundColor(AppTheme.textPrimary)
             }
 
-            Text("Uploading...")
+            Text("Saving...")
                 .font(AppTheme.headlineFont)
                 .foregroundColor(AppTheme.textPrimary)
         }
@@ -438,27 +512,47 @@ class CameraRecorderViewModel: NSObject, ObservableObject {
         recordingDuration = 0
     }
 
-    func uploadVideo() async {
+    func saveVideo() async {
         guard let videoURL = recordedVideoURL else { return }
 
         isUploading = true
         uploadProgress = 0
 
         do {
-            _ = try await videoService.uploadVideoToConvex(
-                videoURL: videoURL,
-                goalId: goalId,
-                subtaskId: subtaskId
-            ) { [weak self] progress in
-                Task { @MainActor in
-                    self?.uploadProgress = progress
+            // Get video duration
+            let durationMinutes = recordingDuration / 60.0
+            uploadProgress = 0.2
+
+            // Save video to local storage
+            let localVideoPath = try LocalStorageService.shared.saveVideo(from: videoURL)
+            uploadProgress = 0.5
+
+            // Generate and save thumbnail
+            var localThumbnailPath: String? = nil
+            if let fullURL = LocalStorageService.shared.getFullURL(for: localVideoPath) {
+                if let thumbnail = try? await videoService.generateThumbnail(from: fullURL) {
+                    localThumbnailPath = try? LocalStorageService.shared.saveThumbnail(thumbnail)
                 }
             }
+            uploadProgress = 0.7
 
+            // Create study session with local path
+            _ = try await ConvexService.shared.createStudySession(
+                goalId: goalId,
+                subtaskId: subtaskId,
+                localVideoPath: localVideoPath,
+                localThumbnailPath: localThumbnailPath,
+                durationMinutes: durationMinutes
+            )
+
+            uploadProgress = 1.0
             uploadSuccess = true
 
+            // Clean up temp file
+            try? FileManager.default.removeItem(at: videoURL)
+
         } catch {
-            errorMessage = "Upload failed: \(error.localizedDescription)"
+            errorMessage = "Save failed: \(error.localizedDescription)"
             isUploading = false
             uploadProgress = 0
         }

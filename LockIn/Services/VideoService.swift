@@ -179,49 +179,6 @@ class VideoService {
         }
     }
 
-    // MARK: - Upload Video with Progress
-
-    func uploadVideoToConvex(
-        videoURL: URL,
-        goalId: String,
-        subtaskId: String?,
-        progressHandler: @escaping (Double) -> Void
-    ) async throws -> String {
-        let convexService = await ConvexService.shared
-
-        // 1. Get video duration
-        let durationMinutes = try await getVideoDuration(url: videoURL)
-
-        // 2. Compress video
-        let compressedURL = try await compressVideo(url: videoURL)
-
-        progressHandler(0.3) // Compression done
-
-        // 3. Generate upload URL
-        let uploadURL = try await convexService.generateUploadUrl()
-
-        progressHandler(0.4) // Upload URL generated
-
-        // 4. Upload video
-        let storageId = try await convexService.uploadVideo(url: compressedURL, uploadUrl: uploadURL)
-
-        progressHandler(0.8) // Upload complete
-
-        // 5. Create study session
-        let sessionId = try await convexService.createStudySession(
-            goalId: goalId,
-            subtaskId: subtaskId,
-            videoStorageId: storageId,
-            durationMinutes: durationMinutes
-        )
-
-        progressHandler(1.0) // All done
-
-        // Clean up temporary file
-        try? FileManager.default.removeItem(at: compressedURL)
-
-        return sessionId
-    }
 }
 
 enum VideoServiceError: Error {

@@ -33,7 +33,7 @@ struct VideoRecorderView: View {
                             .font(.system(size: 80))
                             .foregroundStyle(AppTheme.energyGradient)
 
-                        Text("Upload Study Session")
+                        Text("Add Study Session")
                             .font(AppTheme.titleFont)
                             .foregroundColor(AppTheme.textPrimary)
 
@@ -58,19 +58,19 @@ struct VideoRecorderView: View {
 
                     Spacer()
 
-                    // Upload button
+                    // Save button
                     if viewModel.selectedVideoURL != nil && !viewModel.isUploading {
                         Button {
                             Task {
-                                await viewModel.uploadVideo()
+                                await viewModel.saveVideo()
                                 if viewModel.uploadSuccess {
                                     dismiss()
                                 }
                             }
                         } label: {
                             HStack {
-                                Image(systemName: "arrow.up.circle.fill")
-                                Text("Upload & Add to Goal")
+                                Image(systemName: "checkmark.circle.fill")
+                                Text("Save & Add to Goal")
                             }
                             .font(AppTheme.headlineFont)
                             .frame(maxWidth: .infinity)
@@ -87,7 +87,7 @@ struct VideoRecorderView: View {
                     Button("Cancel") {
                         dismiss()
                     }
-                    .foregroundColor(AppTheme.primaryPurple)
+                    .foregroundColor(AppTheme.actionBlue)
                 }
             }
             .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
@@ -176,7 +176,7 @@ struct VideoRecorderView: View {
             // Progress ring
             ZStack {
                 Circle()
-                    .stroke(AppTheme.lightPurple.opacity(0.3), lineWidth: 12)
+                    .stroke(AppTheme.borderLight, lineWidth: 12)
                     .frame(width: 150, height: 150)
 
                 Circle()
@@ -200,11 +200,11 @@ struct VideoRecorderView: View {
                 }
             }
 
-            Text("Uploading your study session...")
+            Text("Saving your study session...")
                 .font(AppTheme.headlineFont)
                 .foregroundColor(AppTheme.textPrimary)
 
-            Text("This may take a few moments")
+            Text("This may take a moment")
                 .font(AppTheme.bodyFont)
                 .foregroundColor(AppTheme.textSecondary)
         }
@@ -244,45 +244,53 @@ class VideoRecorderViewModel: ObservableObject {
         }
     }
 
-    func uploadVideo() async {
+    func saveVideo() async {
         guard let url = selectedVideoURL else { return }
 
         isUploading = true
         uploadProgress = 0
 
         do {
-            _ = try await videoService.uploadVideoToConvex(
-                videoURL: url,
-                goalId: goalId,
-                subtaskId: subtaskId
-            ) { [weak self] progress in
-                Task { @MainActor in
-                    self?.uploadProgress = progress
-                    self?.updateStatusText(for: progress)
+            // Get video duration
+            let durationMinutes = estimatedDuration ?? 0
+            uploadStatusText = "Compressing video..."
+            uploadProgress = 0.2
+
+            // Save video to local storage
+            let localVideoPath = try LocalStorageService.shared.saveVideo(from: url)
+            uploadStatusText = "Saving to device..."
+            uploadProgress = 0.5
+
+            // Generate and save thumbnail
+            var localThumbnailPath: String? = nil
+            if let fullURL = LocalStorageService.shared.getFullURL(for: localVideoPath) {
+                if let thumbnail = try? await videoService.generateThumbnail(from: fullURL) {
+                    localThumbnailPath = try? LocalStorageService.shared.saveThumbnail(thumbnail)
                 }
             }
+            uploadStatusText = "Finalizing..."
+            uploadProgress = 0.7
 
+            // Create study session with local path
+            _ = try await ConvexService.shared.createStudySession(
+                goalId: goalId,
+                subtaskId: subtaskId,
+                localVideoPath: localVideoPath,
+                localThumbnailPath: localThumbnailPath,
+                durationMinutes: durationMinutes
+            )
+
+            uploadProgress = 1.0
+            uploadStatusText = "Complete!"
             uploadSuccess = true
 
+            // Clean up temp file
+            try? FileManager.default.removeItem(at: url)
+
         } catch {
-            errorMessage = "Upload failed: \(error.localizedDescription)"
+            errorMessage = "Save failed: \(error.localizedDescription)"
             isUploading = false
             uploadProgress = 0
-        }
-    }
-
-    private func updateStatusText(for progress: Double) {
-        switch progress {
-        case 0..<0.3:
-            uploadStatusText = "Compressing video..."
-        case 0.3..<0.4:
-            uploadStatusText = "Preparing upload..."
-        case 0.4..<0.8:
-            uploadStatusText = "Uploading..."
-        case 0.8..<1.0:
-            uploadStatusText = "Finalizing..."
-        default:
-            uploadStatusText = "Complete!"
         }
     }
 }

@@ -30,7 +30,7 @@ struct SubtaskCard: View {
                 // Progress percentage
                 ZStack {
                     Circle()
-                        .stroke(AppTheme.lightPurple.opacity(0.2), lineWidth: 6)
+                        .stroke(AppTheme.borderLight, lineWidth: 6)
                         .frame(width: 60, height: 60)
 
                     Circle()
@@ -77,7 +77,7 @@ struct SubtaskCard: View {
                             Text("\(String(format: "%.1f", subtask.hoursRemaining)) hrs left")
                                 .font(AppTheme.captionFont)
                         }
-                        .foregroundColor(AppTheme.primaryYellow)
+                        .foregroundColor(AppTheme.warningAmber)
                     }
                 }
 
@@ -85,7 +85,7 @@ struct SubtaskCard: View {
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(AppTheme.lightPurple.opacity(0.2))
+                            .fill(AppTheme.borderLight)
                             .frame(height: 8)
 
                         RoundedRectangle(cornerRadius: 4)
