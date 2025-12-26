@@ -9,6 +9,29 @@ import SwiftUI
 import AVFoundation
 import AVKit
 
+// Timelapse speed options
+enum TimelapseSpeed: String, CaseIterable {
+    case normal = "Normal"
+    case timelapse = "Timelapse"
+    case ultraFast = "Ultra Fast"
+
+    var captureInterval: TimeInterval {
+        switch self {
+        case .normal: return 1.0 / 30.0  // 30 fps - real-time video
+        case .timelapse: return 0.5      // 2 fps - 15x speedup
+        case .ultraFast: return 2.0      // 0.5 fps - 60x speedup
+        }
+    }
+
+    var rateLabel: String {
+        switch self {
+        case .normal: return "30 fps"
+        case .timelapse: return "2 fps"
+        case .ultraFast: return "0.5 fps"
+        }
+    }
+}
+
 struct TimeLapseRecorderView: View {
     let goalId: String
     let subtaskId: String?
@@ -21,6 +44,7 @@ struct TimeLapseRecorderView: View {
     @State private var errorMessage: String?
     @State private var previewThumbnail: UIImage?
     @State private var player: AVPlayer?
+    @State private var selectedSpeed: TimelapseSpeed = .timelapse
 
     private let videoService = VideoService.shared
 
@@ -31,144 +55,116 @@ struct TimeLapseRecorderView: View {
     }
 
     var body: some View {
-        NavigationView {
-            ZStack {
-                AppTheme.background.ignoresSafeArea()
+        ZStack {
+            // Full screen camera or video preview
+            Color.black.ignoresSafeArea()
 
-                VStack(spacing: 24) {
-                    Spacer()
-
-                    // Camera preview or video preview
-                    if recorder.recordedVideoURL != nil {
-                        // Video preview after recording
-                        videoPreviewView
-                            .padding(.horizontal)
-                    } else {
-                        ZStack {
-                            CameraPreview(session: recorder.captureSession)
-                                .frame(maxWidth: .infinity, maxHeight: isLandscape ? 400 : 600)
-                                .cornerRadius(AppTheme.cornerRadius)
-
-                            // Camera flip button (shown when not recording)
-                            if !recorder.isRecording {
-                                VStack {
-                                    HStack {
-                                        Spacer()
-
-                                        Button {
-                                            recorder.switchCamera()
-                                        } label: {
-                                            Image(systemName: "arrow.triangle.2.circlepath.camera")
-                                                .font(.title2)
-                                                .foregroundColor(.white)
-                                                .padding(12)
-                                                .background(Color.black.opacity(0.5))
-                                                .clipShape(Circle())
-                                        }
-                                    }
-                                    .padding()
-
-                                    Spacer()
-                                }
-                            }
-
-                            // Recording overlay
-                            if recorder.isRecording {
-                                VStack {
-                                    HStack {
-                                        // Recording indicator with capture rate
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            HStack(spacing: 8) {
-                                                Circle()
-                                                    .fill(Color.red)
-                                                    .frame(width: 12, height: 12)
-
-                                                Text("TIMELAPSE")
-                                                    .font(AppTheme.headlineFont)
-                                                    .foregroundColor(.white)
-                                                    .shadow(color: .black, radius: 2)
-                                            }
-
-                                            Text(recorder.currentCaptureRate)
-                                                .font(.system(size: 12, weight: .medium, design: .rounded))
-                                                .foregroundColor(.white.opacity(0.8))
-                                        }
-                                        .padding()
-                                        .background(Color.black.opacity(0.5))
-                                        .cornerRadius(8)
-
-                                        Spacer()
-
-                                        // Duration + Frame count
-                                        VStack(alignment: .trailing, spacing: 4) {
-                                            Text(formattedDuration)
-                                                .font(.system(size: 20, weight: .bold, design: .rounded))
-                                                .foregroundColor(isApproachingLimit ? .orange : .white)
-
-                                            Text("\(recorder.frameCount) frames")
-                                                .font(.system(size: 12, weight: .medium, design: .rounded))
-                                                .foregroundColor(.white.opacity(0.8))
-
-                                            if isApproachingLimit {
-                                                Text("Max 4h")
-                                                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                                    .foregroundColor(.orange)
-                                            }
-                                        }
-                                        .padding()
-                                        .background(Color.black.opacity(0.5))
-                                        .cornerRadius(8)
-                                    }
-                                    .padding()
-
-                                    Spacer()
-                                }
-                            }
-                        }
-                        .playfulCard()
-                        .padding(.horizontal)
-                    }
-
-                    Spacer()
-
-                    // Controls
-                    if isUploading {
-                        uploadProgressView
-                    } else if recorder.recordedVideoURL != nil {
-                        finishedRecordingButtons
-                    } else {
-                        recordingButton
-                    }
-                }
-                .padding()
+            if recorder.recordedVideoURL != nil {
+                // Video preview after recording
+                videoPreviewView
+            } else {
+                // Full screen camera preview
+                CameraPreview(session: recorder.captureSession)
+                    .ignoresSafeArea()
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
+
+            // Overlay controls
+            VStack {
+                // Top bar
+                HStack {
+                    // Cancel button
+                    Button {
                         recorder.cleanup()
                         dismiss()
+                    } label: {
+                        Text("Cancel")
+                            .font(.system(size: 17, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.black.opacity(0.5))
+                            .cornerRadius(20)
                     }
-                    .foregroundColor(AppTheme.actionBlue)
+
+                    Spacer()
+
+                    // Camera flip button (when not recording)
+                    if !recorder.isRecording && recorder.recordedVideoURL == nil {
+                        Button {
+                            recorder.switchCamera()
+                        } label: {
+                            Image(systemName: "arrow.triangle.2.circlepath.camera")
+                                .font(.title2)
+                                .foregroundColor(.white)
+                                .padding(12)
+                                .background(Color.black.opacity(0.5))
+                                .clipShape(Circle())
+                        }
+                    }
+
+                    // Recording info (when recording)
+                    if recorder.isRecording {
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 10, height: 10)
+
+                            Text(formattedDuration)
+                                .font(.system(size: 17, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+
+                            Text("• \(recorder.frameCount) frames")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.black.opacity(0.5))
+                        .cornerRadius(20)
+                    }
                 }
-            }
-            .alert("Error", isPresented: .constant(errorMessage != nil)) {
-                Button("OK") {
-                    errorMessage = nil
-                }
-            } message: {
-                if let error = errorMessage {
-                    Text(error)
+                .padding(.horizontal)
+                .padding(.top, 60)
+
+                Spacer()
+
+                // Bottom controls
+                if isUploading {
+                    uploadProgressView
+                        .padding(.bottom, 60)
+                } else if recorder.recordedVideoURL != nil {
+                    finishedRecordingButtons
+                        .padding(.bottom, 60)
+                } else {
+                    VStack(spacing: 24) {
+                        // Speed selector
+                        speedSelector
+
+                        // Record button
+                        recordingButton
+                    }
+                    .padding(.bottom, 40)
                 }
             }
         }
         .onAppear {
             Task {
                 await recorder.setupCamera()
+                // Set initial capture interval
+                recorder.setCaptureInterval(selectedSpeed.captureInterval, rateName: selectedSpeed.rateLabel)
             }
         }
         .onDisappear {
             recorder.cleanup()
+        }
+        .alert("Error", isPresented: .constant(errorMessage != nil)) {
+            Button("OK") {
+                errorMessage = nil
+            }
+        } message: {
+            if let error = errorMessage {
+                Text(error)
+            }
         }
     }
 
@@ -192,80 +188,65 @@ struct TimeLapseRecorderView: View {
         recorder.recordingDuration >= 3.5 * 60 * 60 // 3.5 hours
     }
 
-    var recordingButton: some View {
-        HStack {
-            Spacer()
-
-            Button {
-                if recorder.isRecording {
-                    recorder.stopRecording()
-                } else {
-                    recorder.startRecording()
-                }
-            } label: {
-                ZStack {
-                    Circle()
-                        .stroke(recorder.isRecording ? Color.red : AppTheme.actionBlue, lineWidth: 6)
-                        .frame(width: 100, height: 100)
-
-                    Circle()
-                        .fill(recorder.isRecording ? Color.red : AppTheme.actionBlue)
-                        .frame(width: 80, height: 80)
-
-                    if recorder.isRecording {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.white)
-                            .frame(width: 30, height: 30)
-                    }
+    var speedSelector: some View {
+        HStack(spacing: 12) {
+            ForEach(TimelapseSpeed.allCases, id: \.self) { speed in
+                Button {
+                    selectedSpeed = speed
+                    recorder.setCaptureInterval(speed.captureInterval, rateName: speed.rateLabel)
+                } label: {
+                    Text(speed.rawValue)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(selectedSpeed == speed ? .black : .white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(selectedSpeed == speed ? Color.white : Color.black.opacity(0.5))
+                        .cornerRadius(20)
                 }
             }
+        }
+    }
 
-            Spacer()
+    var recordingButton: some View {
+        Button {
+            if recorder.isRecording {
+                recorder.stopRecording()
+            } else {
+                recorder.startRecording()
+            }
+        } label: {
+            ZStack {
+                Circle()
+                    .stroke(Color.white, lineWidth: 4)
+                    .frame(width: 80, height: 80)
+
+                Circle()
+                    .fill(recorder.isRecording ? Color.red : Color.white)
+                    .frame(width: recorder.isRecording ? 32 : 64, height: recorder.isRecording ? 32 : 64)
+                    .cornerRadius(recorder.isRecording ? 8 : 32)
+                    .animation(.easeInOut(duration: 0.2), value: recorder.isRecording)
+            }
         }
     }
 
     var videoPreviewView: some View {
         ZStack {
-            // Video Player
+            // Full screen video player
             if let player = player {
                 VideoPlayer(player: player)
                     .aspectRatio(contentMode: .fill)
-                    .frame(maxWidth: .infinity, maxHeight: isLandscape ? 400 : 600)
-                    .clipped()
-                    .cornerRadius(AppTheme.cornerRadius)
+                    .ignoresSafeArea()
             } else {
                 // Loading placeholder
-                RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
-                    .fill(Color.black)
-                    .frame(maxWidth: .infinity, maxHeight: isLandscape ? 400 : 600)
-                    .overlay(
-                        VStack(spacing: 16) {
-                            ProgressView()
-                                .tint(.white)
-                            Text("Loading preview...")
-                                .font(AppTheme.captionFont)
-                                .foregroundColor(.white.opacity(0.8))
-                        }
-                    )
-            }
-
-            // Duration badge
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Text(formattedDuration)
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.black.opacity(0.7))
-                        .cornerRadius(8)
-                        .padding()
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .tint(.white)
+                    Text("Loading preview...")
+                        .font(AppTheme.captionFont)
+                        .foregroundColor(.white.opacity(0.8))
                 }
             }
         }
-        .playfulCard()
         .onAppear {
             setupPlayer()
         }

@@ -26,13 +26,22 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     private var frameStorageDirectory: URL?
     private var startTime: Date?
     private var lastCaptureTime: Date?
-    private var frameInterval: TimeInterval = 0.5 // Dynamic: starts at 2 fps
+    private var frameInterval: TimeInterval = 0.5 // Default: timelapse speed (2 fps)
+    private var manualSpeedOverride: Bool = false // User manually set speed
     private let outputFPS: Int32 = 30 // Playback at 30 fps
     private let maxRecordingDuration: TimeInterval = 4 * 60 * 60 // 4 hours in seconds
 
     private var recordingTimer: Timer?
     private let videoQueue = DispatchQueue(label: "com.lockin.timelapse.video")
     private var recordingOrientation: UIDeviceOrientation = .portrait
+
+    // Allow external control of capture interval
+    func setCaptureInterval(_ interval: TimeInterval, rateName: String) {
+        frameInterval = interval
+        currentCaptureRate = rateName
+        manualSpeedOverride = true
+        print("📸 User changed capture rate to \(rateName) (interval: \(interval)s)")
+    }
 
     func setupCamera() async {
         await requestCameraPermission()
@@ -112,8 +121,8 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         recordingDuration = 0
         startTime = Date()
         lastCaptureTime = nil
-        frameInterval = 0.5 // Start at 2 fps
-        currentCaptureRate = "2 fps"
+        // Keep current frameInterval (set by user via speed selector)
+        // Default is 2.0 seconds (Timelapse mode)
 
         // Capture the current orientation at the start of recording
         recordingOrientation = deviceOrientation
@@ -142,30 +151,12 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             }
         }
 
-        print("🎬 Started timelapse recording at 2 fps (max 4 hours)")
+        print("🎬 Started timelapse recording at \(currentCaptureRate) (max 4 hours)")
     }
 
     private func updateFrameInterval() {
-        let minutes = recordingDuration / 60.0
-
-        let (newInterval, rateText): (TimeInterval, String) = {
-            switch minutes {
-            case 0..<10:
-                return (0.5, "2 fps")      // Under 10 min: 2 fps
-            case 10..<20:
-                return (1.0, "1 fps")      // 10-20 min: 1 fps
-            case 20..<80:
-                return (2.0, "0.5 fps")    // 20-80 min: 0.5 fps
-            default:
-                return (30.0, "1/30s")     // Over 80 min: ~0.03 fps
-            }
-        }()
-
-        if frameInterval != newInterval {
-            frameInterval = newInterval
-            currentCaptureRate = rateText
-            print("📸 Adjusted capture rate to \(rateText) at \(Int(minutes)) minutes")
-        }
+        // User controls the speed manually via speed selector
+        // No automatic adjustment
     }
 
     func stopRecording() {
