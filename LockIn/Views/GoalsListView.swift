@@ -82,36 +82,43 @@ struct GoalsListView: View {
             } else if goalsViewModel.goals.isEmpty {
                 goalsEmptyStateView
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(goalsViewModel.goals) { goal in
-                            NavigationLink(destination: GoalDetailView(goal: goal)) {
-                                GoalCardHorizontal(goal: goal)
+                List {
+                    ForEach(goalsViewModel.goals) { goal in
+                        NavigationLink(destination: GoalDetailView(goal: goal)) {
+                            GoalCardHorizontal(goal: goal)
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .swipeActions(edge: .leading) {
+                            Button {
+                                Task {
+                                    await goalsViewModel.archiveGoal(goal)
+                                }
+                            } label: {
+                                Label("Archive", systemImage: "archivebox")
                             }
-                            .buttonStyle(PlainButtonStyle())
-                            .contextMenu {
-                                Button {
-                                    Task {
-                                        await goalsViewModel.archiveGoal(goal)
-                                    }
-                                } label: {
-                                    Label("Archive", systemImage: "archivebox")
+                            .tint(.purple)
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                Task {
+                                    await goalsViewModel.deleteGoal(goal)
                                 }
-
-                                Button(role: .destructive) {
-                                    Task {
-                                        await goalsViewModel.deleteGoal(goal)
-                                    }
-                                } label: {
-                                    Label("Delete Goal", systemImage: "trash")
-                                }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
                             }
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .padding(.bottom, 100)
+
+                    // Bottom spacer for tab bar
+                    Color.clear
+                        .frame(height: 80)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
     }
@@ -160,9 +167,15 @@ struct GoalsListView: View {
             } else if todoViewModel.todos.isEmpty {
                 todosEmptyStateView
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(todoViewModel.todos) { todo in
+                List {
+                    ForEach(todoViewModel.todos) { todo in
+                        Button {
+                            if todo.hasVideo {
+                                selectedTodoForPlayback = todo
+                            } else {
+                                selectedTodoForRecording = todo
+                            }
+                        } label: {
                             TodoCard(
                                 todo: todo,
                                 onToggle: {
@@ -178,47 +191,53 @@ struct GoalsListView: View {
                                     }
                                 }
                             )
-                            .contextMenu {
-                                if !todo.hasVideo {
-                                    Button {
-                                        selectedTodoForRecording = todo
-                                    } label: {
-                                        Label("Record Video", systemImage: "video.badge.plus")
-                                    }
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .swipeActions(edge: .leading) {
+                            Button {
+                                Task {
+                                    await todoViewModel.archiveTodo(todo)
                                 }
-
-                                Button {
-                                    Task {
-                                        await todoViewModel.toggleTodo(todo)
-                                    }
-                                } label: {
-                                    Label(
-                                        todo.isCompleted ? "Mark Incomplete" : "Mark Complete",
-                                        systemImage: todo.isCompleted ? "circle" : "checkmark.circle"
-                                    )
+                            } label: {
+                                Label("Archive", systemImage: "archivebox")
+                            }
+                            .tint(.purple)
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                Task {
+                                    await todoViewModel.deleteTodo(todo)
                                 }
-
-                                Button {
-                                    Task {
-                                        await todoViewModel.archiveTodo(todo)
-                                    }
-                                } label: {
-                                    Label("Archive", systemImage: "archivebox")
-                                }
-
-                                Button(role: .destructive) {
-                                    Task {
-                                        await todoViewModel.deleteTodo(todo)
-                                    }
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
                             }
                         }
+                        .swipeActions(edge: .trailing) {
+                            Button {
+                                Task {
+                                    await todoViewModel.toggleTodo(todo)
+                                }
+                            } label: {
+                                Label(
+                                    todo.isCompleted ? "Undo" : "Done",
+                                    systemImage: todo.isCompleted ? "arrow.uturn.backward" : "checkmark"
+                                )
+                            }
+                            .tint(todo.isCompleted ? .orange : .green)
+                        }
                     }
-                    .padding()
-                    .padding(.bottom, 100) // Space for floating tab bar
+
+                    // Bottom spacer for tab bar
+                    Color.clear
+                        .frame(height: 80)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
     }
