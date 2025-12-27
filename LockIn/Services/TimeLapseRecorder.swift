@@ -8,6 +8,30 @@
 import AVFoundation
 import UIKit
 
+// MARK: - Segment Tracking Structs
+
+/// Tracks a period where the capture speed was constant
+struct SpeedSegment {
+    let startFrameIndex: Int      // First frame index in this segment
+    var endFrameIndex: Int        // Last frame index (exclusive)
+    let startRealTime: TimeInterval  // Real time when segment started (excluding pauses)
+    var endRealTime: TimeInterval    // Real time when segment ended
+    let frameInterval: TimeInterval  // Capture interval during this segment
+}
+
+/// Tracks a period where audio was being recorded
+struct AudioSegment {
+    let startRealTime: TimeInterval  // When audio started (relative to recording start)
+    var endRealTime: TimeInterval    // When audio stopped
+    let audioFileURL: URL            // The audio file for this segment
+}
+
+/// Maps a video frame to its real-time capture moment
+struct FrameTimestamp {
+    let frameIndex: Int
+    let realTimeOffset: TimeInterval  // Seconds since recording started (excluding pauses)
+}
+
 @MainActor
 class TimeLapseRecorder: NSObject, ObservableObject {
     @Published var isRecording = false
@@ -26,7 +50,12 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
     // Audio recording
     private var audioRecorder: AVAudioRecorder?
-    private var audioFileURL: URL?
+    private var currentAudioFileURL: URL?
+
+    // Segment tracking for proper sync
+    private var speedSegments: [SpeedSegment] = []
+    private var audioSegments: [AudioSegment] = []
+    private var frameTimestamps: [FrameTimestamp] = []
 
     var capturedFrameURLs: [URL] = []
     private var frameStorageDirectory: URL?
@@ -44,6 +73,9 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     // Pause tracking
     private var pausedDuration: TimeInterval = 0
     private var pauseStartTime: Date?
+
+    // Track current audio segment start time
+    private var currentAudioStartTime: TimeInterval = 0
 
     // MARK: - Pause/Resume Recording
 
@@ -76,10 +108,33 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
     // Allow external control of capture interval
     func setCaptureInterval(_ interval: TimeInterval, rateName: String) {
+        // If recording, close current speed segment and start new one
+        if isRecording {
+            closeCurrentSpeedSegment()
+
+            // Start new speed segment
+            let newSegment = SpeedSegment(
+                startFrameIndex: frameCount,
+                endFrameIndex: frameCount,  // Will be updated as frames are captured
+                startRealTime: recordingDuration,
+                endRealTime: recordingDuration,
+                frameInterval: interval
+            )
+            speedSegments.append(newSegment)
+            print("📸 Speed changed at frame \(frameCount), real-time \(recordingDuration)s")
+        }
+
         frameInterval = interval
         currentCaptureRate = rateName
         manualSpeedOverride = true
         print("📸 User changed capture rate to \(rateName) (interval: \(interval)s)")
+    }
+
+    // Close the current speed segment
+    private func closeCurrentSpeedSegment() {
+        guard !speedSegments.isEmpty else { return }
+        speedSegments[speedSegments.count - 1].endFrameIndex = frameCount
+        speedSegments[speedSegments.count - 1].endRealTime = recordingDuration
     }
 
     // Toggle audio recording on/off (can be called during recording)
@@ -88,13 +143,38 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
         if isRecording {
             if isAudioEnabled {
+                // Start new audio segment
+                currentAudioStartTime = recordingDuration
                 startAudioRecording()
+                print("🎤 Audio enabled at real-time offset: \(currentAudioStartTime)s")
             } else {
-                stopAudioRecording()
+                // Close current audio segment
+                closeCurrentAudioSegment()
+                print("🎤 Audio disabled at real-time offset: \(recordingDuration)s")
             }
         }
 
         print("🎤 Audio \(isAudioEnabled ? "enabled" : "disabled")")
+    }
+
+    // Close the current audio segment and save it
+    private func closeCurrentAudioSegment() {
+        guard let audioURL = currentAudioFileURL else { return }
+
+        audioRecorder?.stop()
+        audioRecorder = nil
+
+        // Create segment record
+        let segment = AudioSegment(
+            startRealTime: currentAudioStartTime,
+            endRealTime: recordingDuration,
+            audioFileURL: audioURL
+        )
+        audioSegments.append(segment)
+
+        print("📝 Saved audio segment: \(segment.startRealTime)s - \(segment.endRealTime)s")
+
+        currentAudioFileURL = nil
     }
 
     func setupCamera() async {
@@ -132,7 +212,7 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
             audioRecorder = try AVAudioRecorder(url: audioURL, settings: settings)
             audioRecorder?.record()
-            audioFileURL = audioURL
+            currentAudioFileURL = audioURL
             print("🎙️ Started audio recording: \(audioURL.lastPathComponent)")
         } catch {
             print("❌ Failed to start audio recording: \(error)")
@@ -140,8 +220,10 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     }
 
     private func stopAudioRecording() {
-        audioRecorder?.stop()
-        audioRecorder = nil
+        // Close current audio segment if recording
+        if currentAudioFileURL != nil {
+            closeCurrentAudioSegment()
+        }
         print("🎙️ Stopped audio recording")
     }
 
@@ -220,8 +302,21 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         pauseStartTime = nil
         startTime = Date()
         lastCaptureTime = nil
-        // Keep current frameInterval (set by user via speed selector)
-        // Default is 2.0 seconds (Timelapse mode)
+
+        // Reset segment tracking
+        speedSegments.removeAll()
+        audioSegments.removeAll()
+        frameTimestamps.removeAll()
+
+        // Initialize first speed segment
+        let initialSegment = SpeedSegment(
+            startFrameIndex: 0,
+            endFrameIndex: 0,
+            startRealTime: 0,
+            endRealTime: 0,
+            frameInterval: frameInterval
+        )
+        speedSegments.append(initialSegment)
 
         // Capture the current orientation at the start of recording
         recordingOrientation = deviceOrientation
@@ -237,6 +332,7 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
         // Start audio recording if enabled
         if isAudioEnabled {
+            currentAudioStartTime = 0
             startAudioRecording()
         }
 
@@ -276,19 +372,32 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         recordingTimer?.invalidate()
         recordingTimer = nil
 
-        // Stop audio recording
+        // Close current speed segment
+        closeCurrentSpeedSegment()
+
+        // Stop audio recording (this closes the current audio segment)
         stopAudioRecording()
 
         print("⏹️ Stopped timelapse recording. Captured \(frameCount) frames over \(recordingDuration) seconds")
+        print("📊 Speed segments: \(speedSegments.count), Audio segments: \(audioSegments.count)")
 
-        // Create video from captured frames (with audio if available)
-        let audioURL = audioFileURL
+        // Debug: Print segment details
+        for (i, seg) in speedSegments.enumerated() {
+            print("  Speed[\(i)]: frames \(seg.startFrameIndex)-\(seg.endFrameIndex), time \(seg.startRealTime)-\(seg.endRealTime)s, interval \(seg.frameInterval)s")
+        }
+        for (i, seg) in audioSegments.enumerated() {
+            print("  Audio[\(i)]: time \(seg.startRealTime)-\(seg.endRealTime)s")
+        }
+
+        // Create video from captured frames (with audio segments if available)
+        let segments = audioSegments
+        let timestamps = frameTimestamps
         Task {
-            await createVideo(withAudioURL: audioURL)
+            await createVideo(withAudioSegments: segments, frameTimestamps: timestamps)
         }
     }
 
-    private func createVideo(withAudioURL audioURL: URL? = nil) async {
+    private func createVideo(withAudioSegments audioSegments: [AudioSegment], frameTimestamps: [FrameTimestamp]) async {
         guard !capturedFrameURLs.isEmpty else {
             print("❌ No frames captured")
             return
@@ -303,24 +412,30 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         do {
             try await createVideoFromFrames(frameURLs: capturedFrameURLs, outputURL: videoOnlyURL, fps: outputFPS)
 
-            // If we have audio, merge it with the video
-            if let audioURL = audioURL, FileManager.default.fileExists(atPath: audioURL.path) {
-                print("🔊 Merging audio with video...")
+            // If we have audio segments, merge them with the video using proper sync
+            if !audioSegments.isEmpty {
+                print("🔊 Merging \(audioSegments.count) audio segment(s) with video using segment-based sync...")
                 let finalURL = FileManager.default.temporaryDirectory
                     .appendingPathComponent(UUID().uuidString)
                     .appendingPathExtension("mov")
 
-                try await mergeVideoWithAudio(videoURL: videoOnlyURL, audioURL: audioURL, outputURL: finalURL)
+                try await mergeVideoWithAudioSegments(
+                    videoURL: videoOnlyURL,
+                    audioSegments: audioSegments,
+                    frameTimestamps: frameTimestamps,
+                    outputURL: finalURL
+                )
 
                 // Clean up intermediate files
                 try? FileManager.default.removeItem(at: videoOnlyURL)
-                try? FileManager.default.removeItem(at: audioURL)
+                for segment in audioSegments {
+                    try? FileManager.default.removeItem(at: segment.audioFileURL)
+                }
 
                 await MainActor.run {
                     self.recordedVideoURL = finalURL
-                    self.audioFileURL = nil
                 }
-                print("✅ Timelapse video with audio created at: \(finalURL)")
+                print("✅ Timelapse video with synced audio created at: \(finalURL)")
             } else {
                 await MainActor.run {
                     self.recordedVideoURL = videoOnlyURL
@@ -338,10 +453,67 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         }
     }
 
-    nonisolated private func mergeVideoWithAudio(videoURL: URL, audioURL: URL, outputURL: URL) async throws {
-        let videoAsset = AVURLAsset(url: videoURL)
-        let audioAsset = AVURLAsset(url: audioURL)
+    /// Maps a real-time offset to a video time based on frame timestamps
+    nonisolated private func realTimeToVideoTime(
+        realTime: TimeInterval,
+        frameTimestamps: [FrameTimestamp],
+        fps: Int32
+    ) -> CMTime {
+        // Handle edge cases
+        guard !frameTimestamps.isEmpty else {
+            return CMTime.zero
+        }
 
+        // If realTime is before first frame, return 0
+        if realTime <= frameTimestamps[0].realTimeOffset {
+            return CMTime.zero
+        }
+
+        // If realTime is after last frame, return end of video
+        if realTime >= frameTimestamps[frameTimestamps.count - 1].realTimeOffset {
+            let videoTime = Double(frameTimestamps.count - 1) / Double(fps)
+            return CMTime(seconds: videoTime, preferredTimescale: 600)
+        }
+
+        // Binary search to find the frame that corresponds to this real time
+        var low = 0
+        var high = frameTimestamps.count - 1
+
+        while low < high {
+            let mid = (low + high + 1) / 2
+            if frameTimestamps[mid].realTimeOffset <= realTime {
+                low = mid
+            } else {
+                high = mid - 1
+            }
+        }
+
+        // Interpolate between frames for smoother mapping
+        let frameIndex = low
+        var videoTime = Double(frameIndex) / Double(fps)
+
+        // If there's a next frame, interpolate
+        if frameIndex < frameTimestamps.count - 1 {
+            let currentFrameTime = frameTimestamps[frameIndex].realTimeOffset
+            let nextFrameTime = frameTimestamps[frameIndex + 1].realTimeOffset
+            let frameDuration = nextFrameTime - currentFrameTime
+
+            if frameDuration > 0 {
+                let fraction = (realTime - currentFrameTime) / frameDuration
+                videoTime += fraction / Double(fps)
+            }
+        }
+
+        return CMTime(seconds: videoTime, preferredTimescale: 600)
+    }
+
+    nonisolated private func mergeVideoWithAudioSegments(
+        videoURL: URL,
+        audioSegments: [AudioSegment],
+        frameTimestamps: [FrameTimestamp],
+        outputURL: URL
+    ) async throws {
+        let videoAsset = AVURLAsset(url: videoURL)
         let composition = AVMutableComposition()
 
         // Add video track
@@ -357,25 +529,65 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         let videoTransform = try await videoTrack.load(.preferredTransform)
         compositionVideoTrack.preferredTransform = videoTransform
 
-        // Add audio track - time-scaled to match video duration
-        if let audioTrack = try await audioAsset.loadTracks(withMediaType: .audio).first,
-           let compositionAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
+        // Create audio track for composition
+        guard let compositionAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            throw NSError(domain: "TimeLapseRecorder", code: -4, userInfo: [NSLocalizedDescriptionKey: "Failed to create audio track"])
+        }
+
+        let fps = await MainActor.run { self.outputFPS }
+
+        // Process each audio segment
+        for (index, segment) in audioSegments.enumerated() {
+            let audioAsset = AVURLAsset(url: segment.audioFileURL)
+
+            guard let audioTrack = try await audioAsset.loadTracks(withMediaType: .audio).first else {
+                print("⚠️ No audio track in segment \(index), skipping")
+                continue
+            }
 
             let audioDuration = try await audioAsset.load(.duration)
 
-            // Insert the full audio, then we'll scale it
-            try compositionAudioTrack.insertTimeRange(
-                CMTimeRange(start: .zero, duration: audioDuration),
-                of: audioTrack,
-                at: .zero
+            // Calculate where this audio segment should go in the video timeline
+            // Based on when it was recorded in real-time
+            let videoStartTime = realTimeToVideoTime(
+                realTime: segment.startRealTime,
+                frameTimestamps: frameTimestamps,
+                fps: fps
+            )
+            let videoEndTime = realTimeToVideoTime(
+                realTime: segment.endRealTime,
+                frameTimestamps: frameTimestamps,
+                fps: fps
             )
 
-            // Scale the audio track to match video duration
-            // This speeds up/slows down the audio to sync with the timelapse
-            compositionAudioTrack.scaleTimeRange(
-                CMTimeRange(start: .zero, duration: audioDuration),
-                toDuration: videoDuration
-            )
+            let videoSegmentDuration = CMTimeSubtract(videoEndTime, videoStartTime)
+
+            print("🔊 Audio segment \(index):")
+            print("   Real time: \(segment.startRealTime)s - \(segment.endRealTime)s")
+            print("   Video time: \(CMTimeGetSeconds(videoStartTime))s - \(CMTimeGetSeconds(videoEndTime))s")
+            print("   Audio duration: \(CMTimeGetSeconds(audioDuration))s -> Video segment: \(CMTimeGetSeconds(videoSegmentDuration))s")
+
+            // Insert the full audio at the correct video position
+            do {
+                try compositionAudioTrack.insertTimeRange(
+                    CMTimeRange(start: .zero, duration: audioDuration),
+                    of: audioTrack,
+                    at: videoStartTime
+                )
+
+                // Scale this audio segment to match its video segment duration
+                // This applies the correct speedup for this specific segment
+                if CMTimeGetSeconds(videoSegmentDuration) > 0 && CMTimeGetSeconds(audioDuration) > 0 {
+                    compositionAudioTrack.scaleTimeRange(
+                        CMTimeRange(start: videoStartTime, duration: audioDuration),
+                        toDuration: videoSegmentDuration
+                    )
+                    let speedup = CMTimeGetSeconds(audioDuration) / CMTimeGetSeconds(videoSegmentDuration)
+                    print("   Speedup factor: \(String(format: "%.2f", speedup))x")
+                }
+            } catch {
+                print("⚠️ Failed to insert audio segment \(index): \(error)")
+            }
         }
 
         // Export
@@ -558,6 +770,8 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
     func clearFrames() {
         capturedFrameURLs.removeAll()
+        frameTimestamps.removeAll()
+        speedSegments.removeAll()
         frameCount = 0
         recordedVideoURL = nil
 
@@ -567,10 +781,16 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             frameStorageDirectory = nil
         }
 
-        // Clean up audio file
-        if let audioURL = audioFileURL {
+        // Clean up audio segments
+        for segment in audioSegments {
+            try? FileManager.default.removeItem(at: segment.audioFileURL)
+        }
+        audioSegments.removeAll()
+
+        // Clean up current audio file
+        if let audioURL = currentAudioFileURL {
             try? FileManager.default.removeItem(at: audioURL)
-            audioFileURL = nil
+            currentAudioFileURL = nil
         }
     }
 
@@ -578,6 +798,8 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         stopRecording()
         captureSession.stopRunning()
         capturedFrameURLs.removeAll()
+        frameTimestamps.removeAll()
+        speedSegments.removeAll()
 
         // Stop orientation observer
         NotificationCenter.default.removeObserver(self, name: UIDevice.orientationDidChangeNotification, object: nil)
@@ -594,10 +816,16 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             frameStorageDirectory = nil
         }
 
-        // Clean up audio file
-        if let audioURL = audioFileURL {
+        // Clean up audio segments
+        for segment in audioSegments {
+            try? FileManager.default.removeItem(at: segment.audioFileURL)
+        }
+        audioSegments.removeAll()
+
+        // Clean up current audio file
+        if let audioURL = currentAudioFileURL {
             try? FileManager.default.removeItem(at: audioURL)
-            audioFileURL = nil
+            currentAudioFileURL = nil
         }
     }
 
@@ -627,6 +855,14 @@ extension TimeLapseRecorder: AVCaptureVideoDataOutputSampleBufferDelegate {
 
             lastCaptureTime = now
 
+            // Record frame timestamp for audio sync
+            // recordingDuration already excludes paused time
+            let timestamp = FrameTimestamp(
+                frameIndex: frameCount,
+                realTimeOffset: recordingDuration
+            )
+            frameTimestamps.append(timestamp)
+
             // Capture frame with reduced quality
             guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
@@ -654,7 +890,7 @@ extension TimeLapseRecorder: AVCaptureVideoDataOutputSampleBufferDelegate {
                 frameCount = capturedFrameURLs.count
 
                 if frameCount % 10 == 0 {
-                    print("📸 Captured \(frameCount) frames")
+                    print("📸 Captured \(frameCount) frames at real-time \(String(format: "%.1f", recordingDuration))s")
                 }
             }
         }

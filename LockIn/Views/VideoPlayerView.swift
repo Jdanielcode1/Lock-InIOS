@@ -8,11 +8,15 @@
 import SwiftUI
 import AVKit
 import AVFoundation
+import Photos
 
 struct VideoPlayerView: View {
     let session: StudySession
     @Environment(\.dismiss) var dismiss
     @StateObject private var viewModel: VideoPlayerViewModel
+    @State private var showingSaveAlert = false
+    @State private var saveAlertMessage = ""
+    @State private var isSaving = false
 
     init(session: StudySession) {
         self.session = session
@@ -84,6 +88,66 @@ struct VideoPlayerView: View {
                     Text("\(String(format: "%.1f", session.durationHours))h study time")
                         .font(AppTheme.captionFont)
                         .foregroundColor(.white.opacity(0.8))
+                }
+            }
+
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    saveVideoToCameraRoll()
+                } label: {
+                    if isSaving {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Image(systemName: "square.and.arrow.down")
+                            .foregroundColor(.white)
+                    }
+                }
+                .disabled(isSaving)
+            }
+        }
+        .alert("Save Video", isPresented: $showingSaveAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(saveAlertMessage)
+        }
+    }
+
+    private func saveVideoToCameraRoll() {
+        guard let videoURL = session.videoURL else {
+            saveAlertMessage = "Video file not found"
+            showingSaveAlert = true
+            return
+        }
+
+        guard FileManager.default.fileExists(atPath: videoURL.path) else {
+            saveAlertMessage = "Video file has been deleted"
+            showingSaveAlert = true
+            return
+        }
+
+        isSaving = true
+
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            DispatchQueue.main.async {
+                if status == .authorized || status == .limited {
+                    PHPhotoLibrary.shared().performChanges({
+                        PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: videoURL)
+                    }) { success, error in
+                        DispatchQueue.main.async {
+                            isSaving = false
+                            if success {
+                                saveAlertMessage = "Video saved to Camera Roll"
+                            } else {
+                                saveAlertMessage = "Failed to save: \(error?.localizedDescription ?? "Unknown error")"
+                            }
+                            showingSaveAlert = true
+                        }
+                    }
+                } else {
+                    isSaving = false
+                    saveAlertMessage = "Please allow photo library access in Settings"
+                    showingSaveAlert = true
                 }
             }
         }

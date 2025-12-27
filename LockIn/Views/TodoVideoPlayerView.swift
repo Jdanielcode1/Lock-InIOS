@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AVKit
+import Photos
 
 struct TodoVideoPlayerView: View {
     let videoURL: URL
@@ -14,6 +15,9 @@ struct TodoVideoPlayerView: View {
 
     @Environment(\.dismiss) var dismiss
     @State private var player: AVPlayer?
+    @State private var showingSaveAlert = false
+    @State private var saveAlertMessage = ""
+    @State private var isSaving = false
 
     var body: some View {
         ZStack {
@@ -44,6 +48,27 @@ struct TodoVideoPlayerView: View {
 
                     Spacer()
 
+                    // Save button
+                    Button {
+                        saveVideoToCameraRoll()
+                    } label: {
+                        if isSaving {
+                            ProgressView()
+                                .tint(.white)
+                                .frame(width: 44, height: 44)
+                                .background(Color.black.opacity(0.5))
+                                .clipShape(Circle())
+                        } else {
+                            Image(systemName: "square.and.arrow.down")
+                                .font(.title2)
+                                .foregroundColor(.white)
+                                .padding(12)
+                                .background(Color.black.opacity(0.5))
+                                .clipShape(Circle())
+                        }
+                    }
+                    .disabled(isSaving)
+
                     // Todo title
                     VStack(alignment: .trailing, spacing: 4) {
                         Text(todo.title)
@@ -71,6 +96,11 @@ struct TodoVideoPlayerView: View {
                 Spacer()
             }
         }
+        .alert("Save Video", isPresented: $showingSaveAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(saveAlertMessage)
+        }
         .onAppear {
             setupPlayer()
         }
@@ -92,6 +122,40 @@ struct TodoVideoPlayerView: View {
         ) { _ in
             player?.seek(to: .zero)
             player?.play()
+        }
+    }
+
+    private func saveVideoToCameraRoll() {
+        guard FileManager.default.fileExists(atPath: videoURL.path) else {
+            saveAlertMessage = "Video file not found"
+            showingSaveAlert = true
+            return
+        }
+
+        isSaving = true
+
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            DispatchQueue.main.async {
+                if status == .authorized || status == .limited {
+                    PHPhotoLibrary.shared().performChanges({
+                        PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: videoURL)
+                    }) { success, error in
+                        DispatchQueue.main.async {
+                            isSaving = false
+                            if success {
+                                saveAlertMessage = "Video saved to Camera Roll"
+                            } else {
+                                saveAlertMessage = "Failed to save: \(error?.localizedDescription ?? "Unknown error")"
+                            }
+                            showingSaveAlert = true
+                        }
+                    }
+                } else {
+                    isSaving = false
+                    saveAlertMessage = "Please allow photo library access in Settings"
+                    showingSaveAlert = true
+                }
+            }
         }
     }
 }
