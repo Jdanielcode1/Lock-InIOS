@@ -128,17 +128,29 @@ struct TodoRecorderView: View {
                 // Recording info
                 if recorder.isRecording {
                     HStack(spacing: 8) {
-                        Circle()
-                            .fill(Color.red)
-                            .frame(width: 10, height: 10)
+                        if recorder.isPaused {
+                            Image(systemName: "pause.fill")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.orange)
+                        } else {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 10, height: 10)
+                        }
 
                         Text(formattedDuration)
                             .font(.system(size: 17, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
 
-                        Text("• \(recorder.frameCount) frames")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white.opacity(0.8))
+                        if recorder.isPaused {
+                            Text("PAUSED")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.orange)
+                        } else {
+                            Text("• \(recorder.frameCount) frames")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
@@ -153,11 +165,27 @@ struct TodoRecorderView: View {
 
             // Bottom controls
             VStack(spacing: 24) {
-                // Speed selector
-                speedSelector
+                // Speed selector (hide when recording)
+                if !recorder.isRecording {
+                    speedSelector
+                }
 
-                // Record button
-                recordingButton
+                // Recording controls
+                HStack(spacing: 40) {
+                    // Pause button (only visible when recording)
+                    if recorder.isRecording {
+                        pauseButton
+                    }
+
+                    // Record/Stop button
+                    recordingButton
+
+                    // Spacer for balance when recording
+                    if recorder.isRecording {
+                        Color.clear
+                            .frame(width: 56, height: 56)
+                    }
+                }
             }
             .padding(.bottom, 40)
         }
@@ -324,6 +352,26 @@ struct TodoRecorderView: View {
                         .background(selectedSpeed == speed ? Color.white : Color.black.opacity(0.5))
                         .cornerRadius(20)
                 }
+            }
+        }
+    }
+
+    var pauseButton: some View {
+        Button {
+            if recorder.isPaused {
+                recorder.resumeRecording()
+            } else {
+                recorder.pauseRecording()
+            }
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(Color.black.opacity(0.5))
+                    .frame(width: 56, height: 56)
+
+                Image(systemName: recorder.isPaused ? "play.fill" : "pause.fill")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.white)
             }
         }
     }

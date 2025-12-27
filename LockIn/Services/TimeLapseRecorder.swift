@@ -11,6 +11,7 @@ import UIKit
 @MainActor
 class TimeLapseRecorder: NSObject, ObservableObject {
     @Published var isRecording = false
+    @Published var isPaused = false
     @Published var recordingDuration: TimeInterval = 0
     @Published var frameCount: Int = 0
     @Published var recordedVideoURL: URL?
@@ -39,6 +40,39 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     private var recordingTimer: Timer?
     private let videoQueue = DispatchQueue(label: "com.lockin.timelapse.video")
     @Published var recordingOrientation: UIDeviceOrientation = .portrait
+
+    // Pause tracking
+    private var pausedDuration: TimeInterval = 0
+    private var pauseStartTime: Date?
+
+    // MARK: - Pause/Resume Recording
+
+    func pauseRecording() {
+        guard isRecording && !isPaused else { return }
+        isPaused = true
+        pauseStartTime = Date()
+
+        // Pause audio recording
+        audioRecorder?.pause()
+
+        print("⏸️ Recording paused")
+    }
+
+    func resumeRecording() {
+        guard isRecording && isPaused else { return }
+
+        // Calculate how long we were paused
+        if let pauseStart = pauseStartTime {
+            pausedDuration += Date().timeIntervalSince(pauseStart)
+        }
+        pauseStartTime = nil
+        isPaused = false
+
+        // Resume audio recording
+        audioRecorder?.record()
+
+        print("▶️ Recording resumed")
+    }
 
     // Allow external control of capture interval
     func setCaptureInterval(_ interval: TimeInterval, rateName: String) {
@@ -178,9 +212,12 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
     func startRecording() {
         isRecording = true
+        isPaused = false
         capturedFrameURLs.removeAll()
         frameCount = 0
         recordingDuration = 0
+        pausedDuration = 0
+        pauseStartTime = nil
         startTime = Date()
         lastCaptureTime = nil
         // Keep current frameInterval (set by user via speed selector)
@@ -207,7 +244,14 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self = self, let start = self.startTime else { return }
-                self.recordingDuration = Date().timeIntervalSince(start)
+
+                // Calculate duration excluding paused time
+                var totalPaused = self.pausedDuration
+                if self.isPaused, let pauseStart = self.pauseStartTime {
+                    totalPaused += Date().timeIntervalSince(pauseStart)
+                }
+                self.recordingDuration = Date().timeIntervalSince(start) - totalPaused
+
                 self.updateFrameInterval()
 
                 // Check if max duration reached (4 hours)
@@ -228,6 +272,7 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
     func stopRecording() {
         isRecording = false
+        isPaused = false
         recordingTimer?.invalidate()
         recordingTimer = nil
 
@@ -569,7 +614,7 @@ extension TimeLapseRecorder: AVCaptureVideoDataOutputSampleBufferDelegate {
         from connection: AVCaptureConnection
     ) {
         Task { @MainActor in
-            guard isRecording else { return }
+            guard isRecording && !isPaused else { return }
             guard let storageDir = frameStorageDirectory else { return }
 
             let now = Date()
