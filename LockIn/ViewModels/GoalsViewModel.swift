@@ -60,4 +60,8 @@ class GoalsViewModel: ObservableObject {
             errorMessage = "Failed to update goal: \(error.localizedDescription)"
         }
     }
+
+    func moveGoal(from source: IndexSet, to destination: Int) {
+        goals.move(fromOffsets: source, toOffset: destination)
+    }
 }

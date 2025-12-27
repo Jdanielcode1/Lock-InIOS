@@ -83,14 +83,12 @@ struct GoalsListView: View {
                 goalsEmptyStateView
             } else {
                 ScrollView {
-                    LazyVGrid(columns: [
-                        GridItem(.flexible(), spacing: 16),
-                        GridItem(.flexible(), spacing: 16)
-                    ], spacing: 16) {
+                    LazyVStack(spacing: 12) {
                         ForEach(goalsViewModel.goals) { goal in
                             NavigationLink(destination: GoalDetailView(goal: goal)) {
-                                GoalCard(goal: goal)
+                                GoalCardHorizontal(goal: goal)
                             }
+                            .buttonStyle(PlainButtonStyle())
                             .contextMenu {
                                 Button(role: .destructive) {
                                     Task {
@@ -102,8 +100,9 @@ struct GoalsListView: View {
                             }
                         }
                     }
-                    .padding()
-                    .padding(.bottom, 100) // Space for floating tab bar
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 100)
                 }
             }
         }
@@ -239,72 +238,116 @@ struct GoalsListView: View {
     }
 }
 
+struct GoalCardHorizontal: View {
+    let goal: Goal
+
+    var body: some View {
+        HStack(spacing: 16) {
+            // Left: Title and hours
+            VStack(alignment: .leading, spacing: 8) {
+                Text(goal.title)
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .foregroundColor(AppTheme.textPrimary)
+                    .lineLimit(2)
+
+                Text("\(Int(goal.completedHours)) of \(Int(goal.targetHours)) hours")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(AppTheme.textSecondary)
+
+                // Progress bar
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(AppTheme.borderLight)
+                            .frame(height: 6)
+
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(AppTheme.progressGradient(for: goal.progressPercentage))
+                            .frame(width: max(0, geo.size.width * min(goal.progressPercentage / 100, 1.0)), height: 6)
+                            .animation(AppTheme.smoothAnimation, value: goal.progressPercentage)
+                    }
+                }
+                .frame(height: 6)
+            }
+
+            Spacer()
+
+            // Right: Percentage or completed badge
+            if goal.isCompleted {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 32))
+                    .foregroundColor(AppTheme.successGreen)
+            } else {
+                Text("\(Int(goal.progressPercentage))%")
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundColor(goal.progressPercentage > 0 ? AppTheme.actionBlue : AppTheme.textSecondary.opacity(0.5))
+            }
+        }
+        .padding(16)
+        .background(AppTheme.cardBackground)
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+    }
+}
+
+// Keep old card for potential grid view
 struct GoalCard: View {
     let goal: Goal
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Progress circle
-            ZStack {
-                Circle()
-                    .stroke(AppTheme.borderLight, lineWidth: 8)
-                    .frame(width: 80, height: 80)
-
-                Circle()
-                    .trim(from: 0, to: goal.progressPercentage / 100)
-                    .stroke(
-                        AppTheme.progressGradient(for: goal.progressPercentage),
-                        style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                    )
-                    .frame(width: 80, height: 80)
-                    .rotationEffect(.degrees(-90))
-                    .animation(AppTheme.smoothAnimation, value: goal.progressPercentage)
-
-                VStack(spacing: 2) {
-                    Text("\(Int(goal.progressPercentage))%")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundColor(AppTheme.textPrimary)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.top, 8)
-
-            // Goal title
+        VStack(alignment: .leading, spacing: 16) {
             Text(goal.title)
-                .font(AppTheme.headlineFont)
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
                 .foregroundColor(AppTheme.textPrimary)
                 .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(minHeight: 44)
 
-            // Hours info
-            HStack(spacing: 4) {
-                Image(systemName: "clock.fill")
-                    .font(.caption)
-                    .foregroundColor(AppTheme.actionBlue)
+            Spacer()
 
-                Text("\(Int(goal.completedHours))/\(Int(goal.targetHours))h")
-                    .font(AppTheme.captionFont)
+            HStack {
+                Text("\(Int(goal.completedHours)) of \(Int(goal.targetHours))h")
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundColor(AppTheme.textSecondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
 
-            // Status badge
-            if goal.isCompleted {
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
-                    Text("Completed")
+                Spacer()
+
+                Text("\(Int(goal.progressPercentage))%")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundColor(goal.progressPercentage > 0 ? AppTheme.actionBlue : AppTheme.textSecondary)
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(AppTheme.borderLight)
+                        .frame(height: 8)
+
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(AppTheme.progressGradient(for: goal.progressPercentage))
+                        .frame(width: geo.size.width * min(goal.progressPercentage / 100, 1.0), height: 8)
+                        .animation(AppTheme.smoothAnimation, value: goal.progressPercentage)
                 }
-                .font(.caption)
+            }
+            .frame(height: 8)
+
+            if goal.isCompleted {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 12))
+                    Text("Done")
+                        .font(.system(size: 12, weight: .semibold))
+                }
                 .foregroundColor(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(AppTheme.successGradient)
-                .cornerRadius(12)
-                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(AppTheme.successGreen)
+                .cornerRadius(8)
             }
         }
-        .padding()
+        .padding(16)
+        .frame(minHeight: 140)
         .playfulCard()
     }
 }

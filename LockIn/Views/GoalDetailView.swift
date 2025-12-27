@@ -16,10 +16,44 @@ struct GoalDetailView: View {
     @State private var showingTimeLapseRecorder = false
     @State private var showingAddSubtask = false
     @State private var selectedSubtask: Subtask?
+    @Environment(\.dismiss) private var dismiss
 
     init(goal: Goal) {
         self.goal = goal
         _viewModel = StateObject(wrappedValue: GoalDetailViewModel(goalId: goal.id))
+    }
+
+    // Dynamic motivational message based on progress
+    private var motivationalMessage: String {
+        let progress = goal.progressPercentage
+        switch progress {
+        case 0:
+            return "Ready to lock in?"
+        case 1..<25:
+            return "Great start! Keep going!"
+        case 25..<50:
+            return "You're making progress!"
+        case 50..<75:
+            return "Halfway there!"
+        case 75..<100:
+            return "Almost there!"
+        default:
+            return "Goal completed!"
+        }
+    }
+
+    private var motivationalIcon: String {
+        let progress = goal.progressPercentage
+        switch progress {
+        case 0:
+            return "target"
+        case 1..<50:
+            return "flame.fill"
+        case 50..<100:
+            return "bolt.fill"
+        default:
+            return "checkmark.circle.fill"
+        }
     }
 
     var body: some View {
@@ -28,155 +62,99 @@ struct GoalDetailView: View {
 
             ScrollView {
                 VStack(spacing: 24) {
-                    // Progress Header
-                    VStack(spacing: 16) {
-                        // Large progress ring
-                        ZStack {
-                            Circle()
-                                .stroke(AppTheme.borderLight, lineWidth: 20)
-                                .frame(width: 200, height: 200)
+                    // Motivational Header
+                    VStack(spacing: 20) {
+                        // Icon and message
+                        VStack(spacing: 12) {
+                            Image(systemName: motivationalIcon)
+                                .font(.system(size: 44))
+                                .foregroundStyle(goal.isCompleted ? AnyShapeStyle(AppTheme.successGreen) : AnyShapeStyle(AppTheme.primaryGradient))
 
-                            Circle()
-                                .trim(from: 0, to: goal.progressPercentage / 100)
-                                .stroke(
-                                    AppTheme.progressGradient(for: goal.progressPercentage),
-                                    style: StrokeStyle(lineWidth: 20, lineCap: .round)
-                                )
-                                .frame(width: 200, height: 200)
-                                .rotationEffect(.degrees(-90))
-                                .animation(AppTheme.smoothAnimation, value: goal.progressPercentage)
-
-                            VStack(spacing: 4) {
-                                Text("\(Int(goal.progressPercentage))%")
-                                    .font(.system(size: 48, weight: .bold, design: .rounded))
-                                    .foregroundColor(AppTheme.textPrimary)
-
-                                Text("\(Int(goal.completedHours))/\(Int(goal.targetHours)) hrs")
-                                    .font(AppTheme.bodyFont)
-                                    .foregroundColor(AppTheme.textSecondary)
-                            }
-                        }
-                        .padding(.top, 20)
-
-                        // Goal info
-                        VStack(spacing: 8) {
-                            Text(goal.title)
-                                .font(AppTheme.titleFont)
+                            Text(motivationalMessage)
+                                .font(.system(size: 22, weight: .semibold, design: .rounded))
                                 .foregroundColor(AppTheme.textPrimary)
-                                .multilineTextAlignment(.center)
-
-                            Text(goal.description)
-                                .font(AppTheme.bodyFont)
-                                .foregroundColor(AppTheme.textSecondary)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal)
                         }
+                        .padding(.top, 8)
 
-                        // Stats
-                        HStack(spacing: 20) {
-                            StatCard(
-                                icon: "clock.fill",
-                                value: "\(Int(goal.hoursRemaining))",
-                                label: "Hours Left",
-                                color: AppTheme.warningAmber
-                            )
+                        // Progress section
+                        VStack(spacing: 12) {
+                            // Hours text
+                            HStack {
+                                Text("\(Int(goal.completedHours)) of \(Int(goal.targetHours)) hours")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(AppTheme.textSecondary)
 
-                            StatCard(
-                                icon: "video.fill",
-                                value: "\(viewModel.studySessions.count)",
-                                label: "Sessions",
-                                color: AppTheme.actionBlue
-                            )
+                                Spacer()
+
+                                Text("\(Int(goal.progressPercentage))%")
+                                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                                    .foregroundColor(goal.progressPercentage > 0 ? AppTheme.actionBlue : AppTheme.textSecondary)
+                            }
+
+                            // Progress bar
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(AppTheme.borderLight)
+                                        .frame(height: 12)
+
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(AppTheme.progressGradient(for: goal.progressPercentage))
+                                        .frame(width: max(0, geo.size.width * min(goal.progressPercentage / 100, 1.0)), height: 12)
+                                        .animation(AppTheme.smoothAnimation, value: goal.progressPercentage)
+                                }
+                            }
+                            .frame(height: 12)
                         }
-                        .padding(.horizontal)
+                        .padding(.horizontal, 4)
                     }
-                    .padding()
-                    .playfulCard()
+                    .padding(20)
+                    .background(AppTheme.cardBackground)
+                    .cornerRadius(20)
+                    .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 4)
                     .padding(.horizontal)
 
-                    // Add Study Session Buttons
-                    VStack(spacing: 12) {
-                        // Timelapse Button
+                    // Primary CTA - Start Session
+                    if !goal.isCompleted {
                         Button {
                             showingTimeLapseRecorder = true
                         } label: {
-                            VStack(spacing: 8) {
-                                Image(systemName: "timer")
-                                    .font(.title2)
-                                Text("Timelapse")
-                                    .font(AppTheme.captionFont)
+                            HStack(spacing: 12) {
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 18, weight: .semibold))
+                                Text("Start Session")
+                                    .font(.system(size: 18, weight: .semibold))
                             }
                             .frame(maxWidth: .infinity)
-                            .padding()
-                        }
-                        .background(AppTheme.actionBlue)
-                        .foregroundColor(.white)
-                        .cornerRadius(AppTheme.smallCornerRadius)
-                        .shadow(color: AppTheme.actionBlue.opacity(0.3), radius: 8, x: 0, y: 4)
-
-                        // Upload Button
-                        Button {
-                            showingVideoPicker = true
-                        } label: {
-                            VStack(spacing: 8) {
-                                Image(systemName: "square.and.arrow.up")
-                                    .font(.title2)
-                                Text("Upload Video")
-                                    .font(AppTheme.captionFont)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                        }
-                        .background(AppTheme.actionBlueLight)
-                        .foregroundColor(.white)
-                        .cornerRadius(AppTheme.smallCornerRadius)
-                        .shadow(color: AppTheme.actionBlue.opacity(0.3), radius: 8, x: 0, y: 4)
-                    }
-                    .padding(.horizontal)
-
-                    // Subtasks Section
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Subtasks")
-                                .font(AppTheme.headlineFont)
-                                .foregroundColor(AppTheme.textPrimary)
-
-                            Spacer()
-
-                            Button {
-                                showingAddSubtask = true
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "plus.circle.fill")
-                                    Text("Add")
-                                }
-                                .font(AppTheme.captionFont)
-                                .foregroundStyle(AppTheme.primaryGradient)
-                            }
+                            .frame(height: 60)
+                            .foregroundColor(.white)
+                            .background(AppTheme.primaryGradient)
+                            .cornerRadius(16)
+                            .shadow(color: AppTheme.actionBlue.opacity(0.4), radius: 12, x: 0, y: 6)
                         }
                         .padding(.horizontal)
+                    }
 
-                        if viewModel.subtasks.isEmpty {
-                            // Empty state
-                            VStack(spacing: 12) {
-                                Image(systemName: "checklist")
-                                    .font(.system(size: 40))
-                                    .foregroundColor(AppTheme.textSecondary.opacity(0.5))
+                    // Subtasks Section
+                    if !viewModel.subtasks.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Text("Subtasks")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(AppTheme.textPrimary)
 
-                                Text("No subtasks yet")
-                                    .font(AppTheme.bodyFont)
-                                    .foregroundColor(AppTheme.textSecondary)
+                                Spacer()
 
-                                Text("Break down your goal into smaller tasks")
-                                    .font(AppTheme.captionFont)
-                                    .foregroundColor(AppTheme.textSecondary.opacity(0.7))
-                                    .multilineTextAlignment(.center)
+                                Button {
+                                    showingAddSubtask = true
+                                } label: {
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.system(size: 22))
+                                        .foregroundStyle(AppTheme.primaryGradient)
+                                }
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 40)
-                            .playfulCard()
                             .padding(.horizontal)
-                        } else {
+
                             ForEach(viewModel.subtasks) { subtask in
                                 Button {
                                     selectedSubtask = subtask
@@ -187,39 +165,117 @@ struct GoalDetailView: View {
                                 .buttonStyle(PlainButtonStyle())
                                 .padding(.horizontal)
                             }
-                            .onDelete { indexSet in
-                                Task {
-                                    await viewModel.deleteSubtasks(at: indexSet)
-                                }
-                            }
                         }
                     }
 
-                    // Study Sessions List
-                    if !viewModel.studySessions.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Study Sessions")
-                                .font(AppTheme.headlineFont)
+                    // Recent Sessions Section
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Recent Sessions")
+                                .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(AppTheme.textPrimary)
-                                .padding(.horizontal)
 
+                            Spacer()
+
+                            if !viewModel.studySessions.isEmpty {
+                                Text("\(viewModel.studySessions.count)")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 4)
+                                    .background(AppTheme.actionBlue)
+                                    .cornerRadius(10)
+                            }
+                        }
+                        .padding(.horizontal)
+
+                        if viewModel.studySessions.isEmpty {
+                            // Friendly empty state
+                            VStack(spacing: 16) {
+                                Image(systemName: "video.badge.plus")
+                                    .font(.system(size: 40))
+                                    .foregroundStyle(AppTheme.primaryGradient)
+
+                                VStack(spacing: 6) {
+                                    Text("No sessions yet")
+                                        .font(.system(size: 17, weight: .semibold))
+                                        .foregroundColor(AppTheme.textPrimary)
+
+                                    Text("Start your first study session\nand it will appear here!")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(AppTheme.textSecondary)
+                                        .multilineTextAlignment(.center)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 32)
+                            .background(AppTheme.cardBackground)
+                            .cornerRadius(16)
+                            .padding(.horizontal)
+                        } else {
                             ForEach(viewModel.studySessions) { session in
                                 NavigationLink(destination: VideoPlayerView(session: session)) {
                                     StudySessionCard(session: session, subtasks: viewModel.subtasks)
                                 }
                             }
-                            .onDelete { indexSet in
-                                Task {
-                                    await viewModel.deleteStudySessions(at: indexSet)
-                                }
-                            }
                         }
+                    }
+
+                    // Add subtask button if empty
+                    if viewModel.subtasks.isEmpty {
+                        Button {
+                            showingAddSubtask = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "plus.circle")
+                                    .font(.system(size: 16))
+                                Text("Add subtasks to break down your goal")
+                                    .font(.system(size: 14, weight: .medium))
+                            }
+                            .foregroundColor(AppTheme.actionBlue)
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(AppTheme.actionBlue.opacity(0.1))
+                            .cornerRadius(12)
+                        }
+                        .padding(.horizontal)
                     }
                 }
                 .padding(.vertical)
+                .padding(.bottom, 40)
             }
         }
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(goal.title)
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    Button {
+                        showingVideoPicker = true
+                    } label: {
+                        Label("Upload Video", systemImage: "square.and.arrow.up")
+                    }
+
+                    Button {
+                        showingAddSubtask = true
+                    } label: {
+                        Label("Add Subtask", systemImage: "checklist")
+                    }
+
+                    Divider()
+
+                    Button(role: .destructive) {
+                        // Delete goal action would go here
+                    } label: {
+                        Label("Delete Goal", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 20))
+                        .foregroundColor(AppTheme.actionBlue)
+                }
+            }
+        }
         .fullScreenCover(isPresented: $showingTimeLapseRecorder) {
             TimeLapseRecorderView(goalId: goal.id, subtaskId: selectedSubtask?.id)
         }
@@ -239,32 +295,6 @@ struct GoalDetailView: View {
                 selectedSubtask = nil
             }
         }
-    }
-}
-
-struct StatCard: View {
-    let icon: String
-    let value: String
-    let label: String
-    let color: Color
-
-    var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundColor(color)
-
-            Text(value)
-                .font(.system(size: 24, weight: .bold, design: .rounded))
-                .foregroundColor(AppTheme.textPrimary)
-
-            Text(label)
-                .font(AppTheme.captionFont)
-                .foregroundColor(AppTheme.textSecondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding()
-        .playfulCard()
     }
 }
 
@@ -293,14 +323,11 @@ struct StudySessionCard: View {
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 80, height: 60)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
-                } else {
-                    ProgressView()
-                        .tint(.white)
                 }
 
                 // Play button overlay
                 Image(systemName: "play.circle.fill")
-                    .font(.title)
+                    .font(.title2)
                     .foregroundColor(.white)
                     .shadow(color: .black.opacity(0.5), radius: 4)
             }
@@ -313,7 +340,7 @@ struct StudySessionCard: View {
             // Session info
             VStack(alignment: .leading, spacing: 4) {
                 Text(session.formattedDuration)
-                    .font(AppTheme.headlineFont)
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(AppTheme.textPrimary)
 
                 // Show subtask name if available
@@ -322,33 +349,31 @@ struct StudySessionCard: View {
                         Image(systemName: "checklist")
                             .font(.caption)
                         Text(subtaskName)
-                            .font(AppTheme.captionFont)
+                            .font(.system(size: 12))
                     }
-                    .foregroundStyle(AppTheme.energyGradient)
+                    .foregroundColor(AppTheme.actionBlue)
                 }
 
                 Text(session.createdDate, style: .date)
-                    .font(AppTheme.captionFont)
+                    .font(.system(size: 12))
                     .foregroundColor(AppTheme.textSecondary)
             }
 
             Spacer()
 
             // Duration badge
-            HStack(spacing: 4) {
-                Image(systemName: "clock.fill")
-                    .font(.caption)
-                Text(String(format: "%.1fh", session.durationHours))
-                    .font(AppTheme.captionFont)
-            }
-            .foregroundColor(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(AppTheme.energyGradient)
-            .cornerRadius(12)
+            Text(String(format: "%.1fh", session.durationHours))
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(AppTheme.primaryGradient)
+                .cornerRadius(10)
         }
-        .padding()
-        .playfulCard()
+        .padding(12)
+        .background(AppTheme.cardBackground)
+        .cornerRadius(14)
+        .shadow(color: .black.opacity(0.04), radius: 6, x: 0, y: 2)
         .padding(.horizontal)
     }
 
@@ -376,7 +401,7 @@ struct StudySessionCard: View {
                 self.thumbnail = generatedThumbnail
             }
         } catch {
-            print("❌ Failed to generate thumbnail: \(error)")
+            print("Failed to generate thumbnail: \(error)")
         }
     }
 }
@@ -424,7 +449,7 @@ class GoalDetailViewModel: ObservableObject {
                     localThumbnailPath: session.localThumbnailPath
                 )
             } catch {
-                print("❌ Failed to delete study session: \(error)")
+                print("Failed to delete study session: \(error)")
             }
         }
     }
@@ -435,7 +460,7 @@ class GoalDetailViewModel: ObservableObject {
             do {
                 try await convexService.deleteSubtask(id: subtask.id)
             } catch {
-                print("❌ Failed to delete subtask: \(error)")
+                print("Failed to delete subtask: \(error)")
             }
         }
     }
