@@ -90,6 +90,14 @@ struct GoalsListView: View {
                             }
                             .buttonStyle(PlainButtonStyle())
                             .contextMenu {
+                                Button {
+                                    Task {
+                                        await goalsViewModel.archiveGoal(goal)
+                                    }
+                                } label: {
+                                    Label("Archive", systemImage: "archivebox")
+                                }
+
                                 Button(role: .destructive) {
                                     Task {
                                         await goalsViewModel.deleteGoal(goal)
@@ -188,6 +196,14 @@ struct GoalsListView: View {
                                         todo.isCompleted ? "Mark Incomplete" : "Mark Complete",
                                         systemImage: todo.isCompleted ? "circle" : "checkmark.circle"
                                     )
+                                }
+
+                                Button {
+                                    Task {
+                                        await todoViewModel.archiveTodo(todo)
+                                    }
+                                } label: {
+                                    Label("Archive", systemImage: "archivebox")
                                 }
 
                                 Button(role: .destructive) {

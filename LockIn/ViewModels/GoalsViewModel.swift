@@ -64,4 +64,12 @@ class GoalsViewModel: ObservableObject {
     func moveGoal(from source: IndexSet, to destination: Int) {
         goals.move(fromOffsets: source, toOffset: destination)
     }
+
+    func archiveGoal(_ goal: Goal) async {
+        do {
+            try await convexService.archiveGoal(id: goal.id)
+        } catch {
+            errorMessage = "Failed to archive goal: \(error.localizedDescription)"
+        }
+    }
 }

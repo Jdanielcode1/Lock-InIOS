@@ -28,6 +28,9 @@ struct SettingsView: View {
                         // Storage
                         storageSection
 
+                        // Archive
+                        archiveSection
+
                         // About
                         aboutSection
                     }
@@ -131,6 +134,29 @@ struct SettingsView: View {
                         value: ""
                     )
                 }
+            }
+            .background(AppTheme.cardBackground)
+            .cornerRadius(AppTheme.smallCornerRadius)
+            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+        }
+    }
+
+    var archiveSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("ARCHIVE")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(AppTheme.textSecondary)
+                .padding(.horizontal, 4)
+                .padding(.bottom, 8)
+
+            NavigationLink(destination: ArchivedItemsView()) {
+                SettingsRow(
+                    icon: "archivebox.fill",
+                    iconColor: .purple,
+                    title: "Archived Items",
+                    value: "",
+                    showChevron: true
+                )
             }
             .background(AppTheme.cardBackground)
             .cornerRadius(AppTheme.smallCornerRadius)

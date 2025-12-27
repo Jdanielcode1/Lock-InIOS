@@ -49,6 +49,20 @@ class ConvexService: ObservableObject {
         let _: String? = try await convex.mutation("goals:remove", with: ["id": id])
     }
 
+    func archiveGoal(id: String) async throws {
+        let _: String? = try await convex.mutation("goals:archive", with: ["id": id])
+    }
+
+    func unarchiveGoal(id: String) async throws {
+        let _: String? = try await convex.mutation("goals:unarchive", with: ["id": id])
+    }
+
+    func listArchivedGoals() -> AnyPublisher<[Goal], Never> {
+        convex.subscribe(to: "goals:listArchived", yielding: [Goal].self)
+            .replaceError(with: [])
+            .eraseToAnyPublisher()
+    }
+
     // MARK: - Subtasks
 
     func listSubtasks(goalId: String) -> AnyPublisher<[Subtask], Never> {
@@ -175,6 +189,20 @@ class ConvexService: ObservableObject {
         if let thumbnailPath = localThumbnailPath {
             LocalStorageService.shared.deleteThumbnail(at: thumbnailPath)
         }
+    }
+
+    func archiveTodo(id: String) async throws {
+        let _: String? = try await convex.mutation("todos:archive", with: ["id": id])
+    }
+
+    func unarchiveTodo(id: String) async throws {
+        let _: String? = try await convex.mutation("todos:unarchive", with: ["id": id])
+    }
+
+    func listArchivedTodos() -> AnyPublisher<[TodoItem], Never> {
+        convex.subscribe(to: "todos:listArchived", yielding: [TodoItem].self)
+            .replaceError(with: [])
+            .eraseToAnyPublisher()
     }
 }
 

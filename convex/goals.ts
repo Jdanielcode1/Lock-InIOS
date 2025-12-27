@@ -1,12 +1,21 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
-// Query: List all goals
+// Query: List all non-archived goals
 export const list = query({
   args: {},
   handler: async (ctx) => {
     const goals = await ctx.db.query("goals").order("desc").collect();
-    return goals;
+    return goals.filter((goal) => !goal.isArchived);
+  },
+});
+
+// Query: List archived goals
+export const listArchived = query({
+  args: {},
+  handler: async (ctx) => {
+    const goals = await ctx.db.query("goals").order("desc").collect();
+    return goals.filter((goal) => goal.isArchived === true);
   },
 });
 
@@ -70,6 +79,26 @@ export const updateStatus = mutation({
   handler: async (ctx, args) => {
     await ctx.db.patch(args.id, {
       status: args.status,
+    });
+  },
+});
+
+// Mutation: Archive a goal
+export const archive = mutation({
+  args: { id: v.id("goals") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      isArchived: true,
+    });
+  },
+});
+
+// Mutation: Unarchive a goal
+export const unarchive = mutation({
+  args: { id: v.id("goals") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      isArchived: false,
     });
   },
 });

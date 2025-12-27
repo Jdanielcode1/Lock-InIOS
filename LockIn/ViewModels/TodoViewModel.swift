@@ -75,4 +75,12 @@ class TodoViewModel: ObservableObject {
             errorMessage = "Failed to delete todo: \(error.localizedDescription)"
         }
     }
+
+    func archiveTodo(_ todo: TodoItem) async {
+        do {
+            try await convexService.archiveTodo(id: todo.id)
+        } catch {
+            errorMessage = "Failed to archive todo: \(error.localizedDescription)"
+        }
+    }
 }

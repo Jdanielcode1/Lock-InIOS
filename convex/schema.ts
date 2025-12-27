@@ -8,8 +8,11 @@ export default defineSchema({
     targetHours: v.float64(),
     completedHours: v.float64(),
     status: v.union(v.literal("active"), v.literal("completed"), v.literal("paused")),
+    isArchived: v.optional(v.boolean()),
     createdAt: v.float64(),
-  }).index("by_status", ["status"]),
+  })
+    .index("by_status", ["status"])
+    .index("by_archived", ["isArchived"]),
 
   subtasks: defineTable({
     goalId: v.id("goals"),
@@ -35,8 +38,11 @@ export default defineSchema({
     title: v.string(),
     description: v.optional(v.string()),
     isCompleted: v.boolean(),
+    isArchived: v.optional(v.boolean()),
     localVideoPath: v.optional(v.string()),
     localThumbnailPath: v.optional(v.string()),
     createdAt: v.float64(),
-  }).index("by_completed", ["isCompleted"]),
+  })
+    .index("by_completed", ["isCompleted"])
+    .index("by_archived", ["isArchived"]),
 });

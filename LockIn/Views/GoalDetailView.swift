@@ -264,8 +264,20 @@ struct GoalDetailView: View {
 
                     Divider()
 
+                    Button {
+                        Task {
+                            try? await ConvexService.shared.archiveGoal(id: goal.id)
+                            dismiss()
+                        }
+                    } label: {
+                        Label("Archive Goal", systemImage: "archivebox")
+                    }
+
                     Button(role: .destructive) {
-                        // Delete goal action would go here
+                        Task {
+                            try? await ConvexService.shared.deleteGoal(id: goal.id)
+                            dismiss()
+                        }
                     } label: {
                         Label("Delete Goal", systemImage: "trash")
                     }

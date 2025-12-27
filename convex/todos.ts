@@ -1,12 +1,21 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
-// Query: List all todos
+// Query: List all non-archived todos
 export const list = query({
   args: {},
   handler: async (ctx) => {
     const todos = await ctx.db.query("todos").order("desc").collect();
-    return todos;
+    return todos.filter((todo) => !todo.isArchived);
+  },
+});
+
+// Query: List archived todos
+export const listArchived = query({
+  args: {},
+  handler: async (ctx) => {
+    const todos = await ctx.db.query("todos").order("desc").collect();
+    return todos.filter((todo) => todo.isArchived === true);
   },
 });
 
@@ -61,6 +70,26 @@ export const attachVideo = mutation({
       localVideoPath: args.localVideoPath,
       localThumbnailPath: args.localThumbnailPath,
       isCompleted: true,
+    });
+  },
+});
+
+// Mutation: Archive a todo
+export const archive = mutation({
+  args: { id: v.id("todos") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      isArchived: true,
+    });
+  },
+});
+
+// Mutation: Unarchive a todo
+export const unarchive = mutation({
+  args: { id: v.id("todos") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      isArchived: false,
     });
   },
 });
