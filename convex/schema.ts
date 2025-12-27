@@ -30,4 +30,13 @@ export default defineSchema({
   })
     .index("by_goal", ["goalId"])
     .index("by_subtask", ["subtaskId"]),
+
+  todos: defineTable({
+    title: v.string(),
+    description: v.optional(v.string()),
+    isCompleted: v.boolean(),
+    localVideoPath: v.optional(v.string()),
+    localThumbnailPath: v.optional(v.string()),
+    createdAt: v.float64(),
+  }).index("by_completed", ["isCompleted"]),
 });

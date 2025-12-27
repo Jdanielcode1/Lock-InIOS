@@ -7,58 +7,112 @@
 
 import SwiftUI
 
+enum ListMode: String, CaseIterable {
+    case todos = "To Do"
+    case goals = "Goals"
+}
+
 struct GoalsListView: View {
-    @StateObject private var viewModel = GoalsViewModel()
+    @StateObject private var goalsViewModel = GoalsViewModel()
+    @StateObject private var todoViewModel = TodoViewModel()
     @State private var showingCreateGoal = false
+    @State private var showingCreateTodo = false
+    @State private var listMode: ListMode = .goals
+    @State private var selectedTodoForRecording: TodoItem?
+    @State private var showingVideoPlayer = false
+    @State private var selectedTodoForPlayback: TodoItem?
 
     var body: some View {
         NavigationView {
             ZStack {
                 AppTheme.background.ignoresSafeArea()
 
-                if viewModel.isLoading {
-                    ProgressView()
-                        .tint(AppTheme.primaryPurple)
-                } else if viewModel.goals.isEmpty {
-                    emptyStateView
-                } else {
-                    ScrollView {
-                        LazyVGrid(columns: [
-                            GridItem(.flexible(), spacing: 16),
-                            GridItem(.flexible(), spacing: 16)
-                        ], spacing: 16) {
-                            ForEach(viewModel.goals) { goal in
-                                NavigationLink(destination: GoalDetailView(goal: goal)) {
-                                    GoalCard(goal: goal)
-                                }
-                                .contextMenu {
-                                    Button(role: .destructive) {
-                                        Task {
-                                            await viewModel.deleteGoal(goal)
-                                        }
-                                    } label: {
-                                        Label("Delete Goal", systemImage: "trash")
-                                    }
-                                }
-                            }
+                VStack(spacing: 0) {
+                    // Segmented control
+                    Picker("", selection: $listMode) {
+                        ForEach(ListMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
                         }
-                        .padding()
-                        .padding(.bottom, 100) // Space for floating tab bar
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                    .padding(.bottom, 16)
+
+                    // Content based on selection
+                    if listMode == .goals {
+                        goalsContent
+                    } else {
+                        todosContent
                     }
                 }
             }
-            .navigationTitle("Goals")
+            .navigationTitle(listMode == .goals ? "Goals" : "To Do")
             .navigationBarTitleDisplayMode(.large)
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .sheet(isPresented: $showingCreateGoal) {
-                CreateGoalView(viewModel: viewModel)
+                CreateGoalView(viewModel: goalsViewModel)
+            }
+            .sheet(isPresented: $showingCreateTodo) {
+                AddTodoSheet(viewModel: todoViewModel)
+            }
+            .fullScreenCover(item: $selectedTodoForRecording) { todo in
+                TodoRecorderView(todo: todo, viewModel: todoViewModel)
+            }
+            .fullScreenCover(item: $selectedTodoForPlayback) { todo in
+                if let videoURL = todo.videoURL {
+                    TodoVideoPlayerView(videoURL: videoURL, todo: todo)
+                }
             }
         }
     }
 
-    var emptyStateView: some View {
+    // MARK: - Goals Content
+
+    var goalsContent: some View {
+        Group {
+            if goalsViewModel.isLoading {
+                VStack {
+                    Spacer()
+                    ProgressView()
+                        .tint(AppTheme.primaryPurple)
+                    Spacer()
+                }
+            } else if goalsViewModel.goals.isEmpty {
+                goalsEmptyStateView
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: [
+                        GridItem(.flexible(), spacing: 16),
+                        GridItem(.flexible(), spacing: 16)
+                    ], spacing: 16) {
+                        ForEach(goalsViewModel.goals) { goal in
+                            NavigationLink(destination: GoalDetailView(goal: goal)) {
+                                GoalCard(goal: goal)
+                            }
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    Task {
+                                        await goalsViewModel.deleteGoal(goal)
+                                    }
+                                } label: {
+                                    Label("Delete Goal", systemImage: "trash")
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                    .padding(.bottom, 100) // Space for floating tab bar
+                }
+            }
+        }
+    }
+
+    var goalsEmptyStateView: some View {
         VStack(spacing: 20) {
+            Spacer()
+
             Image(systemName: "target")
                 .font(.system(size: 80))
                 .foregroundStyle(AppTheme.primaryGradient)
@@ -79,6 +133,107 @@ struct GoalsListView: View {
                     .font(AppTheme.headlineFont)
                     .primaryButton()
             }
+
+            Spacer()
+        }
+        .padding()
+    }
+
+    // MARK: - Todos Content
+
+    var todosContent: some View {
+        Group {
+            if todoViewModel.isLoading {
+                VStack {
+                    Spacer()
+                    ProgressView()
+                        .tint(AppTheme.primaryPurple)
+                    Spacer()
+                }
+            } else if todoViewModel.todos.isEmpty {
+                todosEmptyStateView
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(todoViewModel.todos) { todo in
+                            TodoCard(
+                                todo: todo,
+                                onToggle: {
+                                    Task {
+                                        await todoViewModel.toggleTodo(todo)
+                                    }
+                                },
+                                onTap: {
+                                    if todo.hasVideo {
+                                        selectedTodoForPlayback = todo
+                                    } else {
+                                        selectedTodoForRecording = todo
+                                    }
+                                }
+                            )
+                            .contextMenu {
+                                if !todo.hasVideo {
+                                    Button {
+                                        selectedTodoForRecording = todo
+                                    } label: {
+                                        Label("Record Video", systemImage: "video.badge.plus")
+                                    }
+                                }
+
+                                Button {
+                                    Task {
+                                        await todoViewModel.toggleTodo(todo)
+                                    }
+                                } label: {
+                                    Label(
+                                        todo.isCompleted ? "Mark Incomplete" : "Mark Complete",
+                                        systemImage: todo.isCompleted ? "circle" : "checkmark.circle"
+                                    )
+                                }
+
+                                Button(role: .destructive) {
+                                    Task {
+                                        await todoViewModel.deleteTodo(todo)
+                                    }
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                    .padding(.bottom, 100) // Space for floating tab bar
+                }
+            }
+        }
+    }
+
+    var todosEmptyStateView: some View {
+        VStack(spacing: 20) {
+            Spacer()
+
+            Image(systemName: "checklist")
+                .font(.system(size: 80))
+                .foregroundStyle(AppTheme.primaryGradient)
+
+            Text("No To-Dos Yet")
+                .font(AppTheme.titleFont)
+                .foregroundColor(AppTheme.textPrimary)
+
+            Text("Add tasks and complete them\nby recording a video!")
+                .font(AppTheme.bodyFont)
+                .foregroundColor(AppTheme.textSecondary)
+                .multilineTextAlignment(.center)
+
+            Button {
+                showingCreateTodo = true
+            } label: {
+                Text("Add To-Do")
+                    .font(AppTheme.headlineFont)
+                    .primaryButton()
+            }
+
+            Spacer()
         }
         .padding()
     }

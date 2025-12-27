@@ -16,11 +16,16 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     @Published var recordedVideoURL: URL?
     @Published var currentCaptureRate: String = "2 fps"
     @Published var deviceOrientation: UIDeviceOrientation = .portrait
+    @Published var isAudioEnabled = false // Audio recording toggle (disabled by default)
 
     nonisolated(unsafe) let captureSession = AVCaptureSession()
     private var videoOutput: AVCaptureVideoDataOutput?
     private var currentVideoInput: AVCaptureDeviceInput?
     private var currentCameraPosition: AVCaptureDevice.Position = .front
+
+    // Audio recording
+    private var audioRecorder: AVAudioRecorder?
+    private var audioFileURL: URL?
 
     var capturedFrameURLs: [URL] = []
     private var frameStorageDirectory: URL?
@@ -43,10 +48,67 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         print("📸 User changed capture rate to \(rateName) (interval: \(interval)s)")
     }
 
+    // Toggle audio recording on/off (can be called during recording)
+    func toggleAudio() {
+        isAudioEnabled.toggle()
+
+        if isRecording {
+            if isAudioEnabled {
+                startAudioRecording()
+            } else {
+                stopAudioRecording()
+            }
+        }
+
+        print("🎤 Audio \(isAudioEnabled ? "enabled" : "disabled")")
+    }
+
     func setupCamera() async {
         await requestCameraPermission()
+        await requestMicrophonePermission()
         await configureCaptureSession()
         startOrientationObserver()
+    }
+
+    private func requestMicrophonePermission() async {
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+
+        if status == .notDetermined {
+            _ = await AVCaptureDevice.requestAccess(for: .audio)
+        }
+    }
+
+    private func startAudioRecording() {
+        let audioURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("m4a")
+
+        let settings: [String: Any] = [
+            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+            AVSampleRateKey: 44100,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+        ]
+
+        do {
+            // Configure audio session
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
+            try audioSession.setActive(true)
+
+            audioRecorder = try AVAudioRecorder(url: audioURL, settings: settings)
+            audioRecorder?.record()
+            audioFileURL = audioURL
+            print("🎙️ Started audio recording: \(audioURL.lastPathComponent)")
+        } catch {
+            print("❌ Failed to start audio recording: \(error)")
+        }
+    }
+
+    private func stopAudioRecording() {
+        audioRecorder?.stop()
+        audioRecorder = nil
+        print("🎙️ Stopped audio recording")
     }
 
     private func startOrientationObserver() {
@@ -136,6 +198,11 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
         print("📁 Created frame storage directory: \(tempDir.path)")
 
+        // Start audio recording if enabled
+        if isAudioEnabled {
+            startAudioRecording()
+        }
+
         // Start timer to update duration and frame interval
         recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
@@ -164,32 +231,57 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         recordingTimer?.invalidate()
         recordingTimer = nil
 
+        // Stop audio recording
+        stopAudioRecording()
+
         print("⏹️ Stopped timelapse recording. Captured \(frameCount) frames over \(recordingDuration) seconds")
 
-        // Create video from captured frames
+        // Create video from captured frames (with audio if available)
+        let audioURL = audioFileURL
         Task {
-            await createVideo()
+            await createVideo(withAudioURL: audioURL)
         }
     }
 
-    private func createVideo() async {
+    private func createVideo(withAudioURL audioURL: URL? = nil) async {
         guard !capturedFrameURLs.isEmpty else {
             print("❌ No frames captured")
             return
         }
 
-        let outputURL = FileManager.default.temporaryDirectory
+        let videoOnlyURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("mov")
 
         print("🎥 Creating timelapse video from \(capturedFrameURLs.count) frames at \(outputFPS) fps")
 
         do {
-            try await createVideoFromFrames(frameURLs: capturedFrameURLs, outputURL: outputURL, fps: outputFPS)
-            await MainActor.run {
-                self.recordedVideoURL = outputURL
+            try await createVideoFromFrames(frameURLs: capturedFrameURLs, outputURL: videoOnlyURL, fps: outputFPS)
+
+            // If we have audio, merge it with the video
+            if let audioURL = audioURL, FileManager.default.fileExists(atPath: audioURL.path) {
+                print("🔊 Merging audio with video...")
+                let finalURL = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(UUID().uuidString)
+                    .appendingPathExtension("mov")
+
+                try await mergeVideoWithAudio(videoURL: videoOnlyURL, audioURL: audioURL, outputURL: finalURL)
+
+                // Clean up intermediate files
+                try? FileManager.default.removeItem(at: videoOnlyURL)
+                try? FileManager.default.removeItem(at: audioURL)
+
+                await MainActor.run {
+                    self.recordedVideoURL = finalURL
+                    self.audioFileURL = nil
+                }
+                print("✅ Timelapse video with audio created at: \(finalURL)")
+            } else {
+                await MainActor.run {
+                    self.recordedVideoURL = videoOnlyURL
+                }
+                print("✅ Timelapse video created at: \(videoOnlyURL)")
             }
-            print("✅ Timelapse video created at: \(outputURL)")
 
             // Clean up temporary frame files
             if let storageDir = frameStorageDirectory {
@@ -198,6 +290,61 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             }
         } catch {
             print("❌ Failed to create video: \(error)")
+        }
+    }
+
+    nonisolated private func mergeVideoWithAudio(videoURL: URL, audioURL: URL, outputURL: URL) async throws {
+        let videoAsset = AVURLAsset(url: videoURL)
+        let audioAsset = AVURLAsset(url: audioURL)
+
+        let composition = AVMutableComposition()
+
+        // Add video track
+        guard let videoTrack = try await videoAsset.loadTracks(withMediaType: .video).first,
+              let compositionVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            throw NSError(domain: "TimeLapseRecorder", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create video track"])
+        }
+
+        let videoDuration = try await videoAsset.load(.duration)
+        try compositionVideoTrack.insertTimeRange(CMTimeRange(start: .zero, duration: videoDuration), of: videoTrack, at: .zero)
+
+        // Copy video transform
+        let videoTransform = try await videoTrack.load(.preferredTransform)
+        compositionVideoTrack.preferredTransform = videoTransform
+
+        // Add audio track - time-scaled to match video duration
+        if let audioTrack = try await audioAsset.loadTracks(withMediaType: .audio).first,
+           let compositionAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
+
+            let audioDuration = try await audioAsset.load(.duration)
+
+            // Insert the full audio, then we'll scale it
+            try compositionAudioTrack.insertTimeRange(
+                CMTimeRange(start: .zero, duration: audioDuration),
+                of: audioTrack,
+                at: .zero
+            )
+
+            // Scale the audio track to match video duration
+            // This speeds up/slows down the audio to sync with the timelapse
+            compositionAudioTrack.scaleTimeRange(
+                CMTimeRange(start: .zero, duration: audioDuration),
+                toDuration: videoDuration
+            )
+        }
+
+        // Export
+        guard let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
+            throw NSError(domain: "TimeLapseRecorder", code: -3, userInfo: [NSLocalizedDescriptionKey: "Failed to create export session"])
+        }
+
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = .mov
+
+        await exportSession.export()
+
+        if let error = exportSession.error {
+            throw error
         }
     }
 
@@ -374,6 +521,12 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             try? FileManager.default.removeItem(at: storageDir)
             frameStorageDirectory = nil
         }
+
+        // Clean up audio file
+        if let audioURL = audioFileURL {
+            try? FileManager.default.removeItem(at: audioURL)
+            audioFileURL = nil
+        }
     }
 
     func cleanup() {
@@ -394,6 +547,12 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         if let storageDir = frameStorageDirectory {
             try? FileManager.default.removeItem(at: storageDir)
             frameStorageDirectory = nil
+        }
+
+        // Clean up audio file
+        if let audioURL = audioFileURL {
+            try? FileManager.default.removeItem(at: audioURL)
+            audioFileURL = nil
         }
     }
 

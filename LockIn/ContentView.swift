@@ -10,7 +10,9 @@ import SwiftUI
 struct ContentView: View {
     @State private var selectedTab: Tab = .goals
     @State private var showingCreateGoal = false
+    @State private var showingCreateTodo = false
     @State private var showingActionSheet = false
+    @StateObject private var todoViewModel = TodoViewModel()
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -33,19 +35,22 @@ struct ContentView: View {
                 showingActionSheet = true
             }
         }
-        .confirmationDialog("Start Session", isPresented: $showingActionSheet) {
-            Button("Create New Goal") {
+        .confirmationDialog("Create New", isPresented: $showingActionSheet) {
+            Button("New Goal") {
                 showingCreateGoal = true
             }
 
-            Button("Quick Timelapse") {
-                // Could open a quick timelapse without goal
+            Button("New To-Do") {
+                showingCreateTodo = true
             }
 
             Button("Cancel", role: .cancel) {}
         }
         .sheet(isPresented: $showingCreateGoal) {
             CreateGoalView()
+        }
+        .sheet(isPresented: $showingCreateTodo) {
+            AddTodoSheet(viewModel: todoViewModel)
         }
     }
 }

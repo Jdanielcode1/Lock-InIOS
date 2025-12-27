@@ -120,6 +120,62 @@ class ConvexService: ObservableObject {
             LocalStorageService.shared.deleteThumbnail(at: thumbnailPath)
         }
     }
+
+    // MARK: - Todos
+
+    func listTodos() -> AnyPublisher<[TodoItem], Never> {
+        convex.subscribe(to: "todos:list", yielding: [TodoItem].self)
+            .replaceError(with: [])
+            .eraseToAnyPublisher()
+    }
+
+    func createTodo(title: String, description: String?) async throws -> String {
+        if let description = description {
+            return try await convex.mutation("todos:create", with: [
+                "title": title,
+                "description": description
+            ])
+        } else {
+            return try await convex.mutation("todos:create", with: [
+                "title": title
+            ])
+        }
+    }
+
+    func toggleTodo(id: String, isCompleted: Bool) async throws {
+        let _: String? = try await convex.mutation("todos:toggle", with: [
+            "id": id,
+            "isCompleted": isCompleted
+        ])
+    }
+
+    func attachVideoToTodo(id: String, localVideoPath: String, localThumbnailPath: String?) async throws {
+        if let thumbnailPath = localThumbnailPath {
+            let _: String? = try await convex.mutation("todos:attachVideo", with: [
+                "id": id,
+                "localVideoPath": localVideoPath,
+                "localThumbnailPath": thumbnailPath
+            ])
+        } else {
+            let _: String? = try await convex.mutation("todos:attachVideo", with: [
+                "id": id,
+                "localVideoPath": localVideoPath
+            ])
+        }
+    }
+
+    func deleteTodo(id: String, localVideoPath: String?, localThumbnailPath: String?) async throws {
+        // Delete from Convex
+        let _: String? = try await convex.mutation("todos:remove", with: ["id": id])
+
+        // Delete local files if they exist
+        if let videoPath = localVideoPath {
+            LocalStorageService.shared.deleteVideo(at: videoPath)
+        }
+        if let thumbnailPath = localThumbnailPath {
+            LocalStorageService.shared.deleteThumbnail(at: thumbnailPath)
+        }
+    }
 }
 
 enum ConvexServiceError: Error {

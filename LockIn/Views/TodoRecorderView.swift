@@ -1,58 +1,27 @@
 //
-//  TimeLapseRecorderView.swift
+//  TodoRecorderView.swift
 //  LockIn
 //
-//  Created by D Cantu on 20/10/25.
+//  Created by Claude on 26/12/25.
 //
 
 import SwiftUI
 import AVFoundation
 import AVKit
 
-// Timelapse speed options
-enum TimelapseSpeed: String, CaseIterable {
-    case normal = "Normal"
-    case timelapse = "Timelapse"
-    case ultraFast = "Ultra Fast"
-
-    var captureInterval: TimeInterval {
-        switch self {
-        case .normal: return 1.0 / 30.0  // 30 fps - real-time video
-        case .timelapse: return 0.5      // 2 fps - 15x speedup
-        case .ultraFast: return 2.0      // 0.5 fps - 60x speedup
-        }
-    }
-
-    var rateLabel: String {
-        switch self {
-        case .normal: return "30 fps"
-        case .timelapse: return "2 fps"
-        case .ultraFast: return "0.5 fps"
-        }
-    }
-}
-
-struct TimeLapseRecorderView: View {
-    let goalId: String
-    let subtaskId: String?
+struct TodoRecorderView: View {
+    let todo: TodoItem
+    @ObservedObject var viewModel: TodoViewModel
 
     @Environment(\.dismiss) var dismiss
-    @StateObject private var recorder: TimeLapseRecorder
+    @StateObject private var recorder = TimeLapseRecorder()
     @State private var isUploading = false
     @State private var uploadProgress: Double = 0
-    @State private var uploadSuccess = false
     @State private var errorMessage: String?
-    @State private var previewThumbnail: UIImage?
     @State private var player: AVPlayer?
     @State private var selectedSpeed: TimelapseSpeed = .timelapse
 
     private let videoService = VideoService.shared
-
-    init(goalId: String, subtaskId: String?) {
-        self.goalId = goalId
-        self.subtaskId = subtaskId
-        _recorder = StateObject(wrappedValue: TimeLapseRecorder())
-    }
 
     var body: some View {
         ZStack {
@@ -88,7 +57,19 @@ struct TimeLapseRecorderView: View {
 
                     Spacer()
 
-                    // Audio toggle button (visible before and during recording)
+                    // Todo title indicator
+                    if !recorder.isRecording && recorder.recordedVideoURL == nil {
+                        Text(todo.title)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.black.opacity(0.5))
+                            .cornerRadius(12)
+                    }
+
+                    // Audio toggle button
                     if recorder.recordedVideoURL == nil {
                         Button {
                             recorder.toggleAudio()
@@ -116,7 +97,7 @@ struct TimeLapseRecorderView: View {
                         }
                     }
 
-                    // Recording info (when recording)
+                    // Recording info
                     if recorder.isRecording {
                         HStack(spacing: 8) {
                             Circle()
@@ -164,7 +145,6 @@ struct TimeLapseRecorderView: View {
         .onAppear {
             Task {
                 await recorder.setupCamera()
-                // Set initial capture interval
                 recorder.setCaptureInterval(selectedSpeed.captureInterval, rateName: selectedSpeed.rateLabel)
             }
         }
@@ -182,10 +162,6 @@ struct TimeLapseRecorderView: View {
         }
     }
 
-    var isLandscape: Bool {
-        recorder.deviceOrientation == .landscapeLeft || recorder.deviceOrientation == .landscapeRight
-    }
-
     var formattedDuration: String {
         let hours = Int(recorder.recordingDuration) / 3600
         let minutes = (Int(recorder.recordingDuration) % 3600) / 60
@@ -196,10 +172,6 @@ struct TimeLapseRecorderView: View {
         } else {
             return String(format: "%02d:%02d", minutes, seconds)
         }
-    }
-
-    var isApproachingLimit: Bool {
-        recorder.recordingDuration >= 3.5 * 60 * 60 // 3.5 hours
     }
 
     var speedSelector: some View {
@@ -245,13 +217,11 @@ struct TimeLapseRecorderView: View {
 
     var videoPreviewView: some View {
         ZStack {
-            // Full screen video player
             if let player = player {
                 VideoPlayer(player: player)
                     .aspectRatio(contentMode: .fill)
                     .ignoresSafeArea()
             } else {
-                // Loading placeholder
                 VStack(spacing: 16) {
                     ProgressView()
                         .tint(.white)
@@ -276,32 +246,30 @@ struct TimeLapseRecorderView: View {
             // Retake
             Button {
                 player = nil
-                previewThumbnail = nil
                 recorder.clearFrames()
             } label: {
                 ZStack {
                     Circle()
-                        .fill(AppTheme.cardBackground)
+                        .fill(Color.white.opacity(0.2))
                         .frame(width: 70, height: 70)
-                        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
 
                     Image(systemName: "arrow.triangle.2.circlepath")
                         .font(.system(size: 30))
-                        .foregroundColor(AppTheme.textSecondary)
+                        .foregroundColor(.white)
                 }
             }
 
-            // Save
+            // Save and complete todo
             Button {
                 Task {
-                    await saveVideo()
+                    await saveVideoAndCompleteTodo()
                 }
             } label: {
                 ZStack {
                     Circle()
-                        .fill(AppTheme.primaryGradient)
+                        .fill(AppTheme.successGreen)
                         .frame(width: 70, height: 70)
-                        .shadow(color: AppTheme.actionBlue.opacity(0.3), radius: 8, x: 0, y: 4)
+                        .shadow(color: AppTheme.successGreen.opacity(0.4), radius: 8, x: 0, y: 4)
 
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 30))
@@ -313,43 +281,40 @@ struct TimeLapseRecorderView: View {
 
     var uploadProgressView: some View {
         VStack(spacing: 24) {
-            // Progress ring
             ZStack {
                 Circle()
-                    .stroke(AppTheme.borderLight, lineWidth: 12)
+                    .stroke(Color.white.opacity(0.3), lineWidth: 12)
                     .frame(width: 120, height: 120)
 
                 Circle()
                     .trim(from: 0, to: uploadProgress)
                     .stroke(
-                        AppTheme.energyGradient,
+                        AppTheme.successGreen,
                         style: StrokeStyle(lineWidth: 12, lineCap: .round)
                     )
                     .frame(width: 120, height: 120)
                     .rotationEffect(.degrees(-90))
-                    .animation(AppTheme.smoothAnimation, value: uploadProgress)
+                    .animation(.easeInOut, value: uploadProgress)
 
                 Text("\(Int(uploadProgress * 100))%")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundColor(AppTheme.textPrimary)
+                    .foregroundColor(.white)
             }
 
             Text("Saving...")
                 .font(AppTheme.headlineFont)
-                .foregroundColor(AppTheme.textPrimary)
+                .foregroundColor(.white)
         }
         .padding()
     }
 
-    private func saveVideo() async {
+    private func saveVideoAndCompleteTodo() async {
         guard let videoURL = recorder.recordedVideoURL else { return }
 
         isUploading = true
         uploadProgress = 0
 
         do {
-            // Use actual recording duration for study time
-            let studyTimeMinutes = recorder.recordingDuration / 60.0
             uploadProgress = 0.2
 
             // Save video to local storage
@@ -365,17 +330,14 @@ struct TimeLapseRecorderView: View {
             }
             uploadProgress = 0.7
 
-            // Create study session with local path
-            _ = try await ConvexService.shared.createStudySession(
-                goalId: goalId,
-                subtaskId: subtaskId,
-                localVideoPath: localVideoPath,
-                localThumbnailPath: localThumbnailPath,
-                durationMinutes: studyTimeMinutes
+            // Attach video to todo (this also marks it as completed)
+            await viewModel.attachVideo(
+                to: todo,
+                videoPath: localVideoPath,
+                thumbnailPath: localThumbnailPath
             )
 
             uploadProgress = 1.0
-            uploadSuccess = true
 
             // Clean up temp file
             try? FileManager.default.removeItem(at: videoURL)
@@ -391,5 +353,16 @@ struct TimeLapseRecorderView: View {
 }
 
 #Preview {
-    TimeLapseRecorderView(goalId: "123", subtaskId: nil)
+    TodoRecorderView(
+        todo: TodoItem(
+            _id: "1",
+            title: "Complete tutorial",
+            description: nil,
+            isCompleted: false,
+            localVideoPath: nil,
+            localThumbnailPath: nil,
+            createdAt: Date().timeIntervalSince1970 * 1000
+        ),
+        viewModel: TodoViewModel()
+    )
 }

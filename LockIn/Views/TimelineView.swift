@@ -45,6 +45,8 @@ struct TimelineView: View {
             }
             .navigationTitle("Timeline")
             .navigationBarTitleDisplayMode(.large)
+            .toolbarColorScheme(.light, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
         }
     }
 

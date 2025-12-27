@@ -36,6 +36,8 @@ struct StatsView: View {
             }
             .navigationTitle("Stats")
             .navigationBarTitleDisplayMode(.large)
+            .toolbarColorScheme(.light, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
         }
     }
 

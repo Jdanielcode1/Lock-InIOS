@@ -11,6 +11,7 @@
 import type * as goals from "../goals.js";
 import type * as studySessions from "../studySessions.js";
 import type * as subtasks from "../subtasks.js";
+import type * as todos from "../todos.js";
 
 import type {
   ApiFromModules,
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   goals: typeof goals;
   studySessions: typeof studySessions;
   subtasks: typeof subtasks;
+  todos: typeof todos;
 }>;
 declare const fullApiWithMounts: typeof fullApi;
 
