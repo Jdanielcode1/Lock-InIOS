@@ -25,124 +25,25 @@ struct TodoRecorderView: View {
 
     var body: some View {
         ZStack {
-            // Full screen camera or video preview
+            // Background
             Color.black.ignoresSafeArea()
 
             if recorder.recordedVideoURL != nil {
-                // Video preview after recording
-                videoPreviewView
+                // YouTube-style preview after recording
+                previewCompletedView
             } else {
                 // Full screen camera preview
                 CameraPreview(session: recorder.captureSession)
                     .ignoresSafeArea()
-            }
 
-            // Overlay controls
-            VStack {
-                // Top bar
-                HStack {
-                    // Cancel button
-                    Button {
-                        recorder.cleanup()
-                        dismiss()
-                    } label: {
-                        Text("Cancel")
-                            .font(.system(size: 17, weight: .medium))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(Color.black.opacity(0.5))
-                            .cornerRadius(20)
-                    }
-
-                    Spacer()
-
-                    // Todo title indicator
-                    if !recorder.isRecording && recorder.recordedVideoURL == nil {
-                        Text(todo.title)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.black.opacity(0.5))
-                            .cornerRadius(12)
-                    }
-
-                    // Audio toggle button
-                    if recorder.recordedVideoURL == nil {
-                        Button {
-                            recorder.toggleAudio()
-                        } label: {
-                            Image(systemName: recorder.isAudioEnabled ? "mic.fill" : "mic.slash.fill")
-                                .font(.title2)
-                                .foregroundColor(recorder.isAudioEnabled ? .white : .red)
-                                .padding(12)
-                                .background(Color.black.opacity(0.5))
-                                .clipShape(Circle())
-                        }
-                    }
-
-                    // Camera flip button (when not recording)
-                    if !recorder.isRecording && recorder.recordedVideoURL == nil {
-                        Button {
-                            recorder.switchCamera()
-                        } label: {
-                            Image(systemName: "arrow.triangle.2.circlepath.camera")
-                                .font(.title2)
-                                .foregroundColor(.white)
-                                .padding(12)
-                                .background(Color.black.opacity(0.5))
-                                .clipShape(Circle())
-                        }
-                    }
-
-                    // Recording info
-                    if recorder.isRecording {
-                        HStack(spacing: 8) {
-                            Circle()
-                                .fill(Color.red)
-                                .frame(width: 10, height: 10)
-
-                            Text(formattedDuration)
-                                .font(.system(size: 17, weight: .bold, design: .rounded))
-                                .foregroundColor(.white)
-
-                            Text("• \(recorder.frameCount) frames")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.white.opacity(0.8))
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(Color.black.opacity(0.5))
-                        .cornerRadius(20)
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.top, 60)
-
-                Spacer()
-
-                // Bottom controls
-                if isUploading {
-                    uploadProgressView
-                        .padding(.bottom, 60)
-                } else if recorder.recordedVideoURL != nil {
-                    finishedRecordingButtons
-                        .padding(.bottom, 60)
-                } else {
-                    VStack(spacing: 24) {
-                        // Speed selector
-                        speedSelector
-
-                        // Record button
-                        recordingButton
-                    }
-                    .padding(.bottom, 40)
-                }
+                // Camera overlay controls
+                cameraOverlayControls
             }
         }
         .onAppear {
+            // Allow landscape orientation in recorder
+            OrientationManager.shared.allowAllOrientations()
+
             Task {
                 await recorder.setupCamera()
                 recorder.setCaptureInterval(selectedSpeed.captureInterval, rateName: selectedSpeed.rateLabel)
@@ -150,6 +51,8 @@ struct TodoRecorderView: View {
         }
         .onDisappear {
             recorder.cleanup()
+            // Lock back to portrait when leaving
+            OrientationManager.shared.lockToPortrait()
         }
         .alert("Error", isPresented: .constant(errorMessage != nil)) {
             Button("OK") {
@@ -159,6 +62,234 @@ struct TodoRecorderView: View {
             if let error = errorMessage {
                 Text(error)
             }
+        }
+    }
+
+    // MARK: - Camera Overlay Controls
+
+    var cameraOverlayControls: some View {
+        VStack {
+            // Top bar
+            HStack {
+                // Cancel button
+                Button {
+                    recorder.cleanup()
+                    dismiss()
+                } label: {
+                    Text("Cancel")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.black.opacity(0.5))
+                        .cornerRadius(20)
+                }
+
+                Spacer()
+
+                // Todo title indicator
+                if !recorder.isRecording {
+                    Text(todo.title)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.black.opacity(0.5))
+                        .cornerRadius(12)
+                }
+
+                // Audio toggle button
+                Button {
+                    recorder.toggleAudio()
+                } label: {
+                    Image(systemName: recorder.isAudioEnabled ? "mic.fill" : "mic.slash.fill")
+                        .font(.title2)
+                        .foregroundColor(recorder.isAudioEnabled ? .white : .red)
+                        .padding(12)
+                        .background(Color.black.opacity(0.5))
+                        .clipShape(Circle())
+                }
+
+                // Camera flip button (when not recording)
+                if !recorder.isRecording {
+                    Button {
+                        recorder.switchCamera()
+                    } label: {
+                        Image(systemName: "arrow.triangle.2.circlepath.camera")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                            .padding(12)
+                            .background(Color.black.opacity(0.5))
+                            .clipShape(Circle())
+                    }
+                }
+
+                // Recording info
+                if recorder.isRecording {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 10, height: 10)
+
+                        Text(formattedDuration)
+                            .font(.system(size: 17, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+
+                        Text("• \(recorder.frameCount) frames")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.black.opacity(0.5))
+                    .cornerRadius(20)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top, 60)
+
+            Spacer()
+
+            // Bottom controls
+            VStack(spacing: 24) {
+                // Speed selector
+                speedSelector
+
+                // Record button
+                recordingButton
+            }
+            .padding(.bottom, 40)
+        }
+    }
+
+    // MARK: - Preview Completed View (YouTube-style)
+
+    var previewCompletedView: some View {
+        VStack(spacing: 0) {
+            // Close button at top
+            HStack {
+                Button {
+                    recorder.cleanup()
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                        .padding(12)
+                        .background(Color.white.opacity(0.15))
+                        .clipShape(Circle())
+                }
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.top, 60)
+
+            Spacer()
+
+            // Video player in a contained box
+            if let player = player {
+                VideoPlayer(player: player)
+                    .aspectRatio(recordedInLandscape ? 16/9 : 9/16, contentMode: .fit)
+                    .frame(maxHeight: UIScreen.main.bounds.height * (recordedInLandscape ? 0.35 : 0.5))
+                    .cornerRadius(16)
+                    .padding(.horizontal, 20)
+                    .onAppear {
+                        player.play()
+                    }
+            } else {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.white.opacity(0.1))
+                    .aspectRatio(recordedInLandscape ? 16/9 : 9/16, contentMode: .fit)
+                    .frame(maxHeight: UIScreen.main.bounds.height * (recordedInLandscape ? 0.35 : 0.5))
+                    .overlay(
+                        ProgressView()
+                            .tint(.white)
+                    )
+                    .padding(.horizontal, 20)
+            }
+
+            // Todo info card
+            VStack(spacing: 12) {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(AppTheme.successGreen)
+
+                    Text(todo.title)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(2)
+
+                    Spacer()
+                }
+
+                if let description = todo.description, !description.isEmpty {
+                    Text(description)
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.7))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .lineLimit(2)
+                }
+            }
+            .padding(20)
+            .background(Color.white.opacity(0.1))
+            .cornerRadius(16)
+            .padding(.horizontal, 20)
+            .padding(.top, 24)
+
+            Spacer()
+
+            // Action buttons
+            if isUploading {
+                uploadProgressView
+                    .padding(.bottom, 40)
+            } else {
+                HStack(spacing: 20) {
+                    // Retake button
+                    Button {
+                        player?.pause()
+                        player = nil
+                        recorder.clearFrames()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.counterclockwise")
+                                .font(.system(size: 18, weight: .semibold))
+                            Text("Retake")
+                                .font(.system(size: 17, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                        .background(Color.white.opacity(0.15))
+                        .cornerRadius(16)
+                    }
+
+                    // Save button
+                    Button {
+                        Task {
+                            await saveVideoAndCompleteTodo()
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 18, weight: .semibold))
+                            Text("Complete")
+                                .font(.system(size: 17, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                        .background(AppTheme.successGreen)
+                        .cornerRadius(16)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 40)
+            }
+        }
+        .onAppear {
+            setupPlayer()
         }
     }
 
@@ -172,6 +303,10 @@ struct TodoRecorderView: View {
         } else {
             return String(format: "%02d:%02d", minutes, seconds)
         }
+    }
+
+    var recordedInLandscape: Bool {
+        recorder.recordingOrientation == .landscapeLeft || recorder.recordingOrientation == .landscapeRight
     }
 
     var speedSelector: some View {
@@ -215,68 +350,9 @@ struct TodoRecorderView: View {
         }
     }
 
-    var videoPreviewView: some View {
-        ZStack {
-            if let player = player {
-                VideoPlayer(player: player)
-                    .aspectRatio(contentMode: .fill)
-                    .ignoresSafeArea()
-            } else {
-                VStack(spacing: 16) {
-                    ProgressView()
-                        .tint(.white)
-                    Text("Loading preview...")
-                        .font(AppTheme.captionFont)
-                        .foregroundColor(.white.opacity(0.8))
-                }
-            }
-        }
-        .onAppear {
-            setupPlayer()
-        }
-    }
-
     private func setupPlayer() {
         guard let videoURL = recorder.recordedVideoURL else { return }
         player = AVPlayer(url: videoURL)
-    }
-
-    var finishedRecordingButtons: some View {
-        HStack(spacing: 40) {
-            // Retake
-            Button {
-                player = nil
-                recorder.clearFrames()
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(Color.white.opacity(0.2))
-                        .frame(width: 70, height: 70)
-
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 30))
-                        .foregroundColor(.white)
-                }
-            }
-
-            // Save and complete todo
-            Button {
-                Task {
-                    await saveVideoAndCompleteTodo()
-                }
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(AppTheme.successGreen)
-                        .frame(width: 70, height: 70)
-                        .shadow(color: AppTheme.successGreen.opacity(0.4), radius: 8, x: 0, y: 4)
-
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 30))
-                        .foregroundColor(.white)
-                }
-            }
-        }
     }
 
     var uploadProgressView: some View {

@@ -38,7 +38,7 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
     private var recordingTimer: Timer?
     private let videoQueue = DispatchQueue(label: "com.lockin.timelapse.video")
-    private var recordingOrientation: UIDeviceOrientation = .portrait
+    @Published var recordingOrientation: UIDeviceOrientation = .portrait
 
     // Allow external control of capture interval
     func setCaptureInterval(_ interval: TimeInterval, rateName: String) {

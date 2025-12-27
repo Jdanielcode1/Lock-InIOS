@@ -311,61 +311,80 @@ struct CameraRecorderView: View {
 struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
 
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: .zero)
-        view.backgroundColor = .black
-
-        let previewLayer = AVCaptureVideoPreviewLayer(session: session)
-        previewLayer.videoGravity = .resizeAspectFill
-        view.layer.addSublayer(previewLayer)
-
-        context.coordinator.previewLayer = previewLayer
-
-        // Set initial orientation
-        updateOrientation(for: previewLayer)
-
+    func makeUIView(context: Context) -> CameraPreviewView {
+        let view = CameraPreviewView()
+        view.previewLayer.session = session
+        view.previewLayer.videoGravity = .resizeAspectFill
         return view
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {
-        if let previewLayer = context.coordinator.previewLayer {
-            DispatchQueue.main.async {
-                previewLayer.frame = uiView.bounds
-                self.updateOrientation(for: previewLayer)
-            }
-        }
+    func updateUIView(_ uiView: CameraPreviewView, context: Context) {
+        // Update orientation when the view updates
+        uiView.updateOrientation()
+    }
+}
+
+// Custom UIView that uses AVCaptureVideoPreviewLayer as its backing layer
+// This ensures the layer automatically resizes with the view during rotation
+class CameraPreviewView: UIView {
+    override class var layerClass: AnyClass {
+        AVCaptureVideoPreviewLayer.self
     }
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
+    var previewLayer: AVCaptureVideoPreviewLayer {
+        layer as! AVCaptureVideoPreviewLayer
     }
 
-    private func updateOrientation(for layer: AVCaptureVideoPreviewLayer) {
-        guard let connection = layer.connection, connection.isVideoOrientationSupported else {
-            return
-        }
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .black
+
+        // Observe device orientation changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(orientationDidChange),
+            name: UIDevice.orientationDidChangeNotification,
+            object: nil
+        )
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func orientationDidChange() {
+        updateOrientation()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // Called when view's bounds change (including rotation)
+        updateOrientation()
+    }
+
+    func updateOrientation() {
+        guard let connection = previewLayer.connection,
+              connection.isVideoOrientationSupported else { return }
 
         let orientation = UIDevice.current.orientation
-        let videoOrientation: AVCaptureVideoOrientation
 
         switch orientation {
         case .portrait:
-            videoOrientation = .portrait
-        case .portraitUpsideDown:
-            videoOrientation = .portraitUpsideDown
+            connection.videoOrientation = .portrait
         case .landscapeLeft:
-            videoOrientation = .landscapeRight // Counterintuitive but correct
+            connection.videoOrientation = .landscapeRight
         case .landscapeRight:
-            videoOrientation = .landscapeLeft  // Counterintuitive but correct
+            connection.videoOrientation = .landscapeLeft
+        case .portraitUpsideDown:
+            connection.videoOrientation = .portraitUpsideDown
         default:
-            videoOrientation = .portrait
+            // Keep current orientation for .faceUp, .faceDown, .unknown
+            break
         }
-
-        connection.videoOrientation = videoOrientation
-    }
-
-    class Coordinator {
-        var previewLayer: AVCaptureVideoPreviewLayer?
     }
 }
 
