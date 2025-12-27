@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		DC08D6182EA6D25B0030C1D4 /* ConvexMobile in Frameworks */ = {isa = PBXBuildFile; productRef = DC08D6172EA6D25B0030C1D4 /* ConvexMobile */; };
+		DCBD54C52F00672E0075CAC4 /* ConvexAuth0 in Frameworks */ = {isa = PBXBuildFile; productRef = DCBD54C42F00672E0075CAC4 /* ConvexAuth0 */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,6 +28,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DCBD54C52F00672E0075CAC4 /* ConvexAuth0 in Frameworks */,
 				DC08D6182EA6D25B0030C1D4 /* ConvexMobile in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -71,6 +73,7 @@
 			name = LockIn;
 			packageProductDependencies = (
 				DC08D6172EA6D25B0030C1D4 /* ConvexMobile */,
+				DCBD54C42F00672E0075CAC4 /* ConvexAuth0 */,
 			);
 			productName = LockIn;
 			productReference = DC3054942EA6CA6700C66B51 /* LockIn.app */;
@@ -102,6 +105,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				DC08D6162EA6D25B0030C1D4 /* XCRemoteSwiftPackageReference "convex-swift" */,
+				DCBD54C32F00672E0075CAC4 /* XCRemoteSwiftPackageReference "convex-swift-auth0" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DC3054952EA6CA6700C66B51 /* Products */;
@@ -294,7 +298,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"LockIn/Preview Content\"";
-				DEVELOPMENT_TEAM = 4YQKZWWFP6;
+				DEVELOPMENT_TEAM = B5Q5ZT57TT;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Record time-lapse videos of your study sessions to track your progress";
@@ -351,6 +355,14 @@
 				minimumVersion = 0.5.6;
 			};
 		};
+		DCBD54C32F00672E0075CAC4 /* XCRemoteSwiftPackageReference "convex-swift-auth0" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/get-convex/convex-swift-auth0";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.3.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -358,6 +370,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DC08D6162EA6D25B0030C1D4 /* XCRemoteSwiftPackageReference "convex-swift" */;
 			productName = ConvexMobile;
+		};
+		DCBD54C42F00672E0075CAC4 /* ConvexAuth0 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DCBD54C32F00672E0075CAC4 /* XCRemoteSwiftPackageReference "convex-swift-auth0" */;
+			productName = ConvexAuth0;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

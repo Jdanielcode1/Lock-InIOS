@@ -53,7 +53,7 @@ struct StatsView: View {
 
             HStack(spacing: 24) {
                 HeroStat(value: "\(viewModel.totalSessions)", label: "Sessions")
-                HeroStat(value: "\(viewModel.activeGoals)", label: "Active Goals")
+                HeroStat(value: "\(viewModel.currentStreak)", label: "Day Streak")
                 HeroStat(value: "\(viewModel.completedGoals)", label: "Completed")
             }
         }
@@ -75,23 +75,23 @@ struct StatsView: View {
             )
 
             StatBox(
-                icon: "clock.fill",
-                value: String(format: "%.1f", viewModel.avgSessionLength),
-                label: "Avg Session (min)",
-                color: AppTheme.actionBlue
-            )
-
-            StatBox(
                 icon: "calendar",
-                value: String(format: "%.1f", viewModel.hoursThisWeek),
-                label: "Hours This Week",
+                value: viewModel.formattedHoursThisWeek,
+                label: viewModel.weeklyTrendLabel,
                 color: AppTheme.actionBlue
             )
 
             StatBox(
                 icon: "star.fill",
-                value: String(format: "%.0f%%", viewModel.completionRate),
-                label: "Completion Rate",
+                value: viewModel.bestDay,
+                label: "Best Day",
+                color: AppTheme.warningAmber
+            )
+
+            StatBox(
+                icon: "checkmark.circle.fill",
+                value: "\(viewModel.completedGoals)",
+                label: "Goals Done",
                 color: AppTheme.successGreen
             )
         }
@@ -108,11 +108,11 @@ struct StatsView: View {
                     VStack(spacing: 8) {
                         RoundedRectangle(cornerRadius: 6)
                             .fill(data.hours > 0 ? AnyShapeStyle(AppTheme.primaryGradient) : AnyShapeStyle(Color.gray.opacity(0.2)))
-                            .frame(width: 36, height: max(8, CGFloat(data.hours) * 20))
+                            .frame(width: 36, height: max(8, CGFloat(data.hours) * 30))
 
                         Text(data.day)
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(AppTheme.textSecondary)
+                            .foregroundColor(data.isToday ? AppTheme.actionBlue : AppTheme.textSecondary)
                     }
                 }
             }
@@ -233,26 +233,34 @@ struct GoalProgressRow: View {
 
 // MARK: - ViewModel
 
-struct WeeklyData {
+struct WeeklyData: Identifiable {
+    let id = UUID()
     let day: String
     let hours: Double
+    let isToday: Bool
 }
 
 @MainActor
 class StatsViewModel: ObservableObject {
     @Published var goals: [Goal] = []
+    @Published var sessions: [StudySession] = []
     @Published var totalHours: Double = 0
     @Published var totalSessions: Int = 0
     @Published var currentStreak: Int = 0
-    @Published var avgSessionLength: Double = 0
     @Published var hoursThisWeek: Double = 0
+    @Published var hoursLastWeek: Double = 0
     @Published var weeklyData: [WeeklyData] = []
+    @Published var bestDay: String = "-"
 
     private var cancellables = Set<AnyCancellable>()
     private let convexService = ConvexService.shared
 
     var formattedTotalHours: String {
         String(format: "%.1fh", totalHours)
+    }
+
+    var formattedHoursThisWeek: String {
+        String(format: "%.1fh", hoursThisWeek)
     }
 
     var activeGoals: Int {
@@ -263,64 +271,163 @@ class StatsViewModel: ObservableObject {
         goals.filter { $0.status == .completed }.count
     }
 
-    var completionRate: Double {
-        guard !goals.isEmpty else { return 0 }
-        return Double(completedGoals) / Double(goals.count) * 100
+    var weeklyTrendLabel: String {
+        if hoursLastWeek == 0 {
+            return "This Week"
+        }
+        let change = ((hoursThisWeek - hoursLastWeek) / hoursLastWeek) * 100
+        if change >= 0 {
+            return "This Week +\(Int(change))%"
+        } else {
+            return "This Week \(Int(change))%"
+        }
     }
 
     init() {
         loadData()
-        generateWeeklyData()
     }
 
     private func loadData() {
+        // Load goals
         convexService.listGoals()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] goals in
                 self?.goals = goals
-                self?.calculateStats(from: goals)
+                self?.totalHours = goals.reduce(0) { $0 + $1.completedHours }
+            }
+            .store(in: &cancellables)
+
+        // Load ALL sessions for stats
+        convexService.listAllStudySessions()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] sessions in
+                self?.sessions = sessions
+                self?.calculateAllStats(from: sessions)
             }
             .store(in: &cancellables)
     }
 
-    private func calculateStats(from goals: [Goal]) {
-        totalHours = goals.reduce(0) { $0 + $1.completedHours }
+    private func calculateAllStats(from sessions: [StudySession]) {
+        // Total sessions
+        totalSessions = sessions.count
 
-        // Load sessions for each goal to get total count
-        for goal in goals {
-            convexService.listStudySessions(goalId: goal.id)
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self] sessions in
-                    guard let self = self else { return }
-                    self.totalSessions = sessions.count
+        // Calculate streak
+        currentStreak = calculateStreak(from: sessions)
 
-                    if !sessions.isEmpty {
-                        let totalMinutes = sessions.reduce(0) { $0 + $1.durationMinutes }
-                        self.avgSessionLength = totalMinutes / Double(sessions.count)
-                    }
-                }
-                .store(in: &cancellables)
-        }
+        // Calculate weekly data
+        calculateWeeklyData(from: sessions)
+
+        // Calculate best day
+        calculateBestDay(from: sessions)
     }
 
-    private func generateWeeklyData() {
+    private func calculateStreak(from sessions: [StudySession]) -> Int {
+        guard !sessions.isEmpty else { return 0 }
+
         let calendar = Calendar.current
-        let today = Date()
+        let today = calendar.startOfDay(for: Date())
+
+        // Get unique days with sessions
+        var daysWithSessions = Set<Date>()
+        for session in sessions {
+            let sessionDate = Date(timeIntervalSince1970: session.createdAt / 1000)
+            let dayStart = calendar.startOfDay(for: sessionDate)
+            daysWithSessions.insert(dayStart)
+        }
+
+        // Count consecutive days from today backwards
+        var streak = 0
+        var checkDate = today
+
+        // Check if today has a session, if not start from yesterday
+        if !daysWithSessions.contains(today) {
+            if let yesterday = calendar.date(byAdding: .day, value: -1, to: today) {
+                checkDate = yesterday
+                // If yesterday also has no session, streak is 0
+                if !daysWithSessions.contains(yesterday) {
+                    return 0
+                }
+            }
+        }
+
+        // Count consecutive days
+        while daysWithSessions.contains(checkDate) {
+            streak += 1
+            guard let previousDay = calendar.date(byAdding: .day, value: -1, to: checkDate) else { break }
+            checkDate = previousDay
+        }
+
+        return streak
+    }
+
+    private func calculateWeeklyData(from sessions: [StudySession]) {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
         let weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
-        var data: [WeeklyData] = []
+        // Get start of this week and last week
+        let thisWeekStart = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: today)) ?? today
+        let lastWeekStart = calendar.date(byAdding: .day, value: -7, to: thisWeekStart) ?? today
 
+        var thisWeekHours: Double = 0
+        var lastWeekHours: Double = 0
+        var dailyHours: [Date: Double] = [:]
+
+        for session in sessions {
+            let sessionDate = Date(timeIntervalSince1970: session.createdAt / 1000)
+            let dayStart = calendar.startOfDay(for: sessionDate)
+            let hours = session.durationMinutes / 60
+
+            // Accumulate daily hours
+            dailyHours[dayStart, default: 0] += hours
+
+            // Calculate this week vs last week
+            if sessionDate >= thisWeekStart {
+                thisWeekHours += hours
+            } else if sessionDate >= lastWeekStart && sessionDate < thisWeekStart {
+                lastWeekHours += hours
+            }
+        }
+
+        hoursThisWeek = thisWeekHours
+        hoursLastWeek = lastWeekHours
+
+        // Build weekly data for chart (last 7 days)
+        var data: [WeeklyData] = []
         for i in (0..<7).reversed() {
             if let date = calendar.date(byAdding: .day, value: -i, to: today) {
+                let dayStart = calendar.startOfDay(for: date)
                 let weekday = calendar.component(.weekday, from: date) - 1
-                // Placeholder - would need actual session data per day
-                let hours = Double.random(in: 0...3)
-                data.append(WeeklyData(day: weekdays[weekday], hours: hours))
+                let hours = dailyHours[dayStart] ?? 0
+                let isToday = i == 0
+                data.append(WeeklyData(day: weekdays[weekday], hours: hours, isToday: isToday))
             }
         }
 
         weeklyData = data
-        hoursThisWeek = data.reduce(0) { $0 + $1.hours }
+    }
+
+    private func calculateBestDay(from sessions: [StudySession]) {
+        guard !sessions.isEmpty else {
+            bestDay = "-"
+            return
+        }
+
+        let calendar = Calendar.current
+        let weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        var hoursByWeekday: [Int: Double] = [:]
+
+        for session in sessions {
+            let sessionDate = Date(timeIntervalSince1970: session.createdAt / 1000)
+            let weekday = calendar.component(.weekday, from: sessionDate) - 1
+            hoursByWeekday[weekday, default: 0] += session.durationMinutes / 60
+        }
+
+        if let (bestWeekday, _) = hoursByWeekday.max(by: { $0.value < $1.value }) {
+            bestDay = weekdays[bestWeekday]
+        } else {
+            bestDay = "-"
+        }
     }
 }
 

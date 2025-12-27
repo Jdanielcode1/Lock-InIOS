@@ -1,6 +1,15 @@
 {
-  "originHash" : "08e9e36e394ea11d96f7d70efaf37bb2033a61df05ce6b3325f18c17af604f05",
+  "originHash" : "2f315b0525c5f5b8e1b6bc39018598e0aa316928a5929afd0d0df12344ba7025",
   "pins" : [
+    {
+      "identity" : "auth0.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/auth0/Auth0.swift",
+      "state" : {
+        "revision" : "0d9c3f3241e3defad065409ac3a071ee1c5a7e8a",
+        "version" : "2.9.0"
+      }
+    },
     {
       "identity" : "convex-swift",
       "kind" : "remoteSourceControl",
@@ -8,6 +17,33 @@
       "state" : {
         "revision" : "8930e29ad2baccd242770606eea09209a2346961",
         "version" : "0.5.6"
+      }
+    },
+    {
+      "identity" : "convex-swift-auth0",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/get-convex/convex-swift-auth0",
+      "state" : {
+        "revision" : "b463fccf035ec02de6450026bfcbff722cd83d5d",
+        "version" : "0.3.0"
+      }
+    },
+    {
+      "identity" : "jwtdecode.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/auth0/JWTDecode.swift.git",
+      "state" : {
+        "revision" : "1e153ef009969543191970c66b7c60163c0b4a65",
+        "version" : "3.2.0"
+      }
+    },
+    {
+      "identity" : "simplekeychain",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/auth0/SimpleKeychain.git",
+      "state" : {
+        "revision" : "b694f155907b189bc82e93586695a26f558c742f",
+        "version" : "1.2.0"
       }
     }
   ],

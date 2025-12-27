@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as auth from "../auth.js";
 import type * as goals from "../goals.js";
 import type * as studySessions from "../studySessions.js";
 import type * as subtasks from "../subtasks.js";
@@ -28,6 +29,7 @@ import type {
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  auth: typeof auth;
   goals: typeof goals;
   studySessions: typeof studySessions;
   subtasks: typeof subtasks;

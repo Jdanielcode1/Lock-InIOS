@@ -11,6 +11,7 @@ struct SettingsView: View {
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
     @AppStorage("darkMode") private var darkMode = false
     @AppStorage("hapticFeedback") private var hapticFeedback = true
+    @State private var showingLogoutAlert = false
 
     var body: some View {
         NavigationView {
@@ -21,6 +22,9 @@ struct SettingsView: View {
                     VStack(spacing: 24) {
                         // App Info Card
                         appInfoCard
+
+                        // Account
+                        accountSection
 
                         // Preferences
                         preferencesSection
@@ -42,6 +46,16 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
+            .alert("Sign Out", isPresented: $showingLogoutAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Sign Out", role: .destructive) {
+                    Task {
+                        await convexClient.logout()
+                    }
+                }
+            } message: {
+                Text("Are you sure you want to sign out?")
+            }
         }
     }
 
@@ -64,6 +78,30 @@ struct SettingsView: View {
         .background(AppTheme.cardBackground)
         .cornerRadius(AppTheme.cornerRadius)
         .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+    }
+
+    var accountSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("ACCOUNT")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(AppTheme.textSecondary)
+                .padding(.horizontal, 4)
+                .padding(.bottom, 8)
+
+            Button {
+                showingLogoutAlert = true
+            } label: {
+                SettingsRow(
+                    icon: "rectangle.portrait.and.arrow.right",
+                    iconColor: .red,
+                    title: "Sign Out",
+                    value: ""
+                )
+            }
+            .background(AppTheme.cardBackground)
+            .cornerRadius(AppTheme.smallCornerRadius)
+            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+        }
     }
 
     var preferencesSection: some View {
