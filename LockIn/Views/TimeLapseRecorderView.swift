@@ -185,10 +185,8 @@ struct TimeLapseRecorderView: View {
 
             // Bottom controls
             VStack(spacing: 24) {
-                // Speed selector (hide when recording)
-                if !recorder.isRecording {
-                    speedSelector
-                }
+                // Speed selector
+                speedSelector
 
                 // Recording controls
                 HStack(spacing: 40) {
