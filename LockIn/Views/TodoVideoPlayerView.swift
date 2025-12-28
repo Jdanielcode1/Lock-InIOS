@@ -33,6 +33,7 @@ struct TodoVideoPlayerView: View {
     @State private var voiceoverTotalDuration: TimeInterval = 0
     @State private var voiceoverTimeObserver: Any?
     @State private var hasVoiceoverAdded = false
+    @State private var showShareSheet = false
 
     private let recorder = TimeLapseRecorder()
 
@@ -90,6 +91,9 @@ struct TodoVideoPlayerView: View {
         .onDisappear {
             cleanupPlayer()
         }
+        .shareSheet(isPresented: $showShareSheet, videoURL: currentVideoURL) {
+            saveVideoToCameraRoll()
+        }
     }
 
     // MARK: - Main Overlay
@@ -111,6 +115,18 @@ struct TodoVideoPlayerView: View {
                 }
 
                 Spacer()
+
+                // Share button
+                Button {
+                    showShareSheet = true
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                        .padding(12)
+                        .background(Color.black.opacity(0.5))
+                        .clipShape(Circle())
+                }
 
                 // Save button
                 Button {

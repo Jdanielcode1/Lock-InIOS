@@ -15,9 +15,22 @@
 		DC3054942EA6CA6700C66B51 /* LockIn.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LockIn.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		DCE7495B2F01DE4C00A913A2 /* Exceptions for "LockIn" folder in "LockIn" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = DC3054932EA6CA6700C66B51 /* LockIn */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		DC3054962EA6CA6700C66B51 /* LockIn */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				DCE7495B2F01DE4C00A913A2 /* Exceptions for "LockIn" folder in "LockIn" target */,
+			);
 			path = LockIn;
 			sourceTree = "<group>";
 		};
@@ -268,6 +281,7 @@
 				DEVELOPMENT_TEAM = 4YQKZWWFP6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LockIn/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Record time-lapse videos of your study sessions to track your progress";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Record audio with your study session videos";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save and import study session videos";
@@ -301,6 +315,7 @@
 				DEVELOPMENT_TEAM = B5Q5ZT57TT;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LockIn/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Record time-lapse videos of your study sessions to track your progress";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Record audio with your study session videos";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save and import study session videos";

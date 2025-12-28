@@ -31,6 +31,7 @@ struct VideoPlayerView: View {
     @State private var voiceoverTimeObserver: Any?
     @State private var hasVoiceoverAdded = false
     @State private var voiceoverError: String?
+    @State private var showShareSheet = false
 
     private let recorder = TimeLapseRecorder()
 
@@ -132,18 +133,29 @@ struct VideoPlayerView: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        saveVideoToCameraRoll()
-                    } label: {
-                        if isSaving {
-                            ProgressView()
-                                .tint(.white)
-                        } else {
-                            Image(systemName: "square.and.arrow.down")
+                    HStack(spacing: 16) {
+                        // Share button
+                        Button {
+                            showShareSheet = true
+                        } label: {
+                            Image(systemName: "square.and.arrow.up")
                                 .foregroundColor(.white)
                         }
+
+                        // Save button
+                        Button {
+                            saveVideoToCameraRoll()
+                        } label: {
+                            if isSaving {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Image(systemName: "square.and.arrow.down")
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .disabled(isSaving)
                     }
-                    .disabled(isSaving)
                 }
             }
         }
@@ -160,6 +172,9 @@ struct VideoPlayerView: View {
             if let error = voiceoverError {
                 Text(error)
             }
+        }
+        .shareSheet(isPresented: $showShareSheet, videoURL: viewModel.currentVideoURL ?? URL(fileURLWithPath: "")) {
+            saveVideoToCameraRoll()
         }
     }
 

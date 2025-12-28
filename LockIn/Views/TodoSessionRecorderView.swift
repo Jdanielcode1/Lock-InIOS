@@ -50,6 +50,7 @@ struct TodoSessionRecorderView: View {
     @State private var voiceoverTotalDuration: TimeInterval = 0
     @State private var voiceoverTimeObserver: Any?
     @State private var hasVoiceoverAdded = false
+    @State private var showShareSheet = false
 
     private let videoService = VideoService.shared
 
@@ -150,6 +151,7 @@ struct TodoSessionRecorderView: View {
                 triggerCountdownAlert()
             }
         }
+        .shareSheet(isPresented: $showShareSheet, videoURL: recorder.recordedVideoURL ?? URL(fileURLWithPath: ""))
     }
 
     private func triggerCountdownAlert() {
@@ -908,26 +910,46 @@ struct TodoSessionRecorderView: View {
                         }
                     }
 
-                    // Voiceover button
-                    Button {
-                        startVoiceoverCountdown()
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: hasVoiceoverAdded ? "arrow.counterclockwise" : "mic.fill")
-                                .font(.system(size: 18, weight: .semibold))
-                            Text(hasVoiceoverAdded ? "Re-record Voiceover" : "Add Voiceover")
-                                .font(.system(size: 17, weight: .semibold))
-                            if hasVoiceoverAdded {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.white.opacity(0.8))
+                    // Bottom row: Voiceover and Share
+                    HStack(spacing: 16) {
+                        // Voiceover button
+                        Button {
+                            startVoiceoverCountdown()
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: hasVoiceoverAdded ? "arrow.counterclockwise" : "mic.fill")
+                                    .font(.system(size: 18, weight: .semibold))
+                                Text(hasVoiceoverAdded ? "Re-record" : "Voiceover")
+                                    .font(.system(size: 17, weight: .semibold))
+                                if hasVoiceoverAdded {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.white.opacity(0.8))
+                                }
                             }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 56)
+                            .background(hasVoiceoverAdded ? Color.orange.opacity(0.8) : Color.orange)
+                            .cornerRadius(16)
                         }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .background(hasVoiceoverAdded ? Color.orange.opacity(0.8) : Color.orange)
-                        .cornerRadius(16)
+
+                        // Share button
+                        Button {
+                            showShareSheet = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "square.and.arrow.up")
+                                    .font(.system(size: 18, weight: .semibold))
+                                Text("Share")
+                                    .font(.system(size: 17, weight: .semibold))
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 56)
+                            .background(Color.white.opacity(0.2))
+                            .cornerRadius(16)
+                        }
                     }
                 }
                 .padding(.horizontal, 20)
