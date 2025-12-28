@@ -52,6 +52,14 @@ class TodoViewModel: ObservableObject {
         }
     }
 
+    func toggleTodoById(_ id: String, isCompleted: Bool) async {
+        do {
+            try await convexService.toggleTodo(id: id, isCompleted: isCompleted)
+        } catch {
+            errorMessage = "Failed to update todo: \(error.localizedDescription)"
+        }
+    }
+
     func attachVideo(to todo: TodoItem, videoPath: String, thumbnailPath: String?) async {
         do {
             try await convexService.attachVideoToTodo(

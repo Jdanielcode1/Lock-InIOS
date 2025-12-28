@@ -1,17 +1,18 @@
 //
-//  TodoRecorderView.swift
+//  TodoSessionRecorderView.swift
 //  LockIn
 //
-//  Created by Claude on 26/12/25.
+//  Created by Claude on 27/12/25.
 //
 
 import SwiftUI
 import AVFoundation
 import AVKit
 
-struct TodoRecorderView: View {
-    let todo: TodoItem
+struct TodoSessionRecorderView: View {
+    let selectedTodoIds: Set<String>
     @ObservedObject var viewModel: TodoViewModel
+    let onDismiss: () -> Void
 
     @Environment(\.dismiss) var dismiss
     @StateObject private var recorder = TimeLapseRecorder()
@@ -21,7 +22,24 @@ struct TodoRecorderView: View {
     @State private var player: AVPlayer?
     @State private var selectedSpeed: TimelapseSpeed = .timelapse
 
+    // Todo tracking during session
+    @State private var checkedTodoIds: Set<String> = []
+    @State private var showTodoOverlay = false
+
     private let videoService = VideoService.shared
+
+    // Computed properties
+    private var selectedTodos: [TodoItem] {
+        viewModel.todos.filter { selectedTodoIds.contains($0.id) }
+    }
+
+    private var completedCount: Int {
+        checkedTodoIds.count
+    }
+
+    private var totalCount: Int {
+        selectedTodoIds.count
+    }
 
     var body: some View {
         ZStack {
@@ -29,7 +47,6 @@ struct TodoRecorderView: View {
             Color.black.ignoresSafeArea()
 
             if recorder.recordedVideoURL != nil {
-                // YouTube-style preview after recording
                 previewCompletedView
             } else {
                 // Full screen camera preview
@@ -38,10 +55,23 @@ struct TodoRecorderView: View {
 
                 // Camera overlay controls
                 cameraOverlayControls
+
+                // Todo list overlay (when expanded)
+                if showTodoOverlay && totalCount > 0 {
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                showTodoOverlay = false
+                            }
+                        }
+
+                    todoListOverlay
+                        .transition(.scale(scale: 0.9).combined(with: .opacity))
+                }
             }
         }
         .onAppear {
-            // Allow landscape orientation in recorder
             OrientationManager.shared.allowAllOrientations()
 
             Task {
@@ -51,7 +81,6 @@ struct TodoRecorderView: View {
         }
         .onDisappear {
             recorder.cleanup()
-            // Lock back to portrait when leaving
             OrientationManager.shared.lockToPortrait()
         }
         .alert("Error", isPresented: .constant(errorMessage != nil)) {
@@ -74,6 +103,7 @@ struct TodoRecorderView: View {
                 // Cancel button
                 Button {
                     recorder.cleanup()
+                    onDismiss()
                     dismiss()
                 } label: {
                     Text("Cancel")
@@ -85,15 +115,10 @@ struct TodoRecorderView: View {
                         .cornerRadius(20)
                 }
 
-                // Todo title indicator (always visible)
-                Text(todo.title)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.black.opacity(0.5))
-                    .cornerRadius(12)
+                // Todo badge (always show if todos selected)
+                if totalCount > 0 {
+                    todoFloatingBadge
+                }
 
                 Spacer()
 
@@ -103,11 +128,13 @@ struct TodoRecorderView: View {
                 } label: {
                     Image(systemName: recorder.isAudioEnabled ? "mic.fill" : "mic.slash.fill")
                         .font(.title2)
-                        .foregroundColor(recorder.isAudioEnabled ? .white : .red)
+                        .foregroundColor(audioButtonColor)
                         .padding(12)
-                        .background(Color.black.opacity(0.5))
+                        .background(Color.black.opacity(recorder.isAudioAllowed ? 0.5 : 0.2))
                         .clipShape(Circle())
                 }
+                .disabled(!recorder.isAudioAllowed && !recorder.isAudioEnabled)
+                .opacity(recorder.isAudioAllowed || recorder.isAudioEnabled ? 1.0 : 0.5)
 
                 // Camera flip button (when not recording)
                 if !recorder.isRecording {
@@ -145,7 +172,7 @@ struct TodoRecorderView: View {
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundColor(.orange)
                         } else {
-                            Text("• \(recorder.frameCount) frames")
+                            Text("\(recorder.frameCount) frames")
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(.white.opacity(0.8))
                         }
@@ -163,20 +190,15 @@ struct TodoRecorderView: View {
 
             // Bottom controls
             VStack(spacing: 24) {
-                // Speed selector
                 speedSelector
 
-                // Recording controls
                 HStack(spacing: 40) {
-                    // Pause button (only visible when recording)
                     if recorder.isRecording {
                         pauseButton
                     }
 
-                    // Record/Stop button
                     recordingButton
 
-                    // Spacer for balance when recording
                     if recorder.isRecording {
                         Color.clear
                             .frame(width: 56, height: 56)
@@ -187,7 +209,102 @@ struct TodoRecorderView: View {
         }
     }
 
-    // MARK: - Preview Completed View (YouTube-style)
+    // MARK: - Todo Badge and Overlay
+
+    var todoFloatingBadge: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showTodoOverlay.toggle()
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: completedCount == totalCount && totalCount > 0 ? "checkmark.circle.fill" : "checklist")
+                    .font(.system(size: 14, weight: .semibold))
+                Text("\(completedCount)/\(totalCount)")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+            }
+            .foregroundColor(completedCount == totalCount && totalCount > 0 ? .green : .white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.black.opacity(0.5))
+            .cornerRadius(16)
+        }
+    }
+
+    var todoListOverlay: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Session Tasks")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(.white)
+
+                Spacer()
+
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showTodoOverlay = false
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.white.opacity(0.6))
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+
+            Divider()
+                .background(Color.white.opacity(0.2))
+
+            // Todo list
+            ScrollView {
+                VStack(spacing: 8) {
+                    ForEach(selectedTodos) { todo in
+                        Button {
+                            toggleTodoCheck(todo)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: checkedTodoIds.contains(todo.id) ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 22))
+                                    .foregroundColor(checkedTodoIds.contains(todo.id) ? .green : .white.opacity(0.6))
+
+                                Text(todo.title)
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundColor(.white)
+                                    .strikethrough(checkedTodoIds.contains(todo.id))
+                                    .opacity(checkedTodoIds.contains(todo.id) ? 0.6 : 1.0)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+            .frame(maxHeight: 250)
+        }
+        .frame(width: 280)
+        .background(.ultraThinMaterial.opacity(0.95))
+        .background(Color.black.opacity(0.3))
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
+    }
+
+    private func toggleTodoCheck(_ todo: TodoItem) {
+        if checkedTodoIds.contains(todo.id) {
+            checkedTodoIds.remove(todo.id)
+        } else {
+            checkedTodoIds.insert(todo.id)
+        }
+    }
+
+    // MARK: - Preview Completed View
 
     var previewCompletedView: some View {
         VStack(spacing: 0) {
@@ -195,6 +312,7 @@ struct TodoRecorderView: View {
             HStack {
                 Button {
                     recorder.cleanup()
+                    onDismiss()
                     dismiss()
                 } label: {
                     Image(systemName: "xmark")
@@ -211,7 +329,7 @@ struct TodoRecorderView: View {
 
             Spacer()
 
-            // Video player in a contained box
+            // Video player
             if let player = player {
                 VideoPlayer(player: player)
                     .aspectRatio(recordedInLandscape ? 16/9 : 9/16, contentMode: .fit)
@@ -233,27 +351,44 @@ struct TodoRecorderView: View {
                     .padding(.horizontal, 20)
             }
 
-            // Todo info card
+            // Session summary card
             VStack(spacing: 12) {
                 HStack {
-                    Image(systemName: "checkmark.circle.fill")
+                    Image(systemName: "checklist")
                         .font(.system(size: 24))
-                        .foregroundColor(AppTheme.successGreen)
+                        .foregroundStyle(AppTheme.primaryGradient)
 
-                    Text(todo.title)
+                    Text("Session Complete")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)
-                        .lineLimit(2)
 
                     Spacer()
+
+                    Text("\(completedCount)/\(totalCount) done")
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundColor(completedCount == totalCount ? .green : AppTheme.actionBlue)
                 }
 
-                if let description = todo.description, !description.isEmpty {
-                    Text(description)
-                        .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.7))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .lineLimit(2)
+                if !checkedTodoIds.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(selectedTodos.filter { checkedTodoIds.contains($0.id) }.prefix(3)) { todo in
+                            HStack(spacing: 8) {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.green)
+                                Text(todo.title)
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.white.opacity(0.8))
+                                    .lineLimit(1)
+                            }
+                        }
+                        if checkedTodoIds.count > 3 {
+                            Text("+\(checkedTodoIds.count - 3) more")
+                                .font(.system(size: 12))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             .padding(20)
@@ -274,6 +409,7 @@ struct TodoRecorderView: View {
                     Button {
                         player?.pause()
                         player = nil
+                        checkedTodoIds.removeAll()
                         recorder.clearFrames()
                     } label: {
                         HStack(spacing: 8) {
@@ -292,19 +428,19 @@ struct TodoRecorderView: View {
                     // Save button
                     Button {
                         Task {
-                            await saveVideoAndCompleteTodo()
+                            await saveSession()
                         }
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 18, weight: .semibold))
-                            Text("Complete")
+                            Text("Save")
                                 .font(.system(size: 17, weight: .semibold))
                         }
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 56)
-                        .background(AppTheme.successGreen)
+                        .background(AppTheme.primaryGradient)
                         .cornerRadius(16)
                     }
                 }
@@ -316,6 +452,8 @@ struct TodoRecorderView: View {
             setupPlayer()
         }
     }
+
+    // MARK: - Helper Views
 
     var formattedDuration: String {
         let hours = Int(recorder.recordingDuration) / 3600
@@ -331,6 +469,16 @@ struct TodoRecorderView: View {
 
     var recordedInLandscape: Bool {
         recorder.recordingOrientation == .landscapeLeft || recorder.recordingOrientation == .landscapeRight
+    }
+
+    var audioButtonColor: Color {
+        if recorder.isAudioEnabled {
+            return .white
+        } else if recorder.isAudioAllowed {
+            return .red
+        } else {
+            return .gray
+        }
     }
 
     var speedSelector: some View {
@@ -394,11 +542,6 @@ struct TodoRecorderView: View {
         }
     }
 
-    private func setupPlayer() {
-        guard let videoURL = recorder.recordedVideoURL else { return }
-        player = AVPlayer(url: videoURL)
-    }
-
     var uploadProgressView: some View {
         VStack(spacing: 24) {
             ZStack {
@@ -409,7 +552,7 @@ struct TodoRecorderView: View {
                 Circle()
                     .trim(from: 0, to: uploadProgress)
                     .stroke(
-                        AppTheme.successGreen,
+                        AppTheme.primaryGradient,
                         style: StrokeStyle(lineWidth: 12, lineCap: .round)
                     )
                     .frame(width: 120, height: 120)
@@ -428,7 +571,12 @@ struct TodoRecorderView: View {
         .padding()
     }
 
-    private func saveVideoAndCompleteTodo() async {
+    private func setupPlayer() {
+        guard let videoURL = recorder.recordedVideoURL else { return }
+        player = AVPlayer(url: videoURL)
+    }
+
+    private func saveSession() async {
         guard let videoURL = recorder.recordedVideoURL else { return }
 
         isUploading = true
@@ -439,7 +587,7 @@ struct TodoRecorderView: View {
 
             // Save video to local storage
             let localVideoPath = try LocalStorageService.shared.saveVideo(from: videoURL)
-            uploadProgress = 0.5
+            uploadProgress = 0.4
 
             // Generate and save thumbnail
             var localThumbnailPath: String? = nil
@@ -448,20 +596,23 @@ struct TodoRecorderView: View {
                     localThumbnailPath = try? LocalStorageService.shared.saveThumbnail(thumbnail)
                 }
             }
-            uploadProgress = 0.7
+            uploadProgress = 0.6
 
-            // Attach video to todo (this also marks it as completed)
-            await viewModel.attachVideo(
-                to: todo,
-                videoPath: localVideoPath,
-                thumbnailPath: localThumbnailPath
-            )
+            // Mark checked todos as complete
+            for todoId in checkedTodoIds {
+                await viewModel.toggleTodoById(todoId, isCompleted: true)
+            }
+            uploadProgress = 0.9
+
+            // Note: We're not creating a study session here since this is todo-focused
+            // The video could optionally be attached to todos or stored separately
 
             uploadProgress = 1.0
 
             // Clean up temp file
             try? FileManager.default.removeItem(at: videoURL)
 
+            onDismiss()
             dismiss()
 
         } catch {
@@ -473,16 +624,9 @@ struct TodoRecorderView: View {
 }
 
 #Preview {
-    TodoRecorderView(
-        todo: TodoItem(
-            _id: "1",
-            title: "Complete tutorial",
-            description: nil,
-            isCompleted: false,
-            localVideoPath: nil,
-            localThumbnailPath: nil,
-            createdAt: Date().timeIntervalSince1970 * 1000
-        ),
-        viewModel: TodoViewModel()
+    TodoSessionRecorderView(
+        selectedTodoIds: ["1", "2"],
+        viewModel: TodoViewModel(),
+        onDismiss: {}
     )
 }

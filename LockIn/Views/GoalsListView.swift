@@ -22,6 +22,10 @@ struct GoalsListView: View {
     @State private var showingVideoPlayer = false
     @State private var selectedTodoForPlayback: TodoItem?
 
+    // Multi-select for todo sessions
+    @State private var selectedTodoIdsForSession: Set<String> = []
+    @State private var showTodoSessionRecorder = false
+
     var body: some View {
         NavigationView {
             ZStack {
@@ -64,6 +68,15 @@ struct GoalsListView: View {
                 if let videoURL = todo.videoURL {
                     TodoVideoPlayerView(videoURL: videoURL, todo: todo)
                 }
+            }
+            .fullScreenCover(isPresented: $showTodoSessionRecorder) {
+                TodoSessionRecorderView(
+                    selectedTodoIds: selectedTodoIdsForSession,
+                    viewModel: todoViewModel,
+                    onDismiss: {
+                        selectedTodoIdsForSession.removeAll()
+                    }
+                )
             }
         }
     }
@@ -155,9 +168,22 @@ struct GoalsListView: View {
 
     // MARK: - Todos Content
 
+    // Get incomplete todos
+    private var incompleteTodos: [TodoItem] {
+        todoViewModel.todos.filter { !$0.isCompleted }
+    }
+
     // Get the first incomplete todo that doesn't have a video yet
     private var nextTodoToRecord: TodoItem? {
         todoViewModel.todos.first { !$0.isCompleted && !$0.hasVideo }
+    }
+
+    private func toggleTodoSelection(_ todoId: String) {
+        if selectedTodoIdsForSession.contains(todoId) {
+            selectedTodoIdsForSession.remove(todoId)
+        } else {
+            selectedTodoIdsForSession.insert(todoId)
+        }
     }
 
     var todosContent: some View {
@@ -175,30 +201,47 @@ struct GoalsListView: View {
                 ZStack(alignment: .bottom) {
                     List {
                         ForEach(todoViewModel.todos) { todo in
-                            Button {
-                                if todo.hasVideo {
-                                    selectedTodoForPlayback = todo
-                                } else {
-                                    selectedTodoForRecording = todo
-                                }
-                            } label: {
-                                TodoCard(
-                                    todo: todo,
-                                    onToggle: {
-                                        Task {
-                                            await todoViewModel.toggleTodo(todo)
-                                        }
-                                    },
-                                    onTap: {
-                                        if todo.hasVideo {
-                                            selectedTodoForPlayback = todo
-                                        } else {
-                                            selectedTodoForRecording = todo
-                                        }
+                            HStack(spacing: 12) {
+                                // Selection circle for session (only for incomplete todos)
+                                if !todo.isCompleted {
+                                    Button {
+                                        toggleTodoSelection(todo.id)
+                                    } label: {
+                                        Image(systemName: selectedTodoIdsForSession.contains(todo.id)
+                                            ? "checkmark.circle.fill" : "circle")
+                                            .font(.system(size: 22))
+                                            .foregroundColor(selectedTodoIdsForSession.contains(todo.id)
+                                                ? AppTheme.actionBlue : AppTheme.textSecondary.opacity(0.4))
                                     }
-                                )
+                                    .buttonStyle(PlainButtonStyle())
+                                }
+
+                                // Todo card
+                                Button {
+                                    if todo.hasVideo {
+                                        selectedTodoForPlayback = todo
+                                    } else {
+                                        selectedTodoForRecording = todo
+                                    }
+                                } label: {
+                                    TodoCard(
+                                        todo: todo,
+                                        onToggle: {
+                                            Task {
+                                                await todoViewModel.toggleTodo(todo)
+                                            }
+                                        },
+                                        onTap: {
+                                            if todo.hasVideo {
+                                                selectedTodoForPlayback = todo
+                                            } else {
+                                                selectedTodoForRecording = todo
+                                            }
+                                        }
+                                    )
+                                }
+                                .buttonStyle(PlainButtonStyle())
                             }
-                            .buttonStyle(PlainButtonStyle())
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
@@ -238,15 +281,15 @@ struct GoalsListView: View {
 
                         // Bottom spacer for tab bar and sticky button
                         Color.clear
-                            .frame(height: nextTodoToRecord != nil ? 160 : 80)
+                            .frame(height: !incompleteTodos.isEmpty ? 160 : 80)
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
 
-                    // Sticky Continue button
-                    if let nextTodo = nextTodoToRecord {
+                    // Sticky Start Session button
+                    if !incompleteTodos.isEmpty {
                         VStack(spacing: 0) {
                             // Gradient fade
                             LinearGradient(
@@ -257,20 +300,23 @@ struct GoalsListView: View {
                             .frame(height: 20)
 
                             VStack(spacing: 8) {
-                                // Next task label
-                                Text("Next: \(nextTodo.title)")
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(AppTheme.textSecondary)
-                                    .lineLimit(1)
+                                // Selection count label
+                                if !selectedTodoIdsForSession.isEmpty {
+                                    Text("\(selectedTodoIdsForSession.count) task\(selectedTodoIdsForSession.count == 1 ? "" : "s") selected")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(AppTheme.textSecondary)
+                                }
 
-                                // Continue button
+                                // Start Session button
                                 Button {
-                                    selectedTodoForRecording = nextTodo
+                                    showTodoSessionRecorder = true
                                 } label: {
                                     HStack(spacing: 12) {
-                                        Image(systemName: "play.fill")
+                                        Image(systemName: "video.fill")
                                             .font(.system(size: 18, weight: .semibold))
-                                        Text("Continue")
+                                        Text(selectedTodoIdsForSession.isEmpty
+                                            ? "Start Session"
+                                            : "Start Session (\(selectedTodoIdsForSession.count))")
                                             .font(.system(size: 18, weight: .semibold))
                                     }
                                     .frame(maxWidth: .infinity)

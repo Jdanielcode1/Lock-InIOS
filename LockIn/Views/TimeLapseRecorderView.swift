@@ -38,6 +38,7 @@ struct TimeLapseRecorderView: View {
 
     @Environment(\.dismiss) var dismiss
     @StateObject private var recorder: TimeLapseRecorder
+    @StateObject private var todoViewModel = TodoViewModel()
     @State private var isUploading = false
     @State private var uploadProgress: Double = 0
     @State private var uploadSuccess = false
@@ -46,7 +47,26 @@ struct TimeLapseRecorderView: View {
     @State private var player: AVPlayer?
     @State private var selectedSpeed: TimelapseSpeed = .timelapse
 
+    // Todo tracking state
+    @State private var showTodoSelection = true
+    @State private var selectedTodoIds: Set<String> = []
+    @State private var checkedTodoIds: Set<String> = []
+    @State private var showTodoOverlay = false
+
     private let videoService = VideoService.shared
+
+    // Computed properties for todos
+    private var selectedTodos: [TodoItem] {
+        todoViewModel.todos.filter { selectedTodoIds.contains($0.id) }
+    }
+
+    private var completedTodoCount: Int {
+        checkedTodoIds.count
+    }
+
+    private var totalTodoCount: Int {
+        selectedTodoIds.count
+    }
 
     init(goalId: String, subtaskId: String?) {
         self.goalId = goalId
@@ -69,7 +89,35 @@ struct TimeLapseRecorderView: View {
 
                 // Camera overlay controls
                 cameraOverlayControls
+
+                // Todo list overlay (when expanded)
+                if showTodoOverlay && totalTodoCount > 0 {
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                showTodoOverlay = false
+                            }
+                        }
+
+                    todoListOverlay
+                        .transition(.scale(scale: 0.9).combined(with: .opacity))
+                }
             }
+        }
+        .sheet(isPresented: $showTodoSelection) {
+            TodoSelectionSheet(
+                selectedTodoIds: $selectedTodoIds,
+                onStart: {
+                    showTodoSelection = false
+                },
+                onSkip: {
+                    selectedTodoIds.removeAll()
+                    showTodoSelection = false
+                }
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .onAppear {
             // Allow landscape orientation in recorder
@@ -115,6 +163,11 @@ struct TimeLapseRecorderView: View {
                         .padding(.vertical, 8)
                         .background(Color.black.opacity(0.5))
                         .cornerRadius(20)
+                }
+
+                // Todo badge (only show if todos selected)
+                if totalTodoCount > 0 {
+                    todoFloatingBadge
                 }
 
                 Spacer()
@@ -301,6 +354,7 @@ struct TimeLapseRecorderView: View {
                         player?.pause()
                         player = nil
                         previewThumbnail = nil
+                        checkedTodoIds.removeAll()
                         recorder.clearFrames()
                     } label: {
                         HStack(spacing: 8) {
@@ -394,6 +448,101 @@ struct TimeLapseRecorderView: View {
                         .cornerRadius(20)
                 }
             }
+        }
+    }
+
+    // MARK: - Todo Badge and Overlay
+
+    var todoFloatingBadge: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showTodoOverlay.toggle()
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: completedTodoCount == totalTodoCount ? "checkmark.circle.fill" : "checklist")
+                    .font(.system(size: 14, weight: .semibold))
+                Text("\(completedTodoCount)/\(totalTodoCount)")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+            }
+            .foregroundColor(completedTodoCount == totalTodoCount ? .green : .white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.black.opacity(0.5))
+            .cornerRadius(16)
+        }
+    }
+
+    var todoListOverlay: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Session Tasks")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(.white)
+
+                Spacer()
+
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showTodoOverlay = false
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.white.opacity(0.6))
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+
+            Divider()
+                .background(Color.white.opacity(0.2))
+
+            // Todo list
+            ScrollView {
+                VStack(spacing: 8) {
+                    ForEach(selectedTodos) { todo in
+                        Button {
+                            toggleTodoCheck(todo)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: checkedTodoIds.contains(todo.id) ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 22))
+                                    .foregroundColor(checkedTodoIds.contains(todo.id) ? .green : .white.opacity(0.6))
+
+                                Text(todo.title)
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundColor(.white)
+                                    .strikethrough(checkedTodoIds.contains(todo.id))
+                                    .opacity(checkedTodoIds.contains(todo.id) ? 0.6 : 1.0)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+            .frame(maxHeight: 250)
+        }
+        .frame(width: 280)
+        .background(.ultraThinMaterial.opacity(0.95))
+        .background(Color.black.opacity(0.3))
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
+    }
+
+    private func toggleTodoCheck(_ todo: TodoItem) {
+        if checkedTodoIds.contains(todo.id) {
+            checkedTodoIds.remove(todo.id)
+        } else {
+            checkedTodoIds.insert(todo.id)
         }
     }
 
@@ -506,6 +655,13 @@ struct TimeLapseRecorderView: View {
                 localThumbnailPath: localThumbnailPath,
                 durationMinutes: studyTimeMinutes
             )
+
+            uploadProgress = 0.9
+
+            // Mark checked todos as completed
+            for todoId in checkedTodoIds {
+                try? await ConvexService.shared.toggleTodo(id: todoId, isCompleted: true)
+            }
 
             uploadProgress = 1.0
             uploadSuccess = true
