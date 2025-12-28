@@ -91,7 +91,10 @@ struct TimeLapseRecorderView: View {
             // Background
             Color.black.ignoresSafeArea()
 
-            if recorder.recordedVideoURL != nil {
+            if recorder.isCompilingVideo {
+                // Video compiling animation
+                compilingVideoView
+            } else if recorder.recordedVideoURL != nil {
                 // YouTube-style preview after recording
                 previewCompletedView
             } else {
@@ -278,6 +281,46 @@ struct TimeLapseRecorderView: View {
             dismissAlarm()
         }
         .transition(.opacity)
+    }
+
+    // MARK: - Compiling Video View
+
+    var compilingVideoView: some View {
+        VStack(spacing: 32) {
+            // Animated film reel icon
+            ZStack {
+                Circle()
+                    .stroke(Color.white.opacity(0.2), lineWidth: 8)
+                    .frame(width: 120, height: 120)
+
+                Circle()
+                    .trim(from: 0, to: 0.7)
+                    .stroke(
+                        AngularGradient(
+                            colors: [AppTheme.actionBlue, AppTheme.actionBlue.opacity(0.3)],
+                            center: .center
+                        ),
+                        style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                    )
+                    .frame(width: 120, height: 120)
+                    .rotationEffect(.degrees(-90))
+                    .modifier(RotatingModifier())
+
+                Image(systemName: "film.stack")
+                    .font(.system(size: 40))
+                    .foregroundColor(.white)
+            }
+
+            VStack(spacing: 12) {
+                Text("Creating Video")
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+
+                Text("Compiling \(recorder.frameCount) frames...")
+                    .font(.system(size: 16))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+        }
     }
 
     // MARK: - Camera Overlay Controls

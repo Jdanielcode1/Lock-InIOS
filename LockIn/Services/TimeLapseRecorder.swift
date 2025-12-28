@@ -38,6 +38,7 @@ struct FrameTimestamp {
 class TimeLapseRecorder: NSObject, ObservableObject {
     @Published var isRecording = false
     @Published var isPaused = false
+    @Published var isCompilingVideo = false
     @Published var recordingDuration: TimeInterval = 0
     @Published var frameCount: Int = 0
     @Published var recordedVideoURL: URL?
@@ -452,6 +453,9 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             print("  Audio[\(i)]: frame \(seg.startFrameIndex), time \(seg.startRealTime)-\(seg.endRealTime)s, interval \(seg.frameInterval)s")
         }
 
+        // Show compiling state
+        isCompilingVideo = true
+
         // Create video from captured frames (with audio segments if available)
         let segments = audioSegments
         Task {
@@ -462,6 +466,9 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     private func createVideo(withAudioSegments audioSegments: [AudioSegment]) async {
         guard !capturedFrameURLs.isEmpty else {
             print("❌ No frames captured")
+            await MainActor.run {
+                self.isCompilingVideo = false
+            }
             return
         }
 
@@ -495,11 +502,13 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
                 await MainActor.run {
                     self.recordedVideoURL = finalURL
+                    self.isCompilingVideo = false
                 }
                 print("✅ Timelapse video with synced audio created at: \(finalURL)")
             } else {
                 await MainActor.run {
                     self.recordedVideoURL = videoOnlyURL
+                    self.isCompilingVideo = false
                 }
                 print("✅ Timelapse video created at: \(videoOnlyURL)")
             }
@@ -511,6 +520,9 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             }
         } catch {
             print("❌ Failed to create video: \(error)")
+            await MainActor.run {
+                self.isCompilingVideo = false
+            }
         }
     }
 
