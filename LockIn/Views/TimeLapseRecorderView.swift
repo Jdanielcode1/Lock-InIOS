@@ -8,6 +8,7 @@
 import SwiftUI
 import AVFoundation
 import AVKit
+import AudioToolbox
 
 // Timelapse speed options
 enum TimelapseSpeed: String, CaseIterable {
@@ -52,6 +53,17 @@ struct TimeLapseRecorderView: View {
     @State private var selectedTodoIds: Set<String> = []
     @State private var checkedTodoIds: Set<String> = []
     @State private var showTodoOverlay = false
+
+    // Countdown timer state
+    @State private var countdownEnabled = false
+    @State private var countdownDuration: TimeInterval = 0
+    @State private var showCountdownPicker = false
+    @State private var selectedMinutes: Int = 0
+    @State private var selectedSeconds: Int = 0
+    @State private var countdownReachedZero = false
+    @State private var alarmEnabled = true
+    @State private var alarmPlayer: AVAudioPlayer?
+    @State private var showAlarmOverlay = false
 
     private let videoService = VideoService.shared
 
@@ -103,6 +115,11 @@ struct TimeLapseRecorderView: View {
                     todoListOverlay
                         .transition(.scale(scale: 0.9).combined(with: .opacity))
                 }
+
+                // Alarm overlay
+                if showAlarmOverlay {
+                    alarmOverlay
+                }
             }
         }
         .sheet(isPresented: $showTodoSelection) {
@@ -131,6 +148,7 @@ struct TimeLapseRecorderView: View {
         }
         .onDisappear {
             recorder.cleanup()
+            dismissAlarm()
             // Lock back to portrait when leaving
             OrientationManager.shared.lockToPortrait()
         }
@@ -143,6 +161,123 @@ struct TimeLapseRecorderView: View {
                 Text(error)
             }
         }
+        .sheet(isPresented: $showCountdownPicker) {
+            CountdownPickerSheet(
+                selectedMinutes: $selectedMinutes,
+                selectedSeconds: $selectedSeconds,
+                onConfirm: {
+                    countdownDuration = TimeInterval(selectedMinutes * 60 + selectedSeconds)
+                    countdownReachedZero = false
+                    showCountdownPicker = false
+                },
+                onCancel: {
+                    showCountdownPicker = false
+                }
+            )
+            .presentationDetents([.height(320)])
+            .presentationDragIndicator(.visible)
+        }
+        .onChange(of: recorder.recordingDuration) { _, newDuration in
+            // Check if countdown just reached zero
+            if countdownEnabled &&
+               countdownDuration > 0 &&
+               !countdownReachedZero &&
+               newDuration >= countdownDuration {
+                countdownReachedZero = true
+                triggerCountdownAlert()
+            }
+        }
+    }
+
+    private func triggerCountdownAlert() {
+        // Haptic feedback always
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.warning)
+
+        // Only show alarm overlay and play sound if alarm is enabled
+        guard alarmEnabled else { return }
+
+        // Show alarm overlay
+        showAlarmOverlay = true
+
+        // Play looping alarm sound
+        if let soundURL = Bundle.main.url(forResource: "alarm", withExtension: "mp3") {
+            // Use custom alarm sound if available
+            do {
+                alarmPlayer = try AVAudioPlayer(contentsOf: soundURL)
+                alarmPlayer?.numberOfLoops = -1 // Loop indefinitely
+                alarmPlayer?.play()
+            } catch {
+                playSystemAlarm()
+            }
+        } else {
+            playSystemAlarm()
+        }
+    }
+
+    private func playSystemAlarm() {
+        // Use system alarm sound with repeated playback
+        let systemSoundID: SystemSoundID = 1005 // Alarm sound
+        AudioServicesPlaySystemSound(systemSoundID)
+
+        // Set up repeating alarm using timer
+        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
+            if !showAlarmOverlay {
+                timer.invalidate()
+                return
+            }
+            AudioServicesPlaySystemSound(systemSoundID)
+            AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+        }
+    }
+
+    private func dismissAlarm() {
+        showAlarmOverlay = false
+        alarmPlayer?.stop()
+        alarmPlayer = nil
+    }
+
+    // MARK: - Alarm Overlay
+
+    var alarmOverlay: some View {
+        ZStack {
+            // Semi-transparent background
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
+
+            VStack(spacing: 24) {
+                // Pulsing alarm icon
+                Image(systemName: "alarm.fill")
+                    .font(.system(size: 80))
+                    .foregroundColor(.red)
+                    .symbolEffect(.pulse, options: .repeating)
+
+                Text("Time's Up!")
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+
+                Text("Your countdown has finished")
+                    .font(.system(size: 17))
+                    .foregroundColor(.white.opacity(0.8))
+
+                // Dismiss button
+                Button {
+                    dismissAlarm()
+                } label: {
+                    Text("Dismiss")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 200, height: 56)
+                        .background(Color.red)
+                        .cornerRadius(28)
+                }
+                .padding(.top, 20)
+            }
+        }
+        .onTapGesture {
+            dismissAlarm()
+        }
+        .transition(.opacity)
     }
 
     // MARK: - Camera Overlay Controls
@@ -207,15 +342,23 @@ struct TimeLapseRecorderView: View {
                             Image(systemName: "pause.fill")
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(.orange)
+                        } else if isOvertime {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.red)
+                        } else if countdownEnabled && countdownDuration > 0 {
+                            Image(systemName: "timer")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.orange)
                         } else {
                             Circle()
                                 .fill(Color.red)
                                 .frame(width: 10, height: 10)
                         }
 
-                        Text(formattedDuration)
+                        Text(timerDisplayText)
                             .font(.system(size: 17, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
+                            .foregroundColor(isOvertime ? .red : .white)
 
                         if recorder.isPaused {
                             Text("PAUSED")
@@ -235,6 +378,12 @@ struct TimeLapseRecorderView: View {
             }
             .padding(.horizontal)
             .padding(.top, 60)
+
+            // Countdown timer settings (below top bar, when not recording)
+            if !recorder.isRecording {
+                countdownTimerSettings
+                    .padding(.top, 12)
+            }
 
             Spacer()
 
@@ -407,15 +556,42 @@ struct TimeLapseRecorderView: View {
     }
 
     var formattedDuration: String {
-        let hours = Int(recorder.recordingDuration) / 3600
-        let minutes = (Int(recorder.recordingDuration) % 3600) / 60
-        let seconds = Int(recorder.recordingDuration) % 60
+        formatTime(recorder.recordingDuration)
+    }
+
+    private func formatTime(_ time: TimeInterval) -> String {
+        let hours = Int(time) / 3600
+        let minutes = (Int(time) % 3600) / 60
+        let seconds = Int(time) % 60
 
         if hours > 0 {
             return String(format: "%d:%02d:%02d", hours, minutes, seconds)
         } else {
             return String(format: "%02d:%02d", minutes, seconds)
         }
+    }
+
+    // Countdown timer computed properties
+    var remainingTime: TimeInterval {
+        max(0, countdownDuration - recorder.recordingDuration)
+    }
+
+    var isOvertime: Bool {
+        countdownEnabled && countdownDuration > 0 && recorder.recordingDuration > countdownDuration
+    }
+
+    var timerDisplayText: String {
+        if countdownEnabled && countdownDuration > 0 {
+            if isOvertime {
+                return "-" + formatTime(recorder.recordingDuration - countdownDuration)
+            }
+            return formatTime(remainingTime)
+        }
+        return formattedDuration
+    }
+
+    var formattedCountdownSetting: String {
+        formatTime(countdownDuration)
     }
 
     var isApproachingLimit: Bool {
@@ -447,6 +623,89 @@ struct TimeLapseRecorderView: View {
                         .background(selectedSpeed == speed ? Color.white : Color.black.opacity(0.5))
                         .cornerRadius(20)
                 }
+            }
+        }
+    }
+
+    // MARK: - Countdown Timer Settings
+
+    var countdownTimerSettings: some View {
+        VStack(spacing: 10) {
+            // Timer toggle button with alarm toggle
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        countdownEnabled.toggle()
+                        if !countdownEnabled {
+                            countdownDuration = 0
+                            countdownReachedZero = false
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: countdownEnabled ? "timer.circle.fill" : "timer")
+                            .font(.system(size: 16))
+                        Text(countdownEnabled && countdownDuration > 0 ? formattedCountdownSetting : "Set Timer")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(countdownEnabled ? AppTheme.actionBlue : .white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(countdownEnabled ? AppTheme.actionBlue.opacity(0.2) : Color.black.opacity(0.5))
+                    .cornerRadius(20)
+                }
+
+                // Alarm toggle (only show when countdown is enabled)
+                if countdownEnabled {
+                    Button {
+                        alarmEnabled.toggle()
+                    } label: {
+                        Image(systemName: alarmEnabled ? "bell.fill" : "bell.slash.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(alarmEnabled ? .orange : .gray)
+                            .padding(10)
+                            .background(alarmEnabled ? Color.orange.opacity(0.2) : Color.black.opacity(0.5))
+                            .clipShape(Circle())
+                    }
+                    .transition(.scale.combined(with: .opacity))
+                }
+            }
+
+            // Preset buttons (when enabled)
+            if countdownEnabled {
+                HStack(spacing: 8) {
+                    ForEach([5, 10, 15, 30, 60], id: \.self) { minutes in
+                        Button {
+                            countdownDuration = TimeInterval(minutes * 60)
+                            countdownReachedZero = false
+                        } label: {
+                            Text("\(minutes)m")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(countdownDuration == TimeInterval(minutes * 60) ? .black : .white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(countdownDuration == TimeInterval(minutes * 60) ? Color.white : Color.black.opacity(0.5))
+                                .cornerRadius(16)
+                        }
+                    }
+
+                    // Custom picker button
+                    Button {
+                        // Initialize picker with current countdown
+                        selectedMinutes = Int(countdownDuration) / 60
+                        selectedSeconds = Int(countdownDuration) % 60
+                        showCountdownPicker = true
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.black.opacity(0.5))
+                            .cornerRadius(16)
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }
