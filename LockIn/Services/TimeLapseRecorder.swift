@@ -24,6 +24,8 @@ struct AudioSegment {
     let startRealTime: TimeInterval  // When audio started (relative to recording start)
     var endRealTime: TimeInterval    // When audio stopped
     let audioFileURL: URL            // The audio file for this segment
+    let frameInterval: TimeInterval  // The capture interval when this segment started (for speedup calculation)
+    let startFrameIndex: Int         // The frame index when audio started (for video position)
 }
 
 /// Maps a video frame to its real-time capture moment
@@ -74,8 +76,24 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     private var pausedDuration: TimeInterval = 0
     private var pauseStartTime: Date?
 
-    // Track current audio segment start time
+    // Track current audio segment start time, mode, and frame position
     private var currentAudioStartTime: TimeInterval = 0
+    private var currentAudioFrameInterval: TimeInterval = 0.5  // The frame interval when audio started
+    private var currentAudioStartFrameIndex: Int = 0           // The frame index when audio started
+
+    // MARK: - Accurate Time Calculation
+
+    /// Returns the current recording time (excluding pauses) using actual wall clock
+    /// This is more accurate than the timer-updated recordingDuration which can be up to 0.1s stale
+    private func calculateActualRealTime() -> TimeInterval {
+        guard let start = startTime else { return 0 }
+        let now = Date()
+        var totalPaused = pausedDuration
+        if isPaused, let pauseStart = pauseStartTime {
+            totalPaused += now.timeIntervalSince(pauseStart)
+        }
+        return now.timeIntervalSince(start) - totalPaused
+    }
 
     // MARK: - Pause/Resume Recording
 
@@ -108,20 +126,36 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
     // Allow external control of capture interval
     func setCaptureInterval(_ interval: TimeInterval, rateName: String) {
+        let isNormalMode = interval <= 0
+        let wasNormalMode = frameInterval <= 0
+
         // If recording, close current speed segment and start new one
         if isRecording {
-            closeCurrentSpeedSegment()
+            // Use actual time for accurate segment boundaries
+            let actualTime = calculateActualRealTime()
+            closeCurrentSpeedSegment(at: actualTime)
+
+            // AUDIO ONLY WORKS IN NORMAL MODE
+            // If switching FROM Normal TO Timelapse/UltraFast: stop audio recording
+            if wasNormalMode && !isNormalMode && isAudioEnabled {
+                print("🎤 Switching to timelapse mode - stopping audio recording")
+                if currentAudioFileURL != nil {
+                    closeCurrentAudioSegment(at: actualTime)
+                }
+                isAudioEnabled = false
+                print("🎤 Audio disabled (not supported in timelapse modes)")
+            }
 
             // Start new speed segment
             let newSegment = SpeedSegment(
                 startFrameIndex: frameCount,
                 endFrameIndex: frameCount,  // Will be updated as frames are captured
-                startRealTime: recordingDuration,
-                endRealTime: recordingDuration,
+                startRealTime: actualTime,
+                endRealTime: actualTime,
                 frameInterval: interval
             )
             speedSegments.append(newSegment)
-            print("📸 Speed changed at frame \(frameCount), real-time \(recordingDuration)s")
+            print("📸 Speed changed at frame \(frameCount), real-time \(actualTime)s")
         }
 
         frameInterval = interval
@@ -130,27 +164,45 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         print("📸 User changed capture rate to \(rateName) (interval: \(interval)s)")
     }
 
+    /// Check if audio recording is allowed (only in Normal mode)
+    var isAudioAllowed: Bool {
+        return frameInterval <= 0
+    }
+
     // Close the current speed segment
-    private func closeCurrentSpeedSegment() {
+    private func closeCurrentSpeedSegment(at endTime: TimeInterval? = nil) {
         guard !speedSegments.isEmpty else { return }
+        let actualEndTime = endTime ?? calculateActualRealTime()
         speedSegments[speedSegments.count - 1].endFrameIndex = frameCount
-        speedSegments[speedSegments.count - 1].endRealTime = recordingDuration
+        speedSegments[speedSegments.count - 1].endRealTime = actualEndTime
     }
 
     // Toggle audio recording on/off (can be called during recording)
+    // NOTE: Audio is only allowed in Normal mode (frameInterval <= 0)
     func toggleAudio() {
+        // Prevent enabling audio in timelapse modes
+        if !isAudioEnabled && !isAudioAllowed {
+            print("🎤 Cannot enable audio in timelapse mode")
+            return
+        }
+
         isAudioEnabled.toggle()
 
         if isRecording {
+            // Use actual time for accurate audio segment boundaries
+            let actualTime = calculateActualRealTime()
+
             if isAudioEnabled {
-                // Start new audio segment
-                currentAudioStartTime = recordingDuration
+                // Start new audio segment - record current frame interval and position for sync
+                currentAudioStartTime = actualTime
+                currentAudioFrameInterval = frameInterval
+                currentAudioStartFrameIndex = frameCount
                 startAudioRecording()
-                print("🎤 Audio enabled at real-time offset: \(currentAudioStartTime)s")
+                print("🎤 Audio enabled at frame \(frameCount), real-time \(currentAudioStartTime)s, frameInterval: \(frameInterval)s")
             } else {
-                // Close current audio segment
-                closeCurrentAudioSegment()
-                print("🎤 Audio disabled at real-time offset: \(recordingDuration)s")
+                // Close current audio segment with accurate time
+                closeCurrentAudioSegment(at: actualTime)
+                print("🎤 Audio disabled at real-time offset: \(actualTime)s")
             }
         }
 
@@ -158,21 +210,27 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     }
 
     // Close the current audio segment and save it
-    private func closeCurrentAudioSegment() {
+    // Uses provided endTime for accuracy (actual wall clock time, not timer value)
+    private func closeCurrentAudioSegment(at endTime: TimeInterval? = nil) {
         guard let audioURL = currentAudioFileURL else { return }
 
         audioRecorder?.stop()
         audioRecorder = nil
 
-        // Create segment record
+        // Use provided time or calculate actual time
+        let actualEndTime = endTime ?? calculateActualRealTime()
+
+        // Create segment record with the frame interval and position for sync
         let segment = AudioSegment(
             startRealTime: currentAudioStartTime,
-            endRealTime: recordingDuration,
-            audioFileURL: audioURL
+            endRealTime: actualEndTime,
+            audioFileURL: audioURL,
+            frameInterval: currentAudioFrameInterval,
+            startFrameIndex: currentAudioStartFrameIndex
         )
         audioSegments.append(segment)
 
-        print("📝 Saved audio segment: \(segment.startRealTime)s - \(segment.endRealTime)s")
+        print("📝 Saved audio segment: frame \(segment.startFrameIndex), time \(segment.startRealTime)s - \(segment.endRealTime)s, frameInterval: \(segment.frameInterval)s")
 
         currentAudioFileURL = nil
     }
@@ -219,10 +277,10 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         }
     }
 
-    private func stopAudioRecording() {
+    private func stopAudioRecording(at endTime: TimeInterval? = nil) {
         // Close current audio segment if recording
         if currentAudioFileURL != nil {
-            closeCurrentAudioSegment()
+            closeCurrentAudioSegment(at: endTime)
         }
         print("🎙️ Stopped audio recording")
     }
@@ -333,6 +391,8 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         // Start audio recording if enabled
         if isAudioEnabled {
             currentAudioStartTime = 0
+            currentAudioFrameInterval = frameInterval  // Record the initial frame interval
+            currentAudioStartFrameIndex = 0            // Starting from frame 0
             startAudioRecording()
         }
 
@@ -367,18 +427,21 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     }
 
     func stopRecording() {
+        // Capture actual time before stopping timer
+        let finalTime = calculateActualRealTime()
+
         isRecording = false
         isPaused = false
         recordingTimer?.invalidate()
         recordingTimer = nil
 
-        // Close current speed segment
-        closeCurrentSpeedSegment()
+        // Close current speed segment with actual time
+        closeCurrentSpeedSegment(at: finalTime)
 
-        // Stop audio recording (this closes the current audio segment)
-        stopAudioRecording()
+        // Stop audio recording (this closes the current audio segment with actual time)
+        stopAudioRecording(at: finalTime)
 
-        print("⏹️ Stopped timelapse recording. Captured \(frameCount) frames over \(recordingDuration) seconds")
+        print("⏹️ Stopped timelapse recording. Captured \(frameCount) frames over \(finalTime) seconds")
         print("📊 Speed segments: \(speedSegments.count), Audio segments: \(audioSegments.count)")
 
         // Debug: Print segment details
@@ -386,18 +449,17 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             print("  Speed[\(i)]: frames \(seg.startFrameIndex)-\(seg.endFrameIndex), time \(seg.startRealTime)-\(seg.endRealTime)s, interval \(seg.frameInterval)s")
         }
         for (i, seg) in audioSegments.enumerated() {
-            print("  Audio[\(i)]: time \(seg.startRealTime)-\(seg.endRealTime)s")
+            print("  Audio[\(i)]: frame \(seg.startFrameIndex), time \(seg.startRealTime)-\(seg.endRealTime)s, interval \(seg.frameInterval)s")
         }
 
         // Create video from captured frames (with audio segments if available)
         let segments = audioSegments
-        let timestamps = frameTimestamps
         Task {
-            await createVideo(withAudioSegments: segments, frameTimestamps: timestamps)
+            await createVideo(withAudioSegments: segments)
         }
     }
 
-    private func createVideo(withAudioSegments audioSegments: [AudioSegment], frameTimestamps: [FrameTimestamp]) async {
+    private func createVideo(withAudioSegments audioSegments: [AudioSegment]) async {
         guard !capturedFrameURLs.isEmpty else {
             print("❌ No frames captured")
             return
@@ -422,7 +484,6 @@ class TimeLapseRecorder: NSObject, ObservableObject {
                 try await mergeVideoWithAudioSegments(
                     videoURL: videoOnlyURL,
                     audioSegments: audioSegments,
-                    frameTimestamps: frameTimestamps,
                     outputURL: finalURL
                 )
 
@@ -453,77 +514,102 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         }
     }
 
-    /// Maps a real-time offset to a video time based on frame timestamps
-    nonisolated private func realTimeToVideoTime(
-        realTime: TimeInterval,
-        frameTimestamps: [FrameTimestamp],
-        fps: Int32
-    ) -> CMTime {
-        // Handle edge cases
-        guard !frameTimestamps.isEmpty else {
-            return CMTime.zero
+    /// Pre-process audio file to target duration using AVAssetExportSession
+    /// This is the workaround for Apple's scaleTimeRange bug that only scales video, not audio
+    /// See: https://nonstrict.eu/blog/2023/stretching-an-audio-file-using-swift/
+    nonisolated private func scaleAudioFile(
+        inputURL: URL,
+        targetDuration: CMTime,
+        outputURL: URL
+    ) async throws {
+        print("   🎵 scaleAudioFile: input=\(inputURL.lastPathComponent), targetDuration=\(CMTimeGetSeconds(targetDuration))s")
+
+        let inputAsset = AVAsset(url: inputURL)
+        let inputDuration = try await inputAsset.load(.duration)
+        let inputTimeRange = CMTimeRange(start: .zero, duration: inputDuration)
+        print("   🎵 Input duration: \(CMTimeGetSeconds(inputDuration))s")
+
+        guard let inputTrack = try await inputAsset.loadTracks(withMediaType: .audio).first else {
+            print("   ❌ No audio track in input file")
+            throw NSError(domain: "TimeLapseRecorder", code: -10,
+                          userInfo: [NSLocalizedDescriptionKey: "No audio track in input file"])
+        }
+        print("   🎵 Audio track loaded")
+
+        // Create composition with audio only
+        let composition = AVMutableComposition()
+        guard let audioTrack = composition.addMutableTrack(
+            withMediaType: .audio,
+            preferredTrackID: kCMPersistentTrackID_Invalid
+        ) else {
+            print("   ❌ Failed to create audio track in composition")
+            throw NSError(domain: "TimeLapseRecorder", code: -11,
+                          userInfo: [NSLocalizedDescriptionKey: "Failed to create audio track"])
         }
 
-        // If realTime is before first frame, return 0
-        if realTime <= frameTimestamps[0].realTimeOffset {
-            return CMTime.zero
+        try audioTrack.insertTimeRange(inputTimeRange, of: inputTrack, at: .zero)
+        print("   🎵 Audio inserted into composition")
+
+        // Scale the AUDIO-ONLY composition (this works correctly for audio-only compositions)
+        composition.scaleTimeRange(inputTimeRange, toDuration: targetDuration)
+        print("   🎵 Time range scaled")
+
+        // Export the scaled audio
+        guard let exportSession = AVAssetExportSession(
+            asset: composition,
+            presetName: AVAssetExportPresetAppleM4A
+        ) else {
+            print("   ❌ Failed to create export session")
+            throw NSError(domain: "TimeLapseRecorder", code: -12,
+                          userInfo: [NSLocalizedDescriptionKey: "Failed to create export session"])
         }
 
-        // If realTime is after last frame, return end of video
-        if realTime >= frameTimestamps[frameTimestamps.count - 1].realTimeOffset {
-            let videoTime = Double(frameTimestamps.count - 1) / Double(fps)
-            return CMTime(seconds: videoTime, preferredTimescale: 600)
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = .m4a
+        print("   🎵 Starting audio export...")
+
+        await exportSession.export()
+
+        switch exportSession.status {
+        case .completed:
+            print("   ✅ Audio scaled: \(CMTimeGetSeconds(inputDuration))s → \(CMTimeGetSeconds(targetDuration))s")
+        case .failed:
+            let errorMessage = exportSession.error?.localizedDescription ?? "Unknown error"
+            print("   ❌ Audio export failed: \(errorMessage)")
+            throw exportSession.error ?? NSError(domain: "TimeLapseRecorder", code: -13,
+                          userInfo: [NSLocalizedDescriptionKey: "Audio export failed: \(errorMessage)"])
+        case .cancelled:
+            print("   ❌ Audio export cancelled")
+            throw NSError(domain: "TimeLapseRecorder", code: -17,
+                          userInfo: [NSLocalizedDescriptionKey: "Audio export cancelled"])
+        default:
+            print("   ❌ Audio export ended with status: \(exportSession.status.rawValue)")
+            throw NSError(domain: "TimeLapseRecorder", code: -18,
+                          userInfo: [NSLocalizedDescriptionKey: "Audio export status: \(exportSession.status.rawValue)"])
         }
-
-        // Binary search to find the frame that corresponds to this real time
-        var low = 0
-        var high = frameTimestamps.count - 1
-
-        while low < high {
-            let mid = (low + high + 1) / 2
-            if frameTimestamps[mid].realTimeOffset <= realTime {
-                low = mid
-            } else {
-                high = mid - 1
-            }
-        }
-
-        // Interpolate between frames for smoother mapping
-        let frameIndex = low
-        var videoTime = Double(frameIndex) / Double(fps)
-
-        // If there's a next frame, interpolate
-        if frameIndex < frameTimestamps.count - 1 {
-            let currentFrameTime = frameTimestamps[frameIndex].realTimeOffset
-            let nextFrameTime = frameTimestamps[frameIndex + 1].realTimeOffset
-            let frameDuration = nextFrameTime - currentFrameTime
-
-            if frameDuration > 0 {
-                let fraction = (realTime - currentFrameTime) / frameDuration
-                videoTime += fraction / Double(fps)
-            }
-        }
-
-        return CMTime(seconds: videoTime, preferredTimescale: 600)
     }
 
     nonisolated private func mergeVideoWithAudioSegments(
         videoURL: URL,
         audioSegments: [AudioSegment],
-        frameTimestamps: [FrameTimestamp],
         outputURL: URL
     ) async throws {
+        print("🎬 Starting merge: video=\(videoURL.lastPathComponent), audioSegments=\(audioSegments.count)")
+
         let videoAsset = AVURLAsset(url: videoURL)
         let composition = AVMutableComposition()
 
         // Add video track
+        print("📹 Loading video track...")
         guard let videoTrack = try await videoAsset.loadTracks(withMediaType: .video).first,
               let compositionVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
             throw NSError(domain: "TimeLapseRecorder", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to create video track"])
         }
 
         let videoDuration = try await videoAsset.load(.duration)
+        print("📹 Video duration: \(CMTimeGetSeconds(videoDuration))s")
         try compositionVideoTrack.insertTimeRange(CMTimeRange(start: .zero, duration: videoDuration), of: videoTrack, at: .zero)
+        print("📹 Video track inserted")
 
         // Copy video transform
         let videoTransform = try await videoTrack.load(.preferredTransform)
@@ -533,10 +619,13 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         guard let compositionAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else {
             throw NSError(domain: "TimeLapseRecorder", code: -4, userInfo: [NSLocalizedDescriptionKey: "Failed to create audio track"])
         }
+        print("🔊 Audio track created in composition")
 
-        let fps = await MainActor.run { self.outputFPS }
+        let fps = Double(await MainActor.run { self.outputFPS })
+        print("🔊 FPS: \(fps)")
 
         // Process each audio segment
+        // Since audio is only recorded in Normal mode, we just insert directly (no speedup needed)
         for (index, segment) in audioSegments.enumerated() {
             let audioAsset = AVURLAsset(url: segment.audioFileURL)
 
@@ -546,51 +635,34 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             }
 
             let audioDuration = try await audioAsset.load(.duration)
+            let audioDurationSeconds = CMTimeGetSeconds(audioDuration)
 
-            // Calculate where this audio segment should go in the video timeline
-            // Based on when it was recorded in real-time
-            let videoStartTime = realTimeToVideoTime(
-                realTime: segment.startRealTime,
-                frameTimestamps: frameTimestamps,
-                fps: fps
-            )
-            let videoEndTime = realTimeToVideoTime(
-                realTime: segment.endRealTime,
-                frameTimestamps: frameTimestamps,
-                fps: fps
-            )
-
-            let videoSegmentDuration = CMTimeSubtract(videoEndTime, videoStartTime)
+            // Calculate video position from frame index
+            let videoPositionSeconds = Double(segment.startFrameIndex) / fps
+            let videoPosition = CMTime(seconds: videoPositionSeconds, preferredTimescale: 600)
 
             print("🔊 Audio segment \(index):")
-            print("   Real time: \(segment.startRealTime)s - \(segment.endRealTime)s")
-            print("   Video time: \(CMTimeGetSeconds(videoStartTime))s - \(CMTimeGetSeconds(videoEndTime))s")
-            print("   Audio duration: \(CMTimeGetSeconds(audioDuration))s -> Video segment: \(CMTimeGetSeconds(videoSegmentDuration))s")
+            print("   Start frame: \(segment.startFrameIndex)")
+            print("   Video position: \(String(format: "%.2f", videoPositionSeconds))s")
+            print("   Audio duration: \(String(format: "%.2f", audioDurationSeconds))s")
 
-            // Insert the full audio at the correct video position
             do {
+                // Insert audio directly at the correct position (no speedup since Normal mode only)
                 try compositionAudioTrack.insertTimeRange(
                     CMTimeRange(start: .zero, duration: audioDuration),
                     of: audioTrack,
-                    at: videoStartTime
+                    at: videoPosition
                 )
-
-                // Scale this audio segment to match its video segment duration
-                // This applies the correct speedup for this specific segment
-                if CMTimeGetSeconds(videoSegmentDuration) > 0 && CMTimeGetSeconds(audioDuration) > 0 {
-                    compositionAudioTrack.scaleTimeRange(
-                        CMTimeRange(start: videoStartTime, duration: audioDuration),
-                        toDuration: videoSegmentDuration
-                    )
-                    let speedup = CMTimeGetSeconds(audioDuration) / CMTimeGetSeconds(videoSegmentDuration)
-                    print("   Speedup factor: \(String(format: "%.2f", speedup))x")
-                }
+                print("   ✅ Inserted audio at video position \(String(format: "%.2f", videoPositionSeconds))s")
             } catch {
                 print("⚠️ Failed to insert audio segment \(index): \(error)")
             }
         }
 
+        print("🔊 Finished processing all \(audioSegments.count) audio segment(s)")
+
         // Export
+        print("📤 Starting final video export...")
         guard let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
             throw NSError(domain: "TimeLapseRecorder", code: -3, userInfo: [NSLocalizedDescriptionKey: "Failed to create export session"])
         }
@@ -600,8 +672,23 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
         await exportSession.export()
 
-        if let error = exportSession.error {
-            throw error
+        // Check export status properly
+        switch exportSession.status {
+        case .completed:
+            print("📤 Export completed successfully")
+        case .failed:
+            let errorMessage = exportSession.error?.localizedDescription ?? "Unknown error"
+            print("❌ Export failed: \(errorMessage)")
+            throw exportSession.error ?? NSError(domain: "TimeLapseRecorder", code: -14,
+                          userInfo: [NSLocalizedDescriptionKey: "Export failed: \(errorMessage)"])
+        case .cancelled:
+            print("❌ Export was cancelled")
+            throw NSError(domain: "TimeLapseRecorder", code: -15,
+                          userInfo: [NSLocalizedDescriptionKey: "Export was cancelled"])
+        default:
+            print("❌ Export ended with unexpected status: \(exportSession.status.rawValue)")
+            throw NSError(domain: "TimeLapseRecorder", code: -16,
+                          userInfo: [NSLocalizedDescriptionKey: "Export ended with status: \(exportSession.status.rawValue)"])
         }
     }
 
@@ -848,18 +935,22 @@ extension TimeLapseRecorder: AVCaptureVideoDataOutputSampleBufferDelegate {
             let now = Date()
 
             // Check if enough time has passed since last capture
-            if let lastTime = lastCaptureTime,
-               now.timeIntervalSince(lastTime) < frameInterval {
-                return
+            // frameInterval = 0 means capture every frame (real-time mode)
+            if frameInterval > 0 {
+                if let lastTime = lastCaptureTime,
+                   now.timeIntervalSince(lastTime) < frameInterval {
+                    return
+                }
             }
 
             lastCaptureTime = now
 
             // Record frame timestamp for audio sync
-            // recordingDuration already excludes paused time
+            // Use actual wall clock time for accuracy (not timer-updated recordingDuration)
+            let actualRealTime = calculateActualRealTime()
             let timestamp = FrameTimestamp(
                 frameIndex: frameCount,
-                realTimeOffset: recordingDuration
+                realTimeOffset: actualRealTime
             )
             frameTimestamps.append(timestamp)
 
@@ -890,7 +981,7 @@ extension TimeLapseRecorder: AVCaptureVideoDataOutputSampleBufferDelegate {
                 frameCount = capturedFrameURLs.count
 
                 if frameCount % 10 == 0 {
-                    print("📸 Captured \(frameCount) frames at real-time \(String(format: "%.1f", recordingDuration))s")
+                    print("📸 Captured \(frameCount) frames at real-time \(String(format: "%.2f", actualRealTime))s")
                 }
             }
         }

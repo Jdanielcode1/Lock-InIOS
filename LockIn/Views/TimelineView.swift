@@ -8,38 +8,38 @@
 import SwiftUI
 import Combine
 
+enum TimelineMode: String, CaseIterable {
+    case goals = "Goals"
+    case todos = "Todos"
+}
+
 struct TimelineView: View {
     @StateObject private var viewModel = TimelineViewModel()
+    @State private var selectedMode: TimelineMode = .goals
+    @State private var selectedTodoForPlayback: TodoItem?
 
     var body: some View {
         NavigationView {
             ZStack {
                 AppTheme.background.ignoresSafeArea()
 
-                if viewModel.isLoading {
-                    ProgressView()
-                        .tint(AppTheme.actionBlue)
-                } else if viewModel.sessionsByDate.isEmpty {
-                    emptyState
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 16, pinnedViews: .sectionHeaders) {
-                            ForEach(viewModel.sortedDates, id: \.self) { date in
-                                Section {
-                                    ForEach(viewModel.sessionsByDate[date] ?? []) { item in
-                                        NavigationLink(destination: VideoPlayerView(session: item.session)) {
-                                            TimelineCard(item: item)
-                                        }
-                                        .buttonStyle(PlainButtonStyle())
-                                    }
-                                } header: {
-                                    DateHeader(date: date)
-                                }
-                            }
+                VStack(spacing: 0) {
+                    // Segmented control
+                    Picker("", selection: $selectedMode) {
+                        ForEach(TimelineMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
                         }
-                        .padding(.horizontal)
-                        .padding(.top, 16)
-                        .padding(.bottom, 100)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                    .padding(.bottom, 16)
+
+                    // Content based on selection
+                    if selectedMode == .goals {
+                        goalsTimeline
+                    } else {
+                        todosTimeline
                     }
                 }
             }
@@ -47,6 +47,97 @@ struct TimelineView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
+            .fullScreenCover(item: $selectedTodoForPlayback) { todo in
+                if let videoURL = todo.videoURL {
+                    TodoVideoPlayerView(videoURL: videoURL, todo: todo)
+                }
+            }
+        }
+    }
+
+    // MARK: - Goals Timeline
+
+    var goalsTimeline: some View {
+        Group {
+            if viewModel.isLoading {
+                VStack {
+                    Spacer()
+                    ProgressView()
+                        .tint(AppTheme.actionBlue)
+                    Spacer()
+                }
+            } else if viewModel.sessionsByDate.isEmpty {
+                VStack {
+                    Spacer()
+                    emptyState
+                    Spacer()
+                }
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 16, pinnedViews: .sectionHeaders) {
+                        ForEach(viewModel.sortedDates, id: \.self) { date in
+                            Section {
+                                ForEach(viewModel.sessionsByDate[date] ?? []) { item in
+                                    NavigationLink(destination: VideoPlayerView(session: item.session)) {
+                                        TimelineCard(item: item)
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                }
+                            } header: {
+                                DateHeader(date: date)
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 16)
+                    .padding(.bottom, 100)
+                }
+            }
+        }
+    }
+
+    // MARK: - Todos Timeline
+
+    var todosTimeline: some View {
+        Group {
+            if viewModel.isLoading {
+                VStack {
+                    Spacer()
+                    ProgressView()
+                        .tint(AppTheme.actionBlue)
+                    Spacer()
+                }
+            } else if viewModel.todosByDate.isEmpty {
+                VStack {
+                    Spacer()
+                    todoEmptyState
+                    Spacer()
+                }
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 16, pinnedViews: .sectionHeaders) {
+                        ForEach(viewModel.sortedTodoDates, id: \.self) { date in
+                            Section {
+                                ForEach(viewModel.todosByDate[date] ?? []) { todo in
+                                    Button {
+                                        if todo.hasVideo {
+                                            selectedTodoForPlayback = todo
+                                        }
+                                    } label: {
+                                        TodoTimelineCard(todo: todo)
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                }
+                            } header: {
+                                DateHeader(date: date)
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 16)
+                    .padding(.bottom, 100)
+                }
+            }
         }
     }
 
@@ -61,6 +152,24 @@ struct TimelineView: View {
                 .foregroundColor(AppTheme.textPrimary)
 
             Text("Start a timelapse recording to\ntrack your study sessions")
+                .font(AppTheme.bodyFont)
+                .foregroundColor(AppTheme.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding()
+    }
+
+    var todoEmptyState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "checklist")
+                .font(.system(size: 60))
+                .foregroundStyle(AppTheme.primaryGradient)
+
+            Text("No Completed Todos Yet")
+                .font(AppTheme.titleFont)
+                .foregroundColor(AppTheme.textPrimary)
+
+            Text("Complete todos to see them\nin your timeline")
                 .font(AppTheme.bodyFont)
                 .foregroundColor(AppTheme.textSecondary)
                 .multilineTextAlignment(.center)
@@ -190,6 +299,92 @@ struct TimelineCard: View {
     }
 }
 
+struct TodoTimelineCard: View {
+    let todo: TodoItem
+    @State private var thumbnail: UIImage?
+
+    var body: some View {
+        HStack(spacing: 16) {
+            // Thumbnail or placeholder
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(todo.isCompleted ? AnyShapeStyle(AppTheme.successGreen.opacity(0.3)) : AnyShapeStyle(AppTheme.primaryGradient.opacity(0.3)))
+                    .frame(width: 80, height: 60)
+
+                if let thumbnail = thumbnail {
+                    Image(uiImage: thumbnail)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 80, height: 60)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                    Image(systemName: "play.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.5), radius: 4)
+                } else {
+                    Image(systemName: todo.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .font(.title)
+                        .foregroundColor(todo.isCompleted ? AppTheme.successGreen : AppTheme.textSecondary)
+                }
+            }
+            .onAppear {
+                loadThumbnail()
+            }
+
+            // Info
+            VStack(alignment: .leading, spacing: 6) {
+                Text(todo.title)
+                    .font(AppTheme.headlineFont)
+                    .foregroundColor(todo.isCompleted ? AppTheme.textPrimary : AppTheme.textSecondary)
+                    .strikethrough(todo.isCompleted)
+                    .lineLimit(2)
+
+                HStack(spacing: 12) {
+                    Label(formatTime(todo.createdDate), systemImage: "calendar")
+                        .font(AppTheme.captionFont)
+                        .foregroundColor(AppTheme.textSecondary)
+
+                    if todo.hasVideo {
+                        Label("Video", systemImage: "video.fill")
+                            .font(AppTheme.captionFont)
+                            .foregroundColor(AppTheme.actionBlue)
+                    }
+                }
+            }
+
+            Spacer()
+
+            // Status badge
+            if todo.isCompleted {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(AppTheme.successGreen)
+            }
+        }
+        .padding()
+        .background(AppTheme.cardBackground)
+        .cornerRadius(AppTheme.cornerRadius)
+        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+    }
+
+    func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return formatter.string(from: date)
+    }
+
+    private func loadThumbnail() {
+        guard let thumbnailURL = todo.thumbnailURL,
+              FileManager.default.fileExists(atPath: thumbnailURL.path),
+              let data = try? Data(contentsOf: thumbnailURL),
+              let image = UIImage(data: data) else {
+            return
+        }
+        thumbnail = image
+    }
+}
+
 // MARK: - ViewModel
 
 struct TimelineItem: Identifiable {
@@ -207,6 +402,7 @@ struct TimelineItem: Identifiable {
 @MainActor
 class TimelineViewModel: ObservableObject {
     @Published var sessionsByDate: [Date: [TimelineItem]] = [:]
+    @Published var todosByDate: [Date: [TodoItem]] = [:]
     @Published var isLoading = true
 
     private var cancellables = Set<AnyCancellable>()
@@ -214,6 +410,10 @@ class TimelineViewModel: ObservableObject {
 
     var sortedDates: [Date] {
         sessionsByDate.keys.sorted(by: >)
+    }
+
+    var sortedTodoDates: [Date] {
+        todosByDate.keys.sorted(by: >)
     }
 
     init() {
@@ -228,6 +428,37 @@ class TimelineViewModel: ObservableObject {
                 self?.loadSessionsForGoals(goals)
             }
             .store(in: &cancellables)
+
+        // Subscribe to todos
+        convexService.listTodos()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] todos in
+                self?.updateTodos(todos)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func updateTodos(_ todos: [TodoItem]) {
+        let calendar = Calendar.current
+
+        // Group todos by date (only completed ones for timeline)
+        var newTodosByDate: [Date: [TodoItem]] = [:]
+
+        for todo in todos.filter({ $0.isCompleted }) {
+            let dateKey = calendar.startOfDay(for: todo.createdDate)
+
+            if newTodosByDate[dateKey] == nil {
+                newTodosByDate[dateKey] = []
+            }
+            newTodosByDate[dateKey]?.append(todo)
+        }
+
+        // Sort todos within each date (newest first)
+        for (date, items) in newTodosByDate {
+            newTodosByDate[date] = items.sorted { $0.createdDate > $1.createdDate }
+        }
+
+        todosByDate = newTodosByDate
     }
 
     private func loadSessionsForGoals(_ goals: [Goal]) {

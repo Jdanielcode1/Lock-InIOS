@@ -17,7 +17,7 @@ enum TimelapseSpeed: String, CaseIterable {
 
     var captureInterval: TimeInterval {
         switch self {
-        case .normal: return 1.0 / 30.0  // 30 fps - real-time video
+        case .normal: return 0.0         // Capture every camera frame (true real-time ~30fps)
         case .timelapse: return 0.5      // 2 fps - 15x speedup
         case .ultraFast: return 2.0      // 0.5 fps - 60x speedup
         }
@@ -119,17 +119,19 @@ struct TimeLapseRecorderView: View {
 
                 Spacer()
 
-                // Audio toggle button
+                // Audio toggle button (only enabled in Normal mode)
                 Button {
                     recorder.toggleAudio()
                 } label: {
                     Image(systemName: recorder.isAudioEnabled ? "mic.fill" : "mic.slash.fill")
                         .font(.title2)
-                        .foregroundColor(recorder.isAudioEnabled ? .white : .red)
+                        .foregroundColor(audioButtonColor)
                         .padding(12)
-                        .background(Color.black.opacity(0.5))
+                        .background(Color.black.opacity(recorder.isAudioAllowed ? 0.5 : 0.2))
                         .clipShape(Circle())
                 }
+                .disabled(!recorder.isAudioAllowed && !recorder.isAudioEnabled)
+                .opacity(recorder.isAudioAllowed || recorder.isAudioEnabled ? 1.0 : 0.5)
 
                 // Camera flip button (when not recording)
                 if !recorder.isRecording {
@@ -364,6 +366,16 @@ struct TimeLapseRecorderView: View {
 
     var isApproachingLimit: Bool {
         recorder.recordingDuration >= 3.5 * 60 * 60 // 3.5 hours
+    }
+
+    var audioButtonColor: Color {
+        if recorder.isAudioEnabled {
+            return .white
+        } else if recorder.isAudioAllowed {
+            return .red
+        } else {
+            return .gray // Disabled state for timelapse modes
+        }
     }
 
     var speedSelector: some View {

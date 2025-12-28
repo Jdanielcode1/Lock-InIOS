@@ -155,6 +155,11 @@ struct GoalsListView: View {
 
     // MARK: - Todos Content
 
+    // Get the first incomplete todo that doesn't have a video yet
+    private var nextTodoToRecord: TodoItem? {
+        todoViewModel.todos.first { !$0.isCompleted && !$0.hasVideo }
+    }
+
     var todosContent: some View {
         Group {
             if todoViewModel.isLoading {
@@ -167,77 +172,121 @@ struct GoalsListView: View {
             } else if todoViewModel.todos.isEmpty {
                 todosEmptyStateView
             } else {
-                List {
-                    ForEach(todoViewModel.todos) { todo in
-                        Button {
-                            if todo.hasVideo {
-                                selectedTodoForPlayback = todo
-                            } else {
-                                selectedTodoForRecording = todo
+                ZStack(alignment: .bottom) {
+                    List {
+                        ForEach(todoViewModel.todos) { todo in
+                            Button {
+                                if todo.hasVideo {
+                                    selectedTodoForPlayback = todo
+                                } else {
+                                    selectedTodoForRecording = todo
+                                }
+                            } label: {
+                                TodoCard(
+                                    todo: todo,
+                                    onToggle: {
+                                        Task {
+                                            await todoViewModel.toggleTodo(todo)
+                                        }
+                                    },
+                                    onTap: {
+                                        if todo.hasVideo {
+                                            selectedTodoForPlayback = todo
+                                        } else {
+                                            selectedTodoForRecording = todo
+                                        }
+                                    }
+                                )
                             }
-                        } label: {
-                            TodoCard(
-                                todo: todo,
-                                onToggle: {
+                            .buttonStyle(PlainButtonStyle())
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                            .swipeActions(edge: .leading) {
+                                Button {
+                                    Task {
+                                        await todoViewModel.archiveTodo(todo)
+                                    }
+                                } label: {
+                                    Label("Archive", systemImage: "archivebox")
+                                }
+                                .tint(.purple)
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    Task {
+                                        await todoViewModel.deleteTodo(todo)
+                                    }
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                            .swipeActions(edge: .trailing) {
+                                Button {
                                     Task {
                                         await todoViewModel.toggleTodo(todo)
                                     }
-                                },
-                                onTap: {
-                                    if todo.hasVideo {
-                                        selectedTodoForPlayback = todo
-                                    } else {
-                                        selectedTodoForRecording = todo
-                                    }
+                                } label: {
+                                    Label(
+                                        todo.isCompleted ? "Undo" : "Done",
+                                        systemImage: todo.isCompleted ? "arrow.uturn.backward" : "checkmark"
+                                    )
                                 }
+                                .tint(todo.isCompleted ? .orange : .green)
+                            }
+                        }
+
+                        // Bottom spacer for tab bar and sticky button
+                        Color.clear
+                            .frame(height: nextTodoToRecord != nil ? 160 : 80)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+
+                    // Sticky Continue button
+                    if let nextTodo = nextTodoToRecord {
+                        VStack(spacing: 0) {
+                            // Gradient fade
+                            LinearGradient(
+                                colors: [AppTheme.background.opacity(0), AppTheme.background],
+                                startPoint: .top,
+                                endPoint: .bottom
                             )
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                        .swipeActions(edge: .leading) {
-                            Button {
-                                Task {
-                                    await todoViewModel.archiveTodo(todo)
+                            .frame(height: 20)
+
+                            VStack(spacing: 8) {
+                                // Next task label
+                                Text("Next: \(nextTodo.title)")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(AppTheme.textSecondary)
+                                    .lineLimit(1)
+
+                                // Continue button
+                                Button {
+                                    selectedTodoForRecording = nextTodo
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "play.fill")
+                                            .font(.system(size: 18, weight: .semibold))
+                                        Text("Continue")
+                                            .font(.system(size: 18, weight: .semibold))
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 56)
+                                    .foregroundColor(.white)
+                                    .background(AppTheme.primaryGradient)
+                                    .cornerRadius(16)
+                                    .shadow(color: AppTheme.actionBlue.opacity(0.4), radius: 12, x: 0, y: 6)
                                 }
-                            } label: {
-                                Label("Archive", systemImage: "archivebox")
                             }
-                            .tint(.purple)
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                Task {
-                                    await todoViewModel.deleteTodo(todo)
-                                }
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
-                        .swipeActions(edge: .trailing) {
-                            Button {
-                                Task {
-                                    await todoViewModel.toggleTodo(todo)
-                                }
-                            } label: {
-                                Label(
-                                    todo.isCompleted ? "Undo" : "Done",
-                                    systemImage: todo.isCompleted ? "arrow.uturn.backward" : "checkmark"
-                                )
-                            }
-                            .tint(todo.isCompleted ? .orange : .green)
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 100) // Space for tab bar
+                            .background(AppTheme.background)
                         }
                     }
-
-                    // Bottom spacer for tab bar
-                    Color.clear
-                        .frame(height: 80)
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
             }
         }
     }

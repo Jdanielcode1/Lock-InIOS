@@ -29,6 +29,9 @@ struct StatsView: View {
 
                         // Goals breakdown
                         goalsBreakdown
+
+                        // Todos section
+                        todosSection
                     }
                     .padding()
                     .padding(.bottom, 100)
@@ -148,6 +151,63 @@ struct StatsView: View {
         .cornerRadius(AppTheme.cornerRadius)
         .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
     }
+
+    var todosSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Todos")
+                .font(AppTheme.headlineFont)
+                .foregroundColor(AppTheme.textPrimary)
+
+            if viewModel.todos.isEmpty {
+                Text("No todos yet")
+                    .font(AppTheme.bodyFont)
+                    .foregroundColor(AppTheme.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 24)
+            } else {
+                HStack(spacing: 16) {
+                    // Streak
+                    VStack(spacing: 8) {
+                        HStack(spacing: 4) {
+                            Text("🔥")
+                                .font(.system(size: 24))
+                            Text("\(viewModel.todoStreak)")
+                                .font(.system(size: 32, weight: .bold, design: .rounded))
+                                .foregroundColor(.orange)
+                        }
+                        Text("Day Streak")
+                            .font(AppTheme.captionFont)
+                            .foregroundColor(AppTheme.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity)
+
+                    // This week with trend
+                    VStack(spacing: 8) {
+                        Text("\(viewModel.todosThisWeek)")
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .foregroundColor(AppTheme.successGreen)
+
+                        HStack(spacing: 4) {
+                            Text("This Week")
+                                .font(AppTheme.captionFont)
+                                .foregroundColor(AppTheme.textSecondary)
+
+                            if viewModel.todoWeeklyTrend != 0 {
+                                Text(viewModel.todoWeeklyTrend > 0 ? "↑\(viewModel.todoWeeklyTrend)" : "↓\(abs(viewModel.todoWeeklyTrend))")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(viewModel.todoWeeklyTrend > 0 ? AppTheme.successGreen : .orange)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .padding()
+        .background(AppTheme.cardBackground)
+        .cornerRadius(AppTheme.cornerRadius)
+        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+    }
 }
 
 struct HeroStat: View {
@@ -252,6 +312,16 @@ class StatsViewModel: ObservableObject {
     @Published var weeklyData: [WeeklyData] = []
     @Published var bestDay: String = "-"
 
+    // Todo stats
+    @Published var todos: [TodoItem] = []
+    @Published var todoStreak: Int = 0
+    @Published var todosThisWeek: Int = 0
+    @Published var todosLastWeek: Int = 0
+
+    var todoWeeklyTrend: Int {
+        todosThisWeek - todosLastWeek
+    }
+
     private var cancellables = Set<AnyCancellable>()
     private let convexService = ConvexService.shared
 
@@ -305,6 +375,81 @@ class StatsViewModel: ObservableObject {
                 self?.calculateAllStats(from: sessions)
             }
             .store(in: &cancellables)
+
+        // Load todos for stats
+        convexService.listTodos()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] todos in
+                self?.todos = todos
+                self?.calculateTodoStats(from: todos)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func calculateTodoStats(from todos: [TodoItem]) {
+        let completedTodos = todos.filter { $0.isCompleted }
+
+        // Calculate streak (consecutive days with at least 1 completion)
+        todoStreak = calculateTodoStreak(from: completedTodos)
+
+        // Calculate weekly counts
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let thisWeekStart = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: today)) ?? today
+        let lastWeekStart = calendar.date(byAdding: .day, value: -7, to: thisWeekStart) ?? today
+
+        var thisWeekCount = 0
+        var lastWeekCount = 0
+
+        for todo in completedTodos {
+            let todoDate = Date(timeIntervalSince1970: todo.createdAt / 1000)
+            if todoDate >= thisWeekStart {
+                thisWeekCount += 1
+            } else if todoDate >= lastWeekStart && todoDate < thisWeekStart {
+                lastWeekCount += 1
+            }
+        }
+
+        todosThisWeek = thisWeekCount
+        todosLastWeek = lastWeekCount
+    }
+
+    private func calculateTodoStreak(from completedTodos: [TodoItem]) -> Int {
+        guard !completedTodos.isEmpty else { return 0 }
+
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+
+        // Get unique days with completed todos
+        var daysWithCompletions = Set<Date>()
+        for todo in completedTodos {
+            let todoDate = Date(timeIntervalSince1970: todo.createdAt / 1000)
+            let dayStart = calendar.startOfDay(for: todoDate)
+            daysWithCompletions.insert(dayStart)
+        }
+
+        // Count consecutive days from today backwards
+        var streak = 0
+        var checkDate = today
+
+        // Check if today has a completion, if not start from yesterday
+        if !daysWithCompletions.contains(today) {
+            if let yesterday = calendar.date(byAdding: .day, value: -1, to: today) {
+                checkDate = yesterday
+                if !daysWithCompletions.contains(yesterday) {
+                    return 0
+                }
+            }
+        }
+
+        // Count consecutive days
+        while daysWithCompletions.contains(checkDate) {
+            streak += 1
+            guard let previousDay = calendar.date(byAdding: .day, value: -1, to: checkDate) else { break }
+            checkDate = previousDay
+        }
+
+        return streak
     }
 
     private func calculateAllStats(from sessions: [StudySession]) {
