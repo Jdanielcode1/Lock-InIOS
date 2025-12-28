@@ -142,3 +142,28 @@ export const remove = userMutation({
     await ctx.db.delete(args.id);
   },
 });
+
+// Mutation: Attach same video to multiple todos (for session recordings)
+export const attachVideoToMultiple = userMutation({
+  args: {
+    ids: v.array(v.id("todos")),
+    localVideoPath: v.string(),
+    localThumbnailPath: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = ctx.identity.tokenIdentifier;
+
+    // Verify ownership and attach video to each todo
+    for (const id of args.ids) {
+      const todo = await ctx.db.get(id);
+      if (!todo) continue; // Skip if todo doesn't exist
+      if (todo.userId !== userId) continue; // Skip if not authorized
+
+      await ctx.db.patch(id, {
+        localVideoPath: args.localVideoPath,
+        localThumbnailPath: args.localThumbnailPath,
+        isCompleted: true,
+      });
+    }
+  },
+});

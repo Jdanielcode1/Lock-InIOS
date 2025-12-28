@@ -72,6 +72,18 @@ class TodoViewModel: ObservableObject {
         }
     }
 
+    func attachVideoToMultiple(todoIds: [String], videoPath: String, thumbnailPath: String?) async {
+        do {
+            try await convexService.attachVideoToMultipleTodos(
+                ids: todoIds,
+                localVideoPath: videoPath,
+                localThumbnailPath: thumbnailPath
+            )
+        } catch {
+            errorMessage = "Failed to attach video: \(error.localizedDescription)"
+        }
+    }
+
     func deleteTodo(_ todo: TodoItem) async {
         do {
             try await convexService.deleteTodo(

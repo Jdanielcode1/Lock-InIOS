@@ -188,6 +188,21 @@ class ConvexService: ObservableObject {
         }
     }
 
+    func attachVideoToMultipleTodos(ids: [String], localVideoPath: String, localThumbnailPath: String?) async throws {
+        if let thumbnailPath = localThumbnailPath {
+            let _: String? = try await convexClient.mutation("todos:attachVideoToMultiple", with: [
+                "ids": ids,
+                "localVideoPath": localVideoPath,
+                "localThumbnailPath": thumbnailPath
+            ])
+        } else {
+            let _: String? = try await convexClient.mutation("todos:attachVideoToMultiple", with: [
+                "ids": ids,
+                "localVideoPath": localVideoPath
+            ])
+        }
+    }
+
     func deleteTodo(id: String, localVideoPath: String?, localThumbnailPath: String?) async throws {
         // Delete from Convex
         let _: String? = try await convexClient.mutation("todos:remove", with: ["id": id])

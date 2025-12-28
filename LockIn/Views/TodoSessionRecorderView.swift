@@ -24,7 +24,7 @@ struct TodoSessionRecorderView: View {
 
     // Todo tracking during session
     @State private var checkedTodoIds: Set<String> = []
-    @State private var showTodoOverlay = false
+    @State private var showTodoOverlay = true  // Open by default
 
     private let videoService = VideoService.shared
 
@@ -56,18 +56,16 @@ struct TodoSessionRecorderView: View {
                 // Camera overlay controls
                 cameraOverlayControls
 
-                // Todo list overlay (when expanded)
+                // Todo list overlay (positioned below cancel button)
                 if showTodoOverlay && totalCount > 0 {
-                    Color.black.opacity(0.3)
-                        .ignoresSafeArea()
-                        .onTapGesture {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                showTodoOverlay = false
-                            }
-                        }
-
-                    todoListOverlay
-                        .transition(.scale(scale: 0.9).combined(with: .opacity))
+                    VStack {
+                        todoListOverlay
+                            .padding(.top, 110) // Below the top bar
+                            .padding(.leading, 16)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
         }
@@ -97,115 +95,125 @@ struct TodoSessionRecorderView: View {
     // MARK: - Camera Overlay Controls
 
     var cameraOverlayControls: some View {
-        VStack {
-            // Top bar
-            HStack {
-                // Cancel button
-                Button {
-                    recorder.cleanup()
-                    onDismiss()
-                    dismiss()
-                } label: {
-                    Text("Cancel")
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundColor(.white)
+        ZStack {
+            VStack {
+                // Top bar
+                HStack {
+                    // Cancel button
+                    Button {
+                        recorder.cleanup()
+                        onDismiss()
+                        dismiss()
+                    } label: {
+                        Text("Cancel")
+                            .font(.system(size: 17, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.black.opacity(0.5))
+                            .cornerRadius(20)
+                    }
+
+                    // Todo badge (always show if todos selected)
+                    if totalCount > 0 {
+                        todoFloatingBadge
+                    }
+
+                    Spacer()
+
+                    // Camera flip button (when not recording)
+                    if !recorder.isRecording {
+                        Button {
+                            recorder.switchCamera()
+                        } label: {
+                            Image(systemName: "arrow.triangle.2.circlepath.camera")
+                                .font(.title2)
+                                .foregroundColor(.white)
+                                .padding(12)
+                                .background(Color.black.opacity(0.5))
+                                .clipShape(Circle())
+                        }
+                    }
+
+                    // Recording info
+                    if recorder.isRecording {
+                        HStack(spacing: 8) {
+                            if recorder.isPaused {
+                                Image(systemName: "pause.fill")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.orange)
+                            } else {
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 10, height: 10)
+                            }
+
+                            Text(formattedDuration)
+                                .font(.system(size: 17, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+
+                            if recorder.isPaused {
+                                Text("PAUSED")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.orange)
+                            } else {
+                                Text("\(recorder.frameCount) frames")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                        }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                         .background(Color.black.opacity(0.5))
                         .cornerRadius(20)
+                    }
                 }
-
-                // Todo badge (always show if todos selected)
-                if totalCount > 0 {
-                    todoFloatingBadge
-                }
+                .padding(.horizontal)
+                .padding(.top, 60)
 
                 Spacer()
 
-                // Audio toggle button
-                Button {
-                    recorder.toggleAudio()
-                } label: {
-                    Image(systemName: recorder.isAudioEnabled ? "mic.fill" : "mic.slash.fill")
-                        .font(.title2)
-                        .foregroundColor(audioButtonColor)
-                        .padding(12)
-                        .background(Color.black.opacity(recorder.isAudioAllowed ? 0.5 : 0.2))
-                        .clipShape(Circle())
-                }
-                .disabled(!recorder.isAudioAllowed && !recorder.isAudioEnabled)
-                .opacity(recorder.isAudioAllowed || recorder.isAudioEnabled ? 1.0 : 0.5)
+                // Bottom controls
+                VStack(spacing: 24) {
+                    speedSelector
 
-                // Camera flip button (when not recording)
-                if !recorder.isRecording {
+                    HStack(spacing: 40) {
+                        if recorder.isRecording {
+                            pauseButton
+                        }
+
+                        recordingButton
+
+                        if recorder.isRecording {
+                            Color.clear
+                                .frame(width: 56, height: 56)
+                        }
+                    }
+                }
+                .padding(.bottom, 40)
+            }
+
+            // Mic button - bottom right
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
                     Button {
-                        recorder.switchCamera()
+                        recorder.toggleAudio()
                     } label: {
-                        Image(systemName: "arrow.triangle.2.circlepath.camera")
+                        Image(systemName: recorder.isAudioEnabled ? "mic.fill" : "mic.slash.fill")
                             .font(.title2)
-                            .foregroundColor(.white)
-                            .padding(12)
-                            .background(Color.black.opacity(0.5))
+                            .foregroundColor(audioButtonColor)
+                            .padding(14)
+                            .background(Color.black.opacity(recorder.isAudioAllowed ? 0.5 : 0.2))
                             .clipShape(Circle())
                     }
+                    .disabled(!recorder.isAudioAllowed && !recorder.isAudioEnabled)
+                    .opacity(recorder.isAudioAllowed || recorder.isAudioEnabled ? 1.0 : 0.5)
                 }
-
-                // Recording info
-                if recorder.isRecording {
-                    HStack(spacing: 8) {
-                        if recorder.isPaused {
-                            Image(systemName: "pause.fill")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.orange)
-                        } else {
-                            Circle()
-                                .fill(Color.red)
-                                .frame(width: 10, height: 10)
-                        }
-
-                        Text(formattedDuration)
-                            .font(.system(size: 17, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
-
-                        if recorder.isPaused {
-                            Text("PAUSED")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(.orange)
-                        } else {
-                            Text("\(recorder.frameCount) frames")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.white.opacity(0.8))
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.black.opacity(0.5))
-                    .cornerRadius(20)
-                }
+                .padding(.trailing, 20)
+                .padding(.bottom, 160)
             }
-            .padding(.horizontal)
-            .padding(.top, 60)
-
-            Spacer()
-
-            // Bottom controls
-            VStack(spacing: 24) {
-                speedSelector
-
-                HStack(spacing: 40) {
-                    if recorder.isRecording {
-                        pauseButton
-                    }
-
-                    recordingButton
-
-                    if recorder.isRecording {
-                        Color.clear
-                            .frame(width: 56, height: 56)
-                    }
-                }
-            }
-            .padding(.bottom, 40)
         }
     }
 
@@ -233,11 +241,15 @@ struct TodoSessionRecorderView: View {
 
     var todoListOverlay: some View {
         VStack(spacing: 0) {
-            // Header
+            // Compact header
             HStack {
-                Text("Session Tasks")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(.white)
+                Text("\(completedCount)/\(totalCount)")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundColor(completedCount == totalCount ? .green : .white)
+
+                Text("Tasks")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white.opacity(0.7))
 
                 Spacer()
 
@@ -246,54 +258,49 @@ struct TodoSessionRecorderView: View {
                         showTodoOverlay = false
                     }
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 24))
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.white.opacity(0.6))
+                        .padding(6)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
 
-            Divider()
-                .background(Color.white.opacity(0.2))
-
-            // Todo list
+            // Todo list - max 4 visible, scrollable
             ScrollView {
-                VStack(spacing: 8) {
+                VStack(spacing: 2) {
                     ForEach(selectedTodos) { todo in
                         Button {
                             toggleTodoCheck(todo)
                         } label: {
-                            HStack(spacing: 12) {
+                            HStack(spacing: 10) {
                                 Image(systemName: checkedTodoIds.contains(todo.id) ? "checkmark.circle.fill" : "circle")
-                                    .font(.system(size: 22))
-                                    .foregroundColor(checkedTodoIds.contains(todo.id) ? .green : .white.opacity(0.6))
+                                    .font(.system(size: 18))
+                                    .foregroundColor(checkedTodoIds.contains(todo.id) ? .green : .white.opacity(0.5))
 
                                 Text(todo.title)
-                                    .font(.system(size: 15, weight: .medium))
+                                    .font(.system(size: 14, weight: .medium))
                                     .foregroundColor(.white)
                                     .strikethrough(checkedTodoIds.contains(todo.id))
-                                    .opacity(checkedTodoIds.contains(todo.id) ? 0.6 : 1.0)
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.leading)
+                                    .opacity(checkedTodoIds.contains(todo.id) ? 0.5 : 1.0)
+                                    .lineLimit(1)
 
                                 Spacer()
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
                 }
-                .padding(.vertical, 8)
             }
-            .frame(maxHeight: 250)
+            .frame(maxHeight: 4 * 36) // ~4 items visible
         }
-        .frame(width: 280)
-        .background(.ultraThinMaterial.opacity(0.95))
-        .background(Color.black.opacity(0.3))
-        .cornerRadius(16)
-        .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
+        .frame(width: 220)
+        .background(.ultraThinMaterial)
+        .background(Color.black.opacity(0.4))
+        .cornerRadius(12)
     }
 
     private func toggleTodoCheck(_ todo: TodoItem) {
@@ -598,14 +605,15 @@ struct TodoSessionRecorderView: View {
             }
             uploadProgress = 0.6
 
-            // Mark checked todos as complete
-            for todoId in checkedTodoIds {
-                await viewModel.toggleTodoById(todoId, isCompleted: true)
+            // Attach the same video to all checked todos (marks them as completed too)
+            if !checkedTodoIds.isEmpty {
+                await viewModel.attachVideoToMultiple(
+                    todoIds: Array(checkedTodoIds),
+                    videoPath: localVideoPath,
+                    thumbnailPath: localThumbnailPath
+                )
             }
             uploadProgress = 0.9
-
-            // Note: We're not creating a study session here since this is todo-focused
-            // The video could optionally be attached to todos or stored separately
 
             uploadProgress = 1.0
 
