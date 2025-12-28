@@ -189,17 +189,13 @@ class ConvexService: ObservableObject {
     }
 
     func attachVideoToMultipleTodos(ids: [String], localVideoPath: String, localThumbnailPath: String?) async throws {
-        if let thumbnailPath = localThumbnailPath {
-            let _: String? = try await convexClient.mutation("todos:attachVideoToMultiple", with: [
-                "ids": ids,
-                "localVideoPath": localVideoPath,
-                "localThumbnailPath": thumbnailPath
-            ])
-        } else {
-            let _: String? = try await convexClient.mutation("todos:attachVideoToMultiple", with: [
-                "ids": ids,
-                "localVideoPath": localVideoPath
-            ])
+        // Loop through each todo and attach the same video
+        for id in ids {
+            try await attachVideoToTodo(
+                id: id,
+                localVideoPath: localVideoPath,
+                localThumbnailPath: localThumbnailPath
+            )
         }
     }
 
