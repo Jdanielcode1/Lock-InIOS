@@ -893,6 +893,98 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Voiceover
+
+    /// Add voiceover audio to an existing video, replacing any existing audio
+    nonisolated func addVoiceoverToVideo(videoURL: URL, voiceoverURL: URL, outputURL: URL) async throws {
+        print("🎙️ Adding voiceover to video...")
+
+        let videoAsset = AVURLAsset(url: videoURL)
+        let audioAsset = AVURLAsset(url: voiceoverURL)
+        let composition = AVMutableComposition()
+
+        // Add video track (without original audio - we're replacing it)
+        guard let videoTrack = try await videoAsset.loadTracks(withMediaType: .video).first,
+              let compositionVideoTrack = composition.addMutableTrack(
+                withMediaType: .video,
+                preferredTrackID: kCMPersistentTrackID_Invalid
+              ) else {
+            throw NSError(domain: "TimeLapseRecorder", code: -20,
+                          userInfo: [NSLocalizedDescriptionKey: "Failed to create video track"])
+        }
+
+        let videoDuration = try await videoAsset.load(.duration)
+        try compositionVideoTrack.insertTimeRange(
+            CMTimeRange(start: .zero, duration: videoDuration),
+            of: videoTrack,
+            at: .zero
+        )
+
+        // Copy video transform
+        let videoTransform = try await videoTrack.load(.preferredTransform)
+        compositionVideoTrack.preferredTransform = videoTransform
+
+        print("📹 Video track added, duration: \(CMTimeGetSeconds(videoDuration))s")
+
+        // Add voiceover audio track (replaces any existing audio)
+        if let audioTrack = try await audioAsset.loadTracks(withMediaType: .audio).first {
+            guard let compositionAudioTrack = composition.addMutableTrack(
+                withMediaType: .audio,
+                preferredTrackID: kCMPersistentTrackID_Invalid
+            ) else {
+                throw NSError(domain: "TimeLapseRecorder", code: -21,
+                              userInfo: [NSLocalizedDescriptionKey: "Failed to create audio track"])
+            }
+
+            let audioDuration = try await audioAsset.load(.duration)
+            // Use the shorter of video or audio duration
+            let insertDuration = CMTimeMinimum(videoDuration, audioDuration)
+
+            try compositionAudioTrack.insertTimeRange(
+                CMTimeRange(start: .zero, duration: insertDuration),
+                of: audioTrack,
+                at: .zero
+            )
+
+            print("🔊 Voiceover audio added, duration: \(CMTimeGetSeconds(audioDuration))s")
+        } else {
+            print("⚠️ No audio track found in voiceover file")
+        }
+
+        // Export the final video
+        guard let exportSession = AVAssetExportSession(
+            asset: composition,
+            presetName: AVAssetExportPresetHighestQuality
+        ) else {
+            throw NSError(domain: "TimeLapseRecorder", code: -22,
+                          userInfo: [NSLocalizedDescriptionKey: "Failed to create export session"])
+        }
+
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = .mov
+
+        print("📤 Starting voiceover video export...")
+        await exportSession.export()
+
+        switch exportSession.status {
+        case .completed:
+            print("✅ Voiceover video created successfully")
+        case .failed:
+            let errorMessage = exportSession.error?.localizedDescription ?? "Unknown error"
+            print("❌ Voiceover export failed: \(errorMessage)")
+            throw exportSession.error ?? NSError(domain: "TimeLapseRecorder", code: -23,
+                          userInfo: [NSLocalizedDescriptionKey: "Export failed: \(errorMessage)"])
+        case .cancelled:
+            print("❌ Voiceover export cancelled")
+            throw NSError(domain: "TimeLapseRecorder", code: -24,
+                          userInfo: [NSLocalizedDescriptionKey: "Export was cancelled"])
+        default:
+            print("❌ Voiceover export ended with status: \(exportSession.status.rawValue)")
+            throw NSError(domain: "TimeLapseRecorder", code: -25,
+                          userInfo: [NSLocalizedDescriptionKey: "Export ended with status: \(exportSession.status.rawValue)"])
+        }
+    }
+
     func cleanup() {
         stopRecording()
         captureSession.stopRunning()

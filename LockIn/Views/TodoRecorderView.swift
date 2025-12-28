@@ -33,6 +33,19 @@ struct TodoRecorderView: View {
     @State private var alarmPlayer: AVAudioPlayer?
     @State private var showAlarmOverlay = false
 
+    // Voiceover recording state
+    @State private var isRecordingVoiceover = false
+    @State private var voiceoverRecorder: AVAudioRecorder?
+    @State private var voiceoverURL: URL?
+    @State private var isCompilingVoiceover = false
+    @State private var showVoiceoverCountdown = false
+    @State private var voiceoverCountdownNumber = 3
+    @State private var voiceoverProgress: Double = 0
+    @State private var voiceoverCurrentTime: TimeInterval = 0
+    @State private var voiceoverTotalDuration: TimeInterval = 0
+    @State private var voiceoverTimeObserver: Any?
+    @State private var hasVoiceoverAdded = false
+
     private let videoService = VideoService.shared
 
     var body: some View {
@@ -240,6 +253,248 @@ struct TodoRecorderView: View {
                     .font(.system(size: 16))
                     .foregroundColor(.white.opacity(0.7))
             }
+        }
+    }
+
+    // MARK: - Voiceover Views
+
+    var voiceoverCompilingView: some View {
+        VStack(spacing: 20) {
+            ProgressView()
+                .scaleEffect(1.5)
+                .tint(.orange)
+
+            Text("Adding Voiceover...")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(.white)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 30)
+    }
+
+    var voiceoverRecordingOverlay: some View {
+        VStack {
+            // Top: Recording indicator + time
+            HStack {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 12, height: 12)
+                        .modifier(PulsingModifier())
+
+                    Text("Recording Voiceover")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+
+                Spacer()
+
+                // Time display
+                Text("\(formatVoiceoverTime(voiceoverCurrentTime)) / \(formatVoiceoverTime(voiceoverTotalDuration))")
+                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .background(Color.black.opacity(0.7))
+
+            Spacer()
+
+            // Progress bar at bottom
+            VStack(spacing: 16) {
+                // Progress bar
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        // Background track
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.white.opacity(0.3))
+                            .frame(height: 8)
+
+                        // Progress fill
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.orange)
+                            .frame(width: geometry.size.width * voiceoverProgress, height: 8)
+                    }
+                }
+                .frame(height: 8)
+                .padding(.horizontal, 20)
+
+                // Stop button
+                Button {
+                    stopVoiceoverRecording()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "stop.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                        Text("Stop Recording")
+                            .font(.system(size: 17, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(width: 220, height: 56)
+                    .background(Color.red)
+                    .cornerRadius(28)
+                }
+            }
+            .padding(.bottom, 40)
+        }
+    }
+
+    private func formatVoiceoverTime(_ time: TimeInterval) -> String {
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+
+    var voiceoverCountdownOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.8)
+                .ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                Text("\(voiceoverCountdownNumber)")
+                    .font(.system(size: 120, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+
+                Text("Get ready to narrate...")
+                    .font(.system(size: 18))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+        }
+    }
+
+    // MARK: - Voiceover Functions
+
+    private func startVoiceoverCountdown() {
+        showVoiceoverCountdown = true
+        voiceoverCountdownNumber = 3
+
+        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
+            voiceoverCountdownNumber -= 1
+            if voiceoverCountdownNumber == 0 {
+                timer.invalidate()
+                showVoiceoverCountdown = false
+                beginVoiceoverCapture()
+            }
+        }
+    }
+
+    private func beginVoiceoverCapture() {
+        // Setup audio recorder
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("m4a")
+
+        let settings: [String: Any] = [
+            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+            AVSampleRateKey: 44100,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+        ]
+
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playAndRecord, options: [.defaultToSpeaker, .allowBluetooth])
+            try audioSession.setActive(true)
+
+            voiceoverRecorder = try AVAudioRecorder(url: url, settings: settings)
+            voiceoverRecorder?.record()
+            voiceoverURL = url
+            isRecordingVoiceover = true
+
+            // Get video duration for progress tracking
+            if let duration = player?.currentItem?.duration, duration.isNumeric {
+                voiceoverTotalDuration = CMTimeGetSeconds(duration)
+            }
+
+            // Add periodic time observer for progress
+            voiceoverTimeObserver = player?.addPeriodicTimeObserver(
+                forInterval: CMTime(seconds: 0.1, preferredTimescale: 600),
+                queue: .main
+            ) { [self] time in
+                let currentTime = CMTimeGetSeconds(time)
+                voiceoverCurrentTime = currentTime
+                if voiceoverTotalDuration > 0 {
+                    voiceoverProgress = currentTime / voiceoverTotalDuration
+                }
+            }
+
+            // Reset and play video from start
+            player?.seek(to: .zero)
+            player?.play()
+
+            print("🎙️ Started voiceover recording")
+        } catch {
+            print("❌ Failed to start voiceover recording: \(error)")
+            errorMessage = "Failed to start voiceover: \(error.localizedDescription)"
+        }
+    }
+
+    private func stopVoiceoverRecording() {
+        // Remove time observer
+        if let observer = voiceoverTimeObserver {
+            player?.removeTimeObserver(observer)
+            voiceoverTimeObserver = nil
+        }
+
+        // Reset progress
+        voiceoverProgress = 0
+        voiceoverCurrentTime = 0
+
+        voiceoverRecorder?.stop()
+        voiceoverRecorder = nil
+        player?.pause()
+        isRecordingVoiceover = false
+
+        print("🎙️ Stopped voiceover recording")
+
+        // Compile video with voiceover
+        Task {
+            await compileWithVoiceover()
+        }
+    }
+
+    private func compileWithVoiceover() async {
+        guard let videoURL = recorder.recordedVideoURL,
+              let voiceoverURL = voiceoverURL else {
+            print("❌ Missing video or voiceover URL")
+            return
+        }
+
+        isCompilingVoiceover = true
+
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("mov")
+
+        do {
+            try await recorder.addVoiceoverToVideo(
+                videoURL: videoURL,
+                voiceoverURL: voiceoverURL,
+                outputURL: outputURL
+            )
+
+            // Clean up old video file
+            try? FileManager.default.removeItem(at: videoURL)
+            try? FileManager.default.removeItem(at: voiceoverURL)
+
+            // Update recorder with new video
+            await MainActor.run {
+                recorder.recordedVideoURL = outputURL
+                self.voiceoverURL = nil
+                hasVoiceoverAdded = true
+                setupPlayer() // Refresh player with new video
+            }
+
+            print("✅ Voiceover added successfully")
+        } catch {
+            print("❌ Failed to add voiceover: \(error)")
+            await MainActor.run {
+                errorMessage = "Failed to add voiceover: \(error.localizedDescription)"
+            }
+        }
+
+        await MainActor.run {
+            isCompilingVoiceover = false
         }
     }
 
@@ -457,51 +712,93 @@ struct TodoRecorderView: View {
             Spacer()
 
             // Action buttons
-            if isUploading {
-                uploadProgressView
-                    .padding(.bottom, 40)
+            if isUploading || isCompilingVoiceover {
+                if isCompilingVoiceover {
+                    voiceoverCompilingView
+                        .padding(.bottom, 40)
+                } else {
+                    uploadProgressView
+                        .padding(.bottom, 40)
+                }
             } else {
-                HStack(spacing: 20) {
-                    // Retake button
-                    Button {
-                        player?.pause()
-                        player = nil
-                        recorder.clearFrames()
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "arrow.counterclockwise")
-                                .font(.system(size: 18, weight: .semibold))
-                            Text("Retake")
-                                .font(.system(size: 17, weight: .semibold))
+                VStack(spacing: 12) {
+                    // Top row: Retake and Complete
+                    HStack(spacing: 16) {
+                        // Retake button
+                        Button {
+                            player?.pause()
+                            player = nil
+                            voiceoverURL = nil
+                            hasVoiceoverAdded = false
+                            recorder.clearFrames()
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .font(.system(size: 18, weight: .semibold))
+                                Text("Retake")
+                                    .font(.system(size: 17, weight: .semibold))
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 56)
+                            .background(Color.white.opacity(0.15))
+                            .cornerRadius(16)
                         }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .background(Color.white.opacity(0.15))
-                        .cornerRadius(16)
+
+                        // Save button
+                        Button {
+                            Task {
+                                await saveVideoAndCompleteTodo()
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 18, weight: .semibold))
+                                Text("Complete")
+                                    .font(.system(size: 17, weight: .semibold))
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 56)
+                            .background(AppTheme.successGreen)
+                            .cornerRadius(16)
+                        }
                     }
 
-                    // Save button
+                    // Voiceover button
                     Button {
-                        Task {
-                            await saveVideoAndCompleteTodo()
-                        }
+                        startVoiceoverCountdown()
                     } label: {
                         HStack(spacing: 8) {
-                            Image(systemName: "checkmark")
+                            Image(systemName: hasVoiceoverAdded ? "arrow.counterclockwise" : "mic.fill")
                                 .font(.system(size: 18, weight: .semibold))
-                            Text("Complete")
+                            Text(hasVoiceoverAdded ? "Re-record Voiceover" : "Add Voiceover")
                                 .font(.system(size: 17, weight: .semibold))
+                            if hasVoiceoverAdded {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
                         }
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 56)
-                        .background(AppTheme.successGreen)
+                        .background(hasVoiceoverAdded ? Color.orange.opacity(0.8) : Color.orange)
                         .cornerRadius(16)
                     }
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 40)
+            }
+
+            // Voiceover recording overlay
+            if isRecordingVoiceover {
+                voiceoverRecordingOverlay
+            }
+
+            // Voiceover countdown overlay
+            if showVoiceoverCountdown {
+                voiceoverCountdownOverlay
             }
         }
         .onAppear {
