@@ -143,3 +143,30 @@ export const remove = userMutation({
     await ctx.db.delete(args.id);
   },
 });
+
+// Mutation: Update video path for a study session (for adding voiceover)
+export const updateVideo = userMutation({
+  args: {
+    id: v.id("studySessions"),
+    localVideoPath: v.string(),
+    localThumbnailPath: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = ctx.identity.tokenIdentifier;
+
+    const session = await ctx.db.get(args.id);
+    if (!session) throw new Error("Study session not found");
+    if (session.userId !== userId) throw new Error("Not authorized");
+
+    // Update the video path (and thumbnail if provided)
+    const updateFields: { localVideoPath: string; localThumbnailPath?: string } = {
+      localVideoPath: args.localVideoPath,
+    };
+
+    if (args.localThumbnailPath !== undefined) {
+      updateFields.localThumbnailPath = args.localThumbnailPath;
+    }
+
+    await ctx.db.patch(args.id, updateFields);
+  },
+});

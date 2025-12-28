@@ -145,6 +145,21 @@ class ConvexService: ObservableObject {
         }
     }
 
+    func updateStudySessionVideo(id: String, localVideoPath: String, localThumbnailPath: String?) async throws {
+        if let thumbnailPath = localThumbnailPath {
+            let _: String? = try await convexClient.mutation("studySessions:updateVideo", with: [
+                "id": id,
+                "localVideoPath": localVideoPath,
+                "localThumbnailPath": thumbnailPath
+            ])
+        } else {
+            let _: String? = try await convexClient.mutation("studySessions:updateVideo", with: [
+                "id": id,
+                "localVideoPath": localVideoPath
+            ])
+        }
+    }
+
     // MARK: - Todos
 
     func listTodos() -> AnyPublisher<[TodoItem], Never> {
