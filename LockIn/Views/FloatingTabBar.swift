@@ -26,13 +26,20 @@ enum Tab: String, CaseIterable {
 struct FloatingTabBar: View {
     @Binding var selectedTab: Tab
     var onPlusTapped: () -> Void
+    @Environment(\.horizontalSizeClass) var sizeClass
+
+    private var sizing: AdaptiveSizing {
+        AdaptiveSizing(horizontalSizeClass: sizeClass)
+    }
 
     var body: some View {
         HStack(spacing: 0) {
+            Spacer(minLength: 0)
+
             // Tab bar container
             HStack(spacing: 0) {
                 ForEach(Tab.allCases, id: \.self) { tab in
-                    TabButton(tab: tab, isSelected: selectedTab == tab) {
+                    TabButton(tab: tab, isSelected: selectedTab == tab, buttonWidth: sizing.tabButtonWidth) {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             selectedTab = tab
                         }
@@ -57,7 +64,11 @@ struct FloatingTabBar: View {
                     .clipShape(Circle())
                     .shadow(color: AppTheme.actionBlue.opacity(0.4), radius: 8, x: 0, y: 4)
             }
+
+            Spacer(minLength: 0)
         }
+        .frame(maxWidth: sizing.tabBarMaxWidth)
+        .frame(maxWidth: .infinity) // Center within parent
         .padding(.horizontal, 20)
         .padding(.bottom, 8)
     }
@@ -66,6 +77,7 @@ struct FloatingTabBar: View {
 struct TabButton: View {
     let tab: Tab
     let isSelected: Bool
+    var buttonWidth: CGFloat = 70
     let action: () -> Void
 
     var body: some View {
@@ -79,7 +91,7 @@ struct TabButton: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(isSelected ? AppTheme.actionBlue : AppTheme.textSecondary)
             }
-            .frame(width: 70, height: 50)
+            .frame(width: buttonWidth, height: 50)
         }
     }
 }

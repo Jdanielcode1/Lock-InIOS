@@ -11,13 +11,19 @@ import Combine
 struct StatsView: View {
     @StateObject private var viewModel = StatsViewModel()
 
+    // iPad adaptation
+    @Environment(\.horizontalSizeClass) var sizeClass
+    private var sizing: AdaptiveSizing {
+        AdaptiveSizing(horizontalSizeClass: sizeClass)
+    }
+
     var body: some View {
         NavigationView {
             ZStack {
                 AppTheme.background.ignoresSafeArea()
 
                 ScrollView {
-                    VStack(spacing: 24) {
+                    VStack(spacing: sizing.sectionSpacing) {
                         // Hero stat
                         heroCard
 
@@ -33,8 +39,11 @@ struct StatsView: View {
                         // Todos section
                         todosSection
                     }
-                    .padding()
+                    .padding(.horizontal, sizing.horizontalPadding)
+                    .padding(.vertical)
                     .padding(.bottom, 100)
+                    .frame(maxWidth: sizing.maxContentWidth)
+                    .frame(maxWidth: .infinity) // Center on iPad
                 }
             }
             .navigationTitle("Stats")
@@ -42,6 +51,7 @@ struct StatsView: View {
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
         }
+        .navigationViewStyle(.stack)
     }
 
     var heroCard: some View {
@@ -69,7 +79,7 @@ struct StatsView: View {
     }
 
     var statsGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+        LazyVGrid(columns: sizing.gridItems(count: sizing.statsGridColumns, spacing: sizing.cardSpacing), spacing: sizing.cardSpacing) {
             StatBox(
                 icon: "flame.fill",
                 value: "\(viewModel.currentStreak)",

@@ -18,6 +18,12 @@ struct TimelineView: View {
     @State private var selectedMode: TimelineMode = .goals
     @State private var selectedTodoForPlayback: TodoItem?
 
+    // iPad adaptation
+    @Environment(\.horizontalSizeClass) var sizeClass
+    private var sizing: AdaptiveSizing {
+        AdaptiveSizing(horizontalSizeClass: sizeClass)
+    }
+
     var body: some View {
         NavigationView {
             ZStack {
@@ -53,6 +59,7 @@ struct TimelineView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     // MARK: - Goals Timeline
@@ -74,21 +81,34 @@ struct TimelineView: View {
                 }
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 16, pinnedViews: .sectionHeaders) {
+                    LazyVStack(spacing: sizing.sectionSpacing, pinnedViews: .sectionHeaders) {
                         ForEach(viewModel.sortedDates, id: \.self) { date in
                             Section {
-                                ForEach(viewModel.sessionsByDate[date] ?? []) { item in
-                                    NavigationLink(destination: VideoPlayerView(session: item.session)) {
-                                        TimelineCard(item: item)
+                                if sizing.isIPad {
+                                    // iPad: Grid layout within each section
+                                    LazyVGrid(columns: sizing.gridItems(count: sizing.gridColumns, spacing: sizing.cardSpacing), spacing: sizing.cardSpacing) {
+                                        ForEach(viewModel.sessionsByDate[date] ?? []) { item in
+                                            NavigationLink(destination: VideoPlayerView(session: item.session)) {
+                                                TimelineCard(item: item)
+                                            }
+                                            .buttonStyle(PlainButtonStyle())
+                                        }
                                     }
-                                    .buttonStyle(PlainButtonStyle())
+                                } else {
+                                    // iPhone: Vertical stack
+                                    ForEach(viewModel.sessionsByDate[date] ?? []) { item in
+                                        NavigationLink(destination: VideoPlayerView(session: item.session)) {
+                                            TimelineCard(item: item)
+                                        }
+                                        .buttonStyle(PlainButtonStyle())
+                                    }
                                 }
                             } header: {
                                 DateHeader(date: date)
                             }
                         }
                     }
-                    .padding(.horizontal)
+                    .padding(.horizontal, sizing.horizontalPadding)
                     .padding(.top, 16)
                     .padding(.bottom, 100)
                 }
@@ -115,25 +135,42 @@ struct TimelineView: View {
                 }
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 16, pinnedViews: .sectionHeaders) {
+                    LazyVStack(spacing: sizing.sectionSpacing, pinnedViews: .sectionHeaders) {
                         ForEach(viewModel.sortedTodoDates, id: \.self) { date in
                             Section {
-                                ForEach(viewModel.todosByDate[date] ?? []) { todo in
-                                    Button {
-                                        if todo.hasVideo {
-                                            selectedTodoForPlayback = todo
+                                if sizing.isIPad {
+                                    // iPad: Grid layout within each section
+                                    LazyVGrid(columns: sizing.gridItems(count: sizing.gridColumns, spacing: sizing.cardSpacing), spacing: sizing.cardSpacing) {
+                                        ForEach(viewModel.todosByDate[date] ?? []) { todo in
+                                            Button {
+                                                if todo.hasVideo {
+                                                    selectedTodoForPlayback = todo
+                                                }
+                                            } label: {
+                                                TodoTimelineCard(todo: todo)
+                                            }
+                                            .buttonStyle(PlainButtonStyle())
                                         }
-                                    } label: {
-                                        TodoTimelineCard(todo: todo)
                                     }
-                                    .buttonStyle(PlainButtonStyle())
+                                } else {
+                                    // iPhone: Vertical stack
+                                    ForEach(viewModel.todosByDate[date] ?? []) { todo in
+                                        Button {
+                                            if todo.hasVideo {
+                                                selectedTodoForPlayback = todo
+                                            }
+                                        } label: {
+                                            TodoTimelineCard(todo: todo)
+                                        }
+                                        .buttonStyle(PlainButtonStyle())
+                                    }
                                 }
                             } header: {
                                 DateHeader(date: date)
                             }
                         }
                     }
-                    .padding(.horizontal)
+                    .padding(.horizontal, sizing.horizontalPadding)
                     .padding(.top, 16)
                     .padding(.bottom, 100)
                 }

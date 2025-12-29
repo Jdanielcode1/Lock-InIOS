@@ -159,3 +159,39 @@ extension AppTheme {
         )
     }
 }
+
+// MARK: - Adaptive Sizing for iPad
+
+struct AdaptiveSizing {
+    let horizontalSizeClass: UserInterfaceSizeClass?
+
+    var isIPad: Bool { horizontalSizeClass == .regular }
+
+    // Grid columns
+    var gridColumns: Int { isIPad ? 2 : 1 }
+    var wideGridColumns: Int { isIPad ? 3 : 1 }
+    var statsGridColumns: Int { isIPad ? 4 : 2 }
+
+    // Spacing
+    var cardSpacing: CGFloat { isIPad ? 24 : 16 }
+    var horizontalPadding: CGFloat { isIPad ? 32 : 16 }
+    var sectionSpacing: CGFloat { isIPad ? 32 : 20 }
+
+    // Card sizes
+    var thumbnailSize: CGSize { isIPad ? CGSize(width: 120, height: 90) : CGSize(width: 80, height: 60) }
+    var progressCircleSize: CGFloat { isIPad ? 80 : 60 }
+
+    // Tab bar
+    var tabButtonWidth: CGFloat { isIPad ? 90 : 70 }
+    var tabBarMaxWidth: CGFloat { isIPad ? 500 : .infinity }
+
+    // Content constraints
+    var maxContentWidth: CGFloat { isIPad ? 800 : .infinity }
+
+    // Helper to create grid columns
+    func gridItems(count: Int? = nil, spacing: CGFloat? = nil) -> [GridItem] {
+        let columnCount = count ?? gridColumns
+        let itemSpacing = spacing ?? cardSpacing
+        return Array(repeating: GridItem(.flexible(), spacing: itemSpacing), count: columnCount)
+    }
+}

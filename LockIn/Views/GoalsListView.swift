@@ -26,6 +26,12 @@ struct GoalsListView: View {
     @State private var selectedTodoIdsForSession: Set<String> = []
     @State private var showTodoSessionRecorder = false
 
+    // iPad adaptation
+    @Environment(\.horizontalSizeClass) var sizeClass
+    private var sizing: AdaptiveSizing {
+        AdaptiveSizing(horizontalSizeClass: sizeClass)
+    }
+
     var body: some View {
         NavigationView {
             ZStack {
@@ -79,6 +85,7 @@ struct GoalsListView: View {
                 )
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     // MARK: - Goals Content
@@ -94,7 +101,35 @@ struct GoalsListView: View {
                 }
             } else if goalsViewModel.goals.isEmpty {
                 goalsEmptyStateView
+            } else if sizing.isIPad {
+                // iPad: Grid layout
+                ScrollView {
+                    LazyVGrid(columns: sizing.gridItems(count: sizing.gridColumns, spacing: sizing.cardSpacing), spacing: sizing.cardSpacing) {
+                        ForEach(goalsViewModel.goals) { goal in
+                            NavigationLink(destination: GoalDetailView(goal: goal)) {
+                                GoalCard(goal: goal)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .contextMenu {
+                                Button {
+                                    Task { await goalsViewModel.archiveGoal(goal) }
+                                } label: {
+                                    Label("Archive", systemImage: "archivebox")
+                                }
+                                Button(role: .destructive) {
+                                    Task { await goalsViewModel.deleteGoal(goal) }
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, sizing.horizontalPadding)
+                    .padding(.top, 8)
+                    .padding(.bottom, 100)
+                }
             } else {
+                // iPhone: List layout (unchanged)
                 List {
                     ForEach(goalsViewModel.goals) { goal in
                         NavigationLink(destination: GoalDetailView(goal: goal)) {
@@ -197,7 +232,28 @@ struct GoalsListView: View {
                 }
             } else if todoViewModel.todos.isEmpty {
                 todosEmptyStateView
+            } else if sizing.isIPad {
+                // iPad: Grid layout
+                ZStack(alignment: .bottom) {
+                    ScrollView {
+                        LazyVGrid(columns: sizing.gridItems(count: sizing.gridColumns, spacing: sizing.cardSpacing), spacing: sizing.cardSpacing) {
+                            ForEach(todoViewModel.todos) { todo in
+                                todoGridItem(todo: todo)
+                            }
+                        }
+                        .padding(.horizontal, sizing.horizontalPadding)
+                        .padding(.top, 8)
+                        .padding(.bottom, !incompleteTodos.isEmpty ? 180 : 100)
+                    }
+
+                    // Sticky Start Session button (iPad - centered and constrained)
+                    if !incompleteTodos.isEmpty {
+                        startSessionButton
+                            .frame(maxWidth: 500)
+                    }
+                }
             } else {
+                // iPhone: List layout (unchanged)
                 ZStack(alignment: .bottom) {
                     List {
                         ForEach(todoViewModel.todos) { todo in
@@ -288,52 +344,121 @@ struct GoalsListView: View {
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
 
-                    // Sticky Start Session button
+                    // Sticky Start Session button (iPhone)
                     if !incompleteTodos.isEmpty {
-                        VStack(spacing: 0) {
-                            // Gradient fade
-                            LinearGradient(
-                                colors: [AppTheme.background.opacity(0), AppTheme.background],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                            .frame(height: 20)
-
-                            VStack(spacing: 8) {
-                                // Selection count label
-                                if !selectedTodoIdsForSession.isEmpty {
-                                    Text("\(selectedTodoIdsForSession.count) task\(selectedTodoIdsForSession.count == 1 ? "" : "s") selected")
-                                        .font(.system(size: 13, weight: .medium))
-                                        .foregroundColor(AppTheme.textSecondary)
-                                }
-
-                                // Start Session button
-                                Button {
-                                    showTodoSessionRecorder = true
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: "video.fill")
-                                            .font(.system(size: 18, weight: .semibold))
-                                        Text(selectedTodoIdsForSession.isEmpty
-                                            ? "Start Session"
-                                            : "Start Session (\(selectedTodoIdsForSession.count))")
-                                            .font(.system(size: 18, weight: .semibold))
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 56)
-                                    .foregroundColor(.white)
-                                    .background(AppTheme.primaryGradient)
-                                    .cornerRadius(16)
-                                    .shadow(color: AppTheme.actionBlue.opacity(0.4), radius: 12, x: 0, y: 6)
-                                }
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 100) // Space for tab bar
-                            .background(AppTheme.background)
-                        }
+                        startSessionButton
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - iPad Todo Grid Item
+    @ViewBuilder
+    private func todoGridItem(todo: TodoItem) -> some View {
+        VStack(spacing: 0) {
+            // Selection overlay for incomplete todos
+            if !todo.isCompleted {
+                HStack {
+                    Spacer()
+                    Button {
+                        toggleTodoSelection(todo.id)
+                    } label: {
+                        Image(systemName: selectedTodoIdsForSession.contains(todo.id)
+                            ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 24))
+                            .foregroundColor(selectedTodoIdsForSession.contains(todo.id)
+                                ? AppTheme.actionBlue : AppTheme.textSecondary.opacity(0.4))
+                            .padding(8)
+                    }
+                }
+            }
+
+            Button {
+                if todo.hasVideo {
+                    selectedTodoForPlayback = todo
+                } else {
+                    selectedTodoForRecording = todo
+                }
+            } label: {
+                TodoCard(
+                    todo: todo,
+                    onToggle: {
+                        Task { await todoViewModel.toggleTodo(todo) }
+                    },
+                    onTap: {
+                        if todo.hasVideo {
+                            selectedTodoForPlayback = todo
+                        } else {
+                            selectedTodoForRecording = todo
+                        }
+                    }
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .contextMenu {
+            Button {
+                Task { await todoViewModel.toggleTodo(todo) }
+            } label: {
+                Label(todo.isCompleted ? "Mark Incomplete" : "Mark Complete",
+                      systemImage: todo.isCompleted ? "arrow.uturn.backward" : "checkmark")
+            }
+            Button {
+                Task { await todoViewModel.archiveTodo(todo) }
+            } label: {
+                Label("Archive", systemImage: "archivebox")
+            }
+            Button(role: .destructive) {
+                Task { await todoViewModel.deleteTodo(todo) }
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+
+    // MARK: - Start Session Button
+    private var startSessionButton: some View {
+        VStack(spacing: 0) {
+            // Gradient fade
+            LinearGradient(
+                colors: [AppTheme.background.opacity(0), AppTheme.background],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 20)
+
+            VStack(spacing: 8) {
+                // Selection count label
+                if !selectedTodoIdsForSession.isEmpty {
+                    Text("\(selectedTodoIdsForSession.count) task\(selectedTodoIdsForSession.count == 1 ? "" : "s") selected")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(AppTheme.textSecondary)
+                }
+
+                // Start Session button
+                Button {
+                    showTodoSessionRecorder = true
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "video.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                        Text(selectedTodoIdsForSession.isEmpty
+                            ? "Start Session"
+                            : "Start Session (\(selectedTodoIdsForSession.count))")
+                            .font(.system(size: 18, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
+                    .foregroundColor(.white)
+                    .background(AppTheme.primaryGradient)
+                    .cornerRadius(16)
+                    .shadow(color: AppTheme.actionBlue.opacity(0.4), radius: 12, x: 0, y: 6)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 100) // Space for tab bar
+            .background(AppTheme.background)
         }
     }
 

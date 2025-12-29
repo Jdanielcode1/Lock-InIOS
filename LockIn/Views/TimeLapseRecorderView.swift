@@ -38,6 +38,10 @@ struct TimeLapseRecorderView: View {
     let subtaskId: String?
 
     @Environment(\.dismiss) var dismiss
+    @Environment(\.horizontalSizeClass) var sizeClass
+    private var sizing: AdaptiveSizing {
+        AdaptiveSizing(horizontalSizeClass: sizeClass)
+    }
     @StateObject private var recorder: TimeLapseRecorder
     @StateObject private var todoViewModel = TodoViewModel()
     @State private var isUploading = false
@@ -204,6 +208,12 @@ struct TimeLapseRecorderView: View {
                 triggerCountdownAlert()
             }
         }
+        .onChange(of: recorder.diskSpaceError) { _, newError in
+            if let error = newError {
+                errorMessage = error
+                recorder.diskSpaceError = nil
+            }
+        }
         .shareSheet(isPresented: $showShareSheet, videoURL: recorder.recordedVideoURL ?? URL(fileURLWithPath: ""))
     }
 
@@ -302,28 +312,34 @@ struct TimeLapseRecorderView: View {
 
     var compilingVideoView: some View {
         VStack(spacing: 32) {
-            // Animated film reel icon
+            // Progress ring with percentage
             ZStack {
                 Circle()
                     .stroke(Color.white.opacity(0.2), lineWidth: 8)
                     .frame(width: 120, height: 120)
 
                 Circle()
-                    .trim(from: 0, to: 0.7)
+                    .trim(from: 0, to: recorder.compilationProgress)
                     .stroke(
                         AngularGradient(
-                            colors: [AppTheme.actionBlue, AppTheme.actionBlue.opacity(0.3)],
+                            colors: [AppTheme.actionBlue, AppTheme.successGreen],
                             center: .center
                         ),
                         style: StrokeStyle(lineWidth: 8, lineCap: .round)
                     )
                     .frame(width: 120, height: 120)
                     .rotationEffect(.degrees(-90))
-                    .modifier(RotatingModifier())
+                    .animation(.easeInOut(duration: 0.3), value: recorder.compilationProgress)
 
-                Image(systemName: "film.stack")
-                    .font(.system(size: 40))
-                    .foregroundColor(.white)
+                VStack(spacing: 4) {
+                    Text("\(Int(recorder.compilationProgress * 100))%")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+
+                    Image(systemName: "film.stack")
+                        .font(.system(size: 20))
+                        .foregroundColor(.white.opacity(0.7))
+                }
             }
 
             VStack(spacing: 12) {
@@ -331,10 +347,38 @@ struct TimeLapseRecorderView: View {
                     .font(.system(size: 24, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
 
-                Text("Compiling \(recorder.frameCount) frames...")
+                Text("Processing \(recorder.frameCount) frames...")
                     .font(.system(size: 16))
                     .foregroundColor(.white.opacity(0.7))
+
+                // Show stage
+                Text(compilationStageText)
+                    .font(.system(size: 14))
+                    .foregroundColor(.white.opacity(0.5))
             }
+
+            // Warning about not closing the app
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(.orange)
+
+                Text("Please keep the app open")
+                    .font(.system(size: 14))
+                    .foregroundColor(.orange)
+            }
+            .padding(.top, 20)
+        }
+    }
+
+    var compilationStageText: String {
+        let progress = recorder.compilationProgress
+        if progress < 0.8 {
+            return "Encoding frames..."
+        } else if progress < 0.95 {
+            return "Adding audio..."
+        } else {
+            return "Finalizing..."
         }
     }
 
@@ -637,43 +681,60 @@ struct TimeLapseRecorderView: View {
 
                 // Recording info
                 if recorder.isRecording {
-                    HStack(spacing: 8) {
-                        if recorder.isPaused {
-                            Image(systemName: "pause.fill")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.orange)
-                        } else if isOvertime {
-                            Image(systemName: "exclamationmark.circle.fill")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.red)
-                        } else if countdownEnabled && countdownDuration > 0 {
-                            Image(systemName: "timer")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.orange)
-                        } else {
-                            Circle()
-                                .fill(Color.red)
-                                .frame(width: 10, height: 10)
+                    VStack(spacing: 8) {
+                        HStack(spacing: 8) {
+                            if recorder.isPaused {
+                                Image(systemName: "pause.fill")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.orange)
+                            } else if isOvertime {
+                                Image(systemName: "exclamationmark.circle.fill")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.red)
+                            } else if countdownEnabled && countdownDuration > 0 {
+                                Image(systemName: "timer")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.orange)
+                            } else {
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 10, height: 10)
+                            }
+
+                            Text(timerDisplayText)
+                                .font(.system(size: 17, weight: .bold, design: .rounded))
+                                .foregroundColor(isOvertime ? .red : .white)
+
+                            if recorder.isPaused {
+                                Text("PAUSED")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.orange)
+                            } else {
+                                Text("• \(recorder.frameCount) frames")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.black.opacity(0.5))
+                        .cornerRadius(20)
 
-                        Text(timerDisplayText)
-                            .font(.system(size: 17, weight: .bold, design: .rounded))
-                            .foregroundColor(isOvertime ? .red : .white)
-
-                        if recorder.isPaused {
-                            Text("PAUSED")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(.orange)
-                        } else {
-                            Text("• \(recorder.frameCount) frames")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.white.opacity(0.8))
+                        // Low disk space warning
+                        if recorder.lowDiskSpaceWarning {
+                            HStack(spacing: 6) {
+                                Image(systemName: "externaldrive.badge.exclamationmark")
+                                    .font(.system(size: 12))
+                                Text("Low Storage")
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.orange.opacity(0.2))
+                            .cornerRadius(12)
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.black.opacity(0.5))
-                    .cornerRadius(20)
                 }
             }
             .padding(.horizontal)
@@ -1192,7 +1253,18 @@ struct TimeLapseRecorderView: View {
             if recorder.isRecording {
                 recorder.stopRecording()
             } else {
-                recorder.startRecording()
+                // Check disk space before starting
+                let (canStart, message) = recorder.canStartRecording()
+                if canStart {
+                    if let warningMessage = message {
+                        // Show warning but allow recording
+                        errorMessage = warningMessage
+                    }
+                    recorder.startRecording()
+                } else {
+                    // Can't start - show error
+                    errorMessage = message ?? "Cannot start recording"
+                }
             }
         } label: {
             ZStack {

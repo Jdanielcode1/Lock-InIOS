@@ -46,6 +46,13 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     @Published var deviceOrientation: UIDeviceOrientation = .portrait
     @Published var isAudioEnabled = false // Audio recording toggle (disabled by default)
 
+    // Compilation progress (0.0 to 1.0)
+    @Published var compilationProgress: Double = 0
+
+    // Disk space warnings
+    @Published var lowDiskSpaceWarning: Bool = false
+    @Published var diskSpaceError: String?
+
     nonisolated(unsafe) let captureSession = AVCaptureSession()
     private var videoOutput: AVCaptureVideoDataOutput?
     private var currentVideoInput: AVCaptureDeviceInput?
@@ -68,6 +75,15 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     private var manualSpeedOverride: Bool = false // User manually set speed
     private let outputFPS: Int32 = 30 // Playback at 30 fps
     private let maxRecordingDuration: TimeInterval = 4 * 60 * 60 // 4 hours in seconds
+    private let maxNormalModeDuration: TimeInterval = 10 * 60 // 10 minutes for Normal mode (high frame rate)
+
+    // Disk space constants
+    private let minRequiredDiskSpaceMB: Int64 = 500 // 500 MB minimum
+    private let estimatedFrameSizeKB: Int64 = 100 // ~100 KB per JPEG frame
+    private let lowDiskSpaceThresholdMB: Int64 = 1000 // Warn at 1 GB remaining
+
+    // Background task for compilation
+    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
     private var recordingTimer: Timer?
     private let videoQueue = DispatchQueue(label: "com.lockin.timelapse.video")
@@ -94,6 +110,90 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             totalPaused += now.timeIntervalSince(pauseStart)
         }
         return now.timeIntervalSince(start) - totalPaused
+    }
+
+    // MARK: - Disk Space Management
+
+    /// Returns available disk space in bytes
+    func getAvailableDiskSpace() -> Int64 {
+        let fileManager = FileManager.default
+        do {
+            let attributes = try fileManager.attributesOfFileSystem(forPath: NSHomeDirectory())
+            if let freeSpace = attributes[.systemFreeSize] as? Int64 {
+                return freeSpace
+            }
+        } catch {
+            print("❌ Failed to get disk space: \(error)")
+        }
+        return 0
+    }
+
+    /// Returns available disk space in MB
+    func getAvailableDiskSpaceMB() -> Int64 {
+        return getAvailableDiskSpace() / (1024 * 1024)
+    }
+
+    /// Check if there's enough disk space to start recording
+    func canStartRecording() -> (canStart: Bool, message: String?) {
+        let availableMB = getAvailableDiskSpaceMB()
+
+        if availableMB < minRequiredDiskSpaceMB {
+            return (false, "Not enough storage space. Need at least \(minRequiredDiskSpaceMB) MB free, but only \(availableMB) MB available.")
+        }
+
+        if availableMB < lowDiskSpaceThresholdMB {
+            lowDiskSpaceWarning = true
+            return (true, "Low storage space (\(availableMB) MB). Recording may stop early.")
+        }
+
+        lowDiskSpaceWarning = false
+        return (true, nil)
+    }
+
+    /// Check disk space during recording and stop if critically low
+    private func checkDiskSpaceDuringRecording() {
+        let availableMB = getAvailableDiskSpaceMB()
+
+        if availableMB < minRequiredDiskSpaceMB / 2 {
+            // Critical - stop recording immediately
+            print("⚠️ Critical disk space! Stopping recording...")
+            diskSpaceError = "Recording stopped: Storage full"
+            stopRecording()
+            return
+        }
+
+        if availableMB < lowDiskSpaceThresholdMB && !lowDiskSpaceWarning {
+            lowDiskSpaceWarning = true
+            print("⚠️ Low disk space warning: \(availableMB) MB remaining")
+        }
+    }
+
+    /// Get the maximum recording duration for current mode
+    func getMaxDurationForCurrentMode() -> TimeInterval {
+        if frameInterval <= 0 {
+            // Normal mode - limit to 10 minutes due to high frame rate
+            return maxNormalModeDuration
+        }
+        return maxRecordingDuration
+    }
+
+    // MARK: - Background Task Management
+
+    private func beginBackgroundTask() {
+        backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "VideoCompilation") { [weak self] in
+            // Clean up if we run out of time
+            print("⚠️ Background task expired")
+            self?.endBackgroundTask()
+        }
+        print("📱 Started background task for compilation")
+    }
+
+    private func endBackgroundTask() {
+        if backgroundTask != .invalid {
+            UIApplication.shared.endBackgroundTask(backgroundTask)
+            backgroundTask = .invalid
+            print("📱 Ended background task")
+        }
     }
 
     // MARK: - Pause/Resume Recording
@@ -398,6 +498,7 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         }
 
         // Start timer to update duration and frame interval
+        var diskCheckCounter = 0
         recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self = self, let start = self.startTime else { return }
@@ -411,15 +512,25 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
                 self.updateFrameInterval()
 
-                // Check if max duration reached (4 hours)
-                if self.recordingDuration >= self.maxRecordingDuration {
-                    print("⏰ Maximum recording duration reached (4 hours). Stopping recording...")
+                // Check disk space every 10 seconds (100 timer ticks)
+                diskCheckCounter += 1
+                if diskCheckCounter >= 100 {
+                    diskCheckCounter = 0
+                    self.checkDiskSpaceDuringRecording()
+                }
+
+                // Check if max duration reached (mode-dependent)
+                let maxDuration = self.getMaxDurationForCurrentMode()
+                if self.recordingDuration >= maxDuration {
+                    let durationStr = self.frameInterval <= 0 ? "10 minutes (Normal mode)" : "4 hours"
+                    print("⏰ Maximum recording duration reached (\(durationStr)). Stopping recording...")
                     self.stopRecording()
                 }
             }
         }
 
-        print("🎬 Started timelapse recording at \(currentCaptureRate) (max 4 hours)")
+        let maxDurationStr = frameInterval <= 0 ? "10 min" : "4 hours"
+        print("🎬 Started timelapse recording at \(currentCaptureRate) (max \(maxDurationStr))")
     }
 
     private func updateFrameInterval() {
@@ -468,18 +579,42 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             print("❌ No frames captured")
             await MainActor.run {
                 self.isCompilingVideo = false
+                self.compilationProgress = 0
             }
             return
+        }
+
+        // Start background task to prevent iOS from killing the app during compilation
+        beginBackgroundTask()
+
+        await MainActor.run {
+            self.compilationProgress = 0
         }
 
         let videoOnlyURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("mov")
 
-        print("🎥 Creating timelapse video from \(capturedFrameURLs.count) frames at \(outputFPS) fps")
+        let totalFrames = capturedFrameURLs.count
+        print("🎥 Creating timelapse video from \(totalFrames) frames at \(outputFPS) fps")
 
         do {
-            try await createVideoFromFrames(frameURLs: capturedFrameURLs, outputURL: videoOnlyURL, fps: outputFPS)
+            // Video creation is ~80% of the work, audio merge is ~20%
+            try await createVideoFromFrames(
+                frameURLs: capturedFrameURLs,
+                outputURL: videoOnlyURL,
+                fps: outputFPS,
+                progressCallback: { [weak self] progress in
+                    Task { @MainActor in
+                        // Frame processing is 0-80% of total progress
+                        self?.compilationProgress = progress * 0.8
+                    }
+                }
+            )
+
+            await MainActor.run {
+                self.compilationProgress = 0.8
+            }
 
             // If we have audio segments, merge them with the video using proper sync
             if !audioSegments.isEmpty {
@@ -494,6 +629,10 @@ class TimeLapseRecorder: NSObject, ObservableObject {
                     outputURL: finalURL
                 )
 
+                await MainActor.run {
+                    self.compilationProgress = 0.95
+                }
+
                 // Clean up intermediate files
                 try? FileManager.default.removeItem(at: videoOnlyURL)
                 for segment in audioSegments {
@@ -503,12 +642,14 @@ class TimeLapseRecorder: NSObject, ObservableObject {
                 await MainActor.run {
                     self.recordedVideoURL = finalURL
                     self.isCompilingVideo = false
+                    self.compilationProgress = 1.0
                 }
                 print("✅ Timelapse video with synced audio created at: \(finalURL)")
             } else {
                 await MainActor.run {
                     self.recordedVideoURL = videoOnlyURL
                     self.isCompilingVideo = false
+                    self.compilationProgress = 1.0
                 }
                 print("✅ Timelapse video created at: \(videoOnlyURL)")
             }
@@ -522,8 +663,13 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             print("❌ Failed to create video: \(error)")
             await MainActor.run {
                 self.isCompilingVideo = false
+                self.compilationProgress = 0
+                self.diskSpaceError = "Failed to create video: \(error.localizedDescription)"
             }
         }
+
+        // End background task
+        endBackgroundTask()
     }
 
     /// Pre-process audio file to target duration using AVAssetExportSession
@@ -704,7 +850,12 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         }
     }
 
-    nonisolated private func createVideoFromFrames(frameURLs: [URL], outputURL: URL, fps: Int32) async throws {
+    nonisolated private func createVideoFromFrames(
+        frameURLs: [URL],
+        outputURL: URL,
+        fps: Int32,
+        progressCallback: ((Double) -> Void)? = nil
+    ) async throws {
         // Load first frame to get dimensions
         guard let firstFrameData = try? Data(contentsOf: frameURLs[0]),
               let firstImage = UIImage(data: firstFrameData),
@@ -714,6 +865,7 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
         let width = firstCGImage.width
         let height = firstCGImage.height
+        let totalFrames = frameURLs.count
 
         let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mov)
 
@@ -756,6 +908,10 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
         let queue = DispatchQueue(label: "com.lockin.timelapse.write")
 
+        // Track last progress update to avoid too frequent callbacks
+        var lastProgressUpdate: Int = 0
+        let progressUpdateInterval = max(1, totalFrames / 100) // Update ~100 times max
+
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             var frameIndex: Int64 = 0
 
@@ -769,36 +925,89 @@ class TimeLapseRecorder: NSObject, ObservableObject {
                         return
                     }
 
-                    let presentationTime = CMTimeMultiply(frameDuration, multiplier: Int32(frameIndex))
+                    // Autoreleasepool ensures memory is freed each iteration
+                    // Without this, Data/UIImage/CGImage objects accumulate and cause crashes
+                    autoreleasepool {
+                        let presentationTime = CMTimeMultiply(frameDuration, multiplier: Int32(frameIndex))
 
-                    // Load frame from disk
-                    if let frameData = try? Data(contentsOf: frameURLs[Int(frameIndex)]),
-                       let frameImage = UIImage(data: frameData),
-                       let cgImage = frameImage.cgImage,
-                       let pixelBuffer = TimeLapseRecorder.createPixelBuffer(from: cgImage, width: width, height: height) {
-                        adaptor.append(pixelBuffer, withPresentationTime: presentationTime)
+                        // Load frame from disk
+                        if let frameData = try? Data(contentsOf: frameURLs[Int(frameIndex)]),
+                           let frameImage = UIImage(data: frameData),
+                           let cgImage = frameImage.cgImage,
+                           let pixelBuffer = TimeLapseRecorder.createPixelBuffer(from: cgImage, width: width, height: height) {
+                            adaptor.append(pixelBuffer, withPresentationTime: presentationTime)
+                        }
                     }
 
                     frameIndex += 1
+
+                    // Report progress periodically
+                    let currentFrame = Int(frameIndex)
+                    if currentFrame - lastProgressUpdate >= progressUpdateInterval {
+                        lastProgressUpdate = currentFrame
+                        let progress = Double(currentFrame) / Double(totalFrames)
+                        progressCallback?(progress)
+                    }
                 }
             }
         }
+
+        // Final progress update
+        progressCallback?(1.0)
     }
 
     private func transformForOrientation(_ orientation: UIDeviceOrientation) -> CGAffineTransform {
-        switch orientation {
-        case .portrait:
-            // Portrait: 90-degree clockwise rotation
-            return CGAffineTransform(rotationAngle: .pi / 2)
-        case .landscapeLeft:
-            // Landscape left: No rotation needed
-            return CGAffineTransform.identity
-        case .landscapeRight:
-            // Landscape right: 180-degree rotation
-            return CGAffineTransform(rotationAngle: .pi)
-        default:
-            // Default to portrait
-            return CGAffineTransform(rotationAngle: .pi / 2)
+        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+        let isFrontCamera = currentCameraPosition == .front
+
+        if isIPad {
+            // iPad camera behavior differs from iPhone
+            // iPad front camera is on the landscape edge, so orientations are different
+            switch orientation {
+            case .portrait:
+                if isFrontCamera {
+                    // iPad front camera portrait: rotate -90° (270°) and mirror
+                    return CGAffineTransform(rotationAngle: -.pi / 2).scaledBy(x: -1, y: 1)
+                } else {
+                    return CGAffineTransform(rotationAngle: -.pi / 2)
+                }
+            case .landscapeLeft:
+                if isFrontCamera {
+                    // iPad front camera landscape left: rotate 180° and mirror
+                    return CGAffineTransform(rotationAngle: .pi).scaledBy(x: -1, y: 1)
+                } else {
+                    return CGAffineTransform(rotationAngle: .pi)
+                }
+            case .landscapeRight:
+                if isFrontCamera {
+                    // iPad front camera landscape right: no rotation, just mirror
+                    return CGAffineTransform(scaleX: -1, y: 1)
+                } else {
+                    return CGAffineTransform.identity
+                }
+            default:
+                if isFrontCamera {
+                    return CGAffineTransform(rotationAngle: -.pi / 2).scaledBy(x: -1, y: 1)
+                } else {
+                    return CGAffineTransform(rotationAngle: -.pi / 2)
+                }
+            }
+        } else {
+            // iPhone behavior (unchanged)
+            switch orientation {
+            case .portrait:
+                // Portrait: 90-degree clockwise rotation
+                return CGAffineTransform(rotationAngle: .pi / 2)
+            case .landscapeLeft:
+                // Landscape left: No rotation needed
+                return CGAffineTransform.identity
+            case .landscapeRight:
+                // Landscape right: 180-degree rotation
+                return CGAffineTransform(rotationAngle: .pi)
+            default:
+                // Default to portrait
+                return CGAffineTransform(rotationAngle: .pi / 2)
+            }
         }
     }
 

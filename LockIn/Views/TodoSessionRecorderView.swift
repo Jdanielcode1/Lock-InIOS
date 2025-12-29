@@ -16,6 +16,10 @@ struct TodoSessionRecorderView: View {
     let onDismiss: () -> Void
 
     @Environment(\.dismiss) var dismiss
+    @Environment(\.horizontalSizeClass) var sizeClass
+    private var sizing: AdaptiveSizing {
+        AdaptiveSizing(horizontalSizeClass: sizeClass)
+    }
     @StateObject private var recorder = TimeLapseRecorder()
     @State private var isUploading = false
     @State private var uploadProgress: Double = 0

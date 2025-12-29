@@ -13,13 +13,19 @@ struct SettingsView: View {
     @AppStorage("hapticFeedback") private var hapticFeedback = true
     @State private var showingLogoutAlert = false
 
+    // iPad adaptation
+    @Environment(\.horizontalSizeClass) var sizeClass
+    private var sizing: AdaptiveSizing {
+        AdaptiveSizing(horizontalSizeClass: sizeClass)
+    }
+
     var body: some View {
         NavigationView {
             ZStack {
                 AppTheme.background.ignoresSafeArea()
 
                 ScrollView {
-                    VStack(spacing: 24) {
+                    VStack(spacing: sizing.sectionSpacing) {
                         // App Info Card
                         appInfoCard
 
@@ -38,8 +44,11 @@ struct SettingsView: View {
                         // About
                         aboutSection
                     }
-                    .padding()
+                    .padding(.horizontal, sizing.horizontalPadding)
+                    .padding(.vertical)
                     .padding(.bottom, 100)
+                    .frame(maxWidth: sizing.maxContentWidth)
+                    .frame(maxWidth: .infinity) // Center on iPad
                 }
             }
             .navigationTitle("Settings")
@@ -57,6 +66,7 @@ struct SettingsView: View {
                 Text("Are you sure you want to sign out?")
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     var appInfoCard: some View {
