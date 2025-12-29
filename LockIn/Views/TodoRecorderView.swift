@@ -79,6 +79,9 @@ struct TodoRecorderView: View {
             }
         }
         .onAppear {
+            // Prevent screen from turning off during recording
+            UIApplication.shared.isIdleTimerDisabled = true
+
             // Allow landscape orientation in recorder
             OrientationManager.shared.allowAllOrientations()
 
@@ -88,6 +91,9 @@ struct TodoRecorderView: View {
             }
         }
         .onDisappear {
+            // Re-enable screen auto-lock
+            UIApplication.shared.isIdleTimerDisabled = false
+
             recorder.cleanup()
             dismissAlarm()
             // Lock back to portrait when leaving

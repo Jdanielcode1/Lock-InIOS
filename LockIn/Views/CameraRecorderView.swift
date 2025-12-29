@@ -141,9 +141,13 @@ struct CameraRecorderView: View {
             }
         }
         .onAppear {
+            // Prevent screen from turning off during recording
+            UIApplication.shared.isIdleTimerDisabled = true
             viewModel.setupCamera()
         }
         .onDisappear {
+            // Re-enable screen auto-lock
+            UIApplication.shared.isIdleTimerDisabled = false
             viewModel.cleanup()
         }
     }

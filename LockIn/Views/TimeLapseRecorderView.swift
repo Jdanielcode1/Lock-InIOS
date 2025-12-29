@@ -158,6 +158,9 @@ struct TimeLapseRecorderView: View {
             .presentationDragIndicator(.visible)
         }
         .onAppear {
+            // Prevent screen from turning off during recording
+            UIApplication.shared.isIdleTimerDisabled = true
+
             // Allow landscape orientation in recorder
             OrientationManager.shared.allowAllOrientations()
 
@@ -168,6 +171,9 @@ struct TimeLapseRecorderView: View {
             }
         }
         .onDisappear {
+            // Re-enable screen auto-lock
+            UIApplication.shared.isIdleTimerDisabled = false
+
             recorder.cleanup()
             dismissAlarm()
             // Lock back to portrait when leaving
