@@ -48,7 +48,7 @@ struct FloatingTabBar: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 12)
-            .background(AppTheme.tabBarBackground)
+            .background(Color(UIColor.secondarySystemBackground))
             .clipShape(Capsule())
 
             Spacer()
@@ -58,11 +58,11 @@ struct FloatingTabBar: View {
             Button(action: onPlusTapped) {
                 Image(systemName: "plus")
                     .font(.system(size: 24, weight: .medium))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .frame(width: 56, height: 56)
-                    .background(AppTheme.actionBlue)
+                    .background(Color.accentColor)
                     .clipShape(Circle())
-                    .shadow(color: AppTheme.actionBlue.opacity(0.4), radius: 8, x: 0, y: 4)
+                    .shadow(color: Color.accentColor.opacity(0.3), radius: 8, x: 0, y: 4)
             }
 
             Spacer(minLength: 0)
@@ -85,11 +85,11 @@ struct TabButton: View {
             VStack(spacing: 4) {
                 Image(systemName: tab.icon)
                     .font(.system(size: 20))
-                    .foregroundColor(isSelected ? AppTheme.actionBlue : AppTheme.textSecondary)
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
 
                 Text(tab.rawValue)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(isSelected ? AppTheme.actionBlue : AppTheme.textSecondary)
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
             }
             .frame(width: buttonWidth, height: 50)
         }

@@ -34,33 +34,27 @@ struct GoalsListView: View {
 
     var body: some View {
         NavigationView {
-            ZStack {
-                AppTheme.background.ignoresSafeArea()
-
-                VStack(spacing: 0) {
-                    // Segmented control
-                    Picker("", selection: $listMode) {
-                        ForEach(ListMode.allCases, id: \.self) { mode in
-                            Text(mode.rawValue).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-                    .padding(.bottom, 16)
-
-                    // Content based on selection
-                    if listMode == .goals {
-                        goalsContent
-                    } else {
-                        todosContent
+            VStack(spacing: 0) {
+                // Segmented control
+                Picker("", selection: $listMode) {
+                    ForEach(ListMode.allCases, id: \.self) { mode in
+                        Text(mode.rawValue).tag(mode)
                     }
                 }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+
+                // Content based on selection
+                if listMode == .goals {
+                    goalsContent
+                } else {
+                    todosContent
+                }
             }
+            .background(Color(UIColor.systemGroupedBackground))
             .navigationTitle(listMode == .goals ? "Goals" : "To Do")
             .navigationBarTitleDisplayMode(.large)
-            .toolbarColorScheme(.light, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
             .sheet(isPresented: $showingCreateGoal) {
                 CreateGoalView(viewModel: goalsViewModel)
             }
@@ -96,7 +90,6 @@ struct GoalsListView: View {
                 VStack {
                     Spacer()
                     ProgressView()
-                        .tint(AppTheme.primaryPurple)
                     Spacer()
                 }
             } else if goalsViewModel.goals.isEmpty {
@@ -129,15 +122,12 @@ struct GoalsListView: View {
                     .padding(.bottom, 100)
                 }
             } else {
-                // iPhone: List layout (unchanged)
+                // iPhone: Native insetGrouped list
                 List {
                     ForEach(goalsViewModel.goals) { goal in
                         NavigationLink(destination: GoalDetailView(goal: goal)) {
                             GoalCardHorizontal(goal: goal)
                         }
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                         .swipeActions(edge: .leading) {
                             Button {
                                 Task {
@@ -158,43 +148,40 @@ struct GoalsListView: View {
                             }
                         }
                     }
-
-                    // Bottom spacer for tab bar
-                    Color.clear
-                        .frame(height: 80)
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
+                .listStyle(.insetGrouped)
             }
         }
     }
 
     var goalsEmptyStateView: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             Spacer()
 
             Image(systemName: "target")
-                .font(.system(size: 80))
-                .foregroundStyle(AppTheme.primaryGradient)
+                .font(.system(size: 56, weight: .light))
+                .foregroundStyle(.secondary)
 
             Text("No Goals Yet")
-                .font(AppTheme.titleFont)
-                .foregroundColor(AppTheme.textPrimary)
+                .font(.title2.bold())
 
             Text("Create your first goal to start\ntracking your study sessions!")
-                .font(AppTheme.bodyFont)
-                .foregroundColor(AppTheme.textSecondary)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
             Button {
                 showingCreateGoal = true
             } label: {
                 Text("Create Goal")
-                    .font(AppTheme.headlineFont)
-                    .primaryButton()
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Color.accentColor)
+                    .foregroundStyle(.white)
+                    .cornerRadius(12)
             }
+            .padding(.top, 8)
 
             Spacer()
         }
@@ -227,7 +214,6 @@ struct GoalsListView: View {
                 VStack {
                     Spacer()
                     ProgressView()
-                        .tint(AppTheme.primaryPurple)
                     Spacer()
                 }
             } else if todoViewModel.todos.isEmpty {
@@ -253,7 +239,7 @@ struct GoalsListView: View {
                     }
                 }
             } else {
-                // iPhone: List layout (unchanged)
+                // iPhone: Native insetGrouped list
                 ZStack(alignment: .bottom) {
                     List {
                         ForEach(todoViewModel.todos) { todo in
@@ -265,42 +251,30 @@ struct GoalsListView: View {
                                     } label: {
                                         Image(systemName: selectedTodoIdsForSession.contains(todo.id)
                                             ? "checkmark.circle.fill" : "circle")
-                                            .font(.system(size: 22))
-                                            .foregroundColor(selectedTodoIdsForSession.contains(todo.id)
-                                                ? AppTheme.actionBlue : AppTheme.textSecondary.opacity(0.4))
+                                            .font(.title2)
+                                            .foregroundStyle(selectedTodoIdsForSession.contains(todo.id)
+                                                ? Color.accentColor : Color(UIColor.tertiaryLabel))
                                     }
-                                    .buttonStyle(PlainButtonStyle())
+                                    .buttonStyle(.plain)
                                 }
 
                                 // Todo card
-                                Button {
-                                    if todo.hasVideo {
-                                        selectedTodoForPlayback = todo
-                                    } else {
-                                        selectedTodoForRecording = todo
-                                    }
-                                } label: {
-                                    TodoCard(
-                                        todo: todo,
-                                        onToggle: {
-                                            Task {
-                                                await todoViewModel.toggleTodo(todo)
-                                            }
-                                        },
-                                        onTap: {
-                                            if todo.hasVideo {
-                                                selectedTodoForPlayback = todo
-                                            } else {
-                                                selectedTodoForRecording = todo
-                                            }
+                                TodoCard(
+                                    todo: todo,
+                                    onToggle: {
+                                        Task {
+                                            await todoViewModel.toggleTodo(todo)
                                         }
-                                    )
-                                }
-                                .buttonStyle(PlainButtonStyle())
+                                    },
+                                    onTap: {
+                                        if todo.hasVideo {
+                                            selectedTodoForPlayback = todo
+                                        } else {
+                                            selectedTodoForRecording = todo
+                                        }
+                                    }
+                                )
                             }
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                             .swipeActions(edge: .leading) {
                                 Button {
                                     Task {
@@ -335,14 +309,14 @@ struct GoalsListView: View {
                             }
                         }
 
-                        // Bottom spacer for tab bar and sticky button
-                        Color.clear
-                            .frame(height: !incompleteTodos.isEmpty ? 160 : 80)
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
+                        // Bottom spacer for sticky button
+                        if !incompleteTodos.isEmpty {
+                            Color.clear
+                                .frame(height: 100)
+                                .listRowBackground(Color.clear)
+                        }
                     }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
+                    .listStyle(.insetGrouped)
 
                     // Sticky Start Session button (iPhone)
                     if !incompleteTodos.isEmpty {
@@ -368,7 +342,7 @@ struct GoalsListView: View {
                             ? "checkmark.circle.fill" : "circle")
                             .font(.system(size: 24))
                             .foregroundColor(selectedTodoIdsForSession.contains(todo.id)
-                                ? AppTheme.actionBlue : AppTheme.textSecondary.opacity(0.4))
+                                ? Color.accentColor : .secondary.opacity(0.4))
                             .padding(8)
                     }
                 }
@@ -419,73 +393,64 @@ struct GoalsListView: View {
 
     // MARK: - Start Session Button
     private var startSessionButton: some View {
-        VStack(spacing: 0) {
-            // Gradient fade
-            LinearGradient(
-                colors: [AppTheme.background.opacity(0), AppTheme.background],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 20)
-
-            VStack(spacing: 8) {
-                // Selection count label
-                if !selectedTodoIdsForSession.isEmpty {
-                    Text("\(selectedTodoIdsForSession.count) task\(selectedTodoIdsForSession.count == 1 ? "" : "s") selected")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(AppTheme.textSecondary)
-                }
-
-                // Start Session button
-                Button {
-                    showTodoSessionRecorder = true
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "video.fill")
-                            .font(.system(size: 18, weight: .semibold))
-                        Text(selectedTodoIdsForSession.isEmpty
-                            ? "Start Session"
-                            : "Start Session (\(selectedTodoIdsForSession.count))")
-                            .font(.system(size: 18, weight: .semibold))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                    .foregroundColor(.white)
-                    .background(AppTheme.primaryGradient)
-                    .cornerRadius(16)
-                    .shadow(color: AppTheme.actionBlue.opacity(0.4), radius: 12, x: 0, y: 6)
-                }
+        VStack(spacing: 8) {
+            // Selection count label
+            if !selectedTodoIdsForSession.isEmpty {
+                Text("\(selectedTodoIdsForSession.count) task\(selectedTodoIdsForSession.count == 1 ? "" : "s") selected")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 100) // Space for tab bar
-            .background(AppTheme.background)
+
+            // Start Session button
+            Button {
+                showTodoSessionRecorder = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "video.fill")
+                    Text(selectedTodoIdsForSession.isEmpty
+                        ? "Start Session"
+                        : "Start Session (\(selectedTodoIdsForSession.count))")
+                }
+                .appleFilledButton()
+            }
         }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 100) // Space for tab bar
+        .background(
+            Color(UIColor.systemGroupedBackground)
+                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: -4)
+                .mask(Rectangle().padding(.top, -20))
+        )
     }
 
     var todosEmptyStateView: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             Spacer()
 
             Image(systemName: "checklist")
-                .font(.system(size: 80))
-                .foregroundStyle(AppTheme.primaryGradient)
+                .font(.system(size: 56, weight: .light))
+                .foregroundStyle(.secondary)
 
             Text("No To-Dos Yet")
-                .font(AppTheme.titleFont)
-                .foregroundColor(AppTheme.textPrimary)
+                .font(.title2.bold())
 
             Text("Add tasks and complete them\nby recording a video!")
-                .font(AppTheme.bodyFont)
-                .foregroundColor(AppTheme.textSecondary)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
             Button {
                 showingCreateTodo = true
             } label: {
                 Text("Add To-Do")
-                    .font(AppTheme.headlineFont)
-                    .primaryButton()
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Color.accentColor)
+                    .foregroundStyle(.white)
+                    .cornerRadius(12)
             }
+            .padding(.top, 8)
 
             Spacer()
         }
@@ -498,31 +463,20 @@ struct GoalCardHorizontal: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            // Left: Title and hours
-            VStack(alignment: .leading, spacing: 8) {
+            // Left: Title and hours with progress
+            VStack(alignment: .leading, spacing: 6) {
                 Text(goal.title)
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    .foregroundColor(AppTheme.textPrimary)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
                     .lineLimit(2)
 
-                Text("\(Int(goal.completedHours)) of \(Int(goal.targetHours)) hours")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(AppTheme.textSecondary)
+                Text("\(Int(goal.completedHours))/\(Int(goal.targetHours)) hrs")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
 
-                // Progress bar
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(AppTheme.borderLight)
-                            .frame(height: 6)
-
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(AppTheme.progressGradient(for: goal.progressPercentage))
-                            .frame(width: max(0, geo.size.width * min(goal.progressPercentage / 100, 1.0)), height: 6)
-                            .animation(AppTheme.smoothAnimation, value: goal.progressPercentage)
-                    }
-                }
-                .frame(height: 6)
+                // Native progress bar
+                ProgressView(value: goal.progressPercentage, total: 100)
+                    .tint(goal.isCompleted ? .green : .accentColor)
             }
 
             Spacer()
@@ -530,30 +484,27 @@ struct GoalCardHorizontal: View {
             // Right: Percentage or completed badge
             if goal.isCompleted {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 32))
-                    .foregroundColor(AppTheme.successGreen)
+                    .font(.title2)
+                    .foregroundStyle(.green)
             } else {
                 Text("\(Int(goal.progressPercentage))%")
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .foregroundColor(goal.progressPercentage > 0 ? AppTheme.actionBlue : AppTheme.textSecondary.opacity(0.5))
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
             }
         }
-        .padding(16)
-        .background(AppTheme.cardBackground)
-        .cornerRadius(16)
-        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        .padding(.vertical, 4)
     }
 }
 
-// Keep old card for potential grid view
+// iPad grid card
 struct GoalCard: View {
     let goal: Goal
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             Text(goal.title)
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundColor(AppTheme.textPrimary)
+                .font(.headline)
+                .foregroundStyle(.primary)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -562,48 +513,29 @@ struct GoalCard: View {
             Spacer()
 
             HStack {
-                Text("\(Int(goal.completedHours)) of \(Int(goal.targetHours))h")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(AppTheme.textSecondary)
+                Text("\(Int(goal.completedHours))/\(Int(goal.targetHours)) hrs")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
 
                 Spacer()
 
-                Text("\(Int(goal.progressPercentage))%")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundColor(goal.progressPercentage > 0 ? AppTheme.actionBlue : AppTheme.textSecondary)
-            }
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(AppTheme.borderLight)
-                        .frame(height: 8)
-
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(AppTheme.progressGradient(for: goal.progressPercentage))
-                        .frame(width: geo.size.width * min(goal.progressPercentage / 100, 1.0), height: 8)
-                        .animation(AppTheme.smoothAnimation, value: goal.progressPercentage)
-                }
-            }
-            .frame(height: 8)
-
-            if goal.isCompleted {
-                HStack(spacing: 4) {
+                if goal.isCompleted {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 12))
-                    Text("Done")
-                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.green)
+                } else {
+                    Text("\(Int(goal.progressPercentage))%")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.secondary)
                 }
-                .foregroundColor(.white)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(AppTheme.successGreen)
-                .cornerRadius(8)
             }
+
+            ProgressView(value: goal.progressPercentage, total: 100)
+                .tint(goal.isCompleted ? .green : .accentColor)
         }
         .padding(16)
-        .frame(minHeight: 140)
-        .playfulCard()
+        .frame(minHeight: 130)
+        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .cornerRadius(12)
     }
 }
 

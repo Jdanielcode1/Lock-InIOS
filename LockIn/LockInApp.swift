@@ -24,6 +24,7 @@ struct LockInApp: App {
 
 struct RootView: View {
     @ObservedObject var authModel: AuthModel
+    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
 
     var body: some View {
         Group {
@@ -36,6 +37,7 @@ struct RootView: View {
                 ContentView()
             }
         }
+        .preferredColorScheme(appearanceMode.colorScheme)
     }
 }
 
@@ -44,17 +46,17 @@ struct RootView: View {
 struct LoadingView: View {
     var body: some View {
         ZStack {
-            AppTheme.background
+            Color(UIColor.systemBackground)
                 .ignoresSafeArea()
 
             VStack(spacing: 20) {
                 ProgressView()
                     .scaleEffect(1.5)
-                    .tint(AppTheme.actionBlue)
+                    .tint(.accentColor)
 
                 Text("Loading...")
-                    .font(.system(size: 16))
-                    .foregroundColor(AppTheme.textSecondary)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
         }
     }

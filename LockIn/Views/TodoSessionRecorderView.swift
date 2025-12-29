@@ -222,7 +222,7 @@ struct TodoSessionRecorderView: View {
                     .symbolEffect(.pulse, options: .repeating)
 
                 Text("Time's Up!")
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .font(.system(size: 32, weight: .bold))
                     .foregroundColor(.white)
 
                 Text("Your countdown has finished")
@@ -263,7 +263,7 @@ struct TodoSessionRecorderView: View {
                     .trim(from: 0, to: 0.7)
                     .stroke(
                         AngularGradient(
-                            colors: [AppTheme.actionBlue, AppTheme.actionBlue.opacity(0.3)],
+                            colors: [Color.accentColor, Color.accentColor.opacity(0.3)],
                             center: .center
                         ),
                         style: StrokeStyle(lineWidth: 8, lineCap: .round)
@@ -279,7 +279,7 @@ struct TodoSessionRecorderView: View {
 
             VStack(spacing: 12) {
                 Text("Creating Video")
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .font(.system(size: 24, weight: .bold))
                     .foregroundColor(.white)
 
                 Text("Compiling \(recorder.frameCount) frames...")
@@ -385,7 +385,7 @@ struct TodoSessionRecorderView: View {
 
             VStack(spacing: 20) {
                 Text("\(voiceoverCountdownNumber)")
-                    .font(.system(size: 120, weight: .bold, design: .rounded))
+                    .font(.system(size: 120, weight: .bold))
                     .foregroundColor(.white)
 
                 Text("Get ready to narrate...")
@@ -596,7 +596,7 @@ struct TodoSessionRecorderView: View {
                             }
 
                             Text(timerDisplayText)
-                                .font(.system(size: 17, weight: .bold, design: .rounded))
+                                .font(.system(size: 17, weight: .bold))
                                 .foregroundColor(isOvertime ? .red : .white)
 
                             if recorder.isPaused {
@@ -682,7 +682,7 @@ struct TodoSessionRecorderView: View {
                 Image(systemName: completedCount == totalCount && totalCount > 0 ? "checkmark.circle.fill" : "checklist")
                     .font(.system(size: 14, weight: .semibold))
                 Text("\(completedCount)/\(totalCount)")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .font(.system(size: 14, weight: .bold))
             }
             .foregroundColor(completedCount == totalCount && totalCount > 0 ? .green : .white)
             .padding(.horizontal, 12)
@@ -697,7 +697,7 @@ struct TodoSessionRecorderView: View {
             // Compact header
             HStack {
                 Text("\(completedCount)/\(totalCount)")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundColor(completedCount == totalCount ? .green : .white)
 
                 Text("Tasks")
@@ -816,7 +816,7 @@ struct TodoSessionRecorderView: View {
                 HStack {
                     Image(systemName: "checklist")
                         .font(.system(size: 24))
-                        .foregroundStyle(AppTheme.primaryGradient)
+                        .foregroundStyle(Color.accentColor)
 
                     Text("Session Complete")
                         .font(.system(size: 18, weight: .semibold))
@@ -825,8 +825,8 @@ struct TodoSessionRecorderView: View {
                     Spacer()
 
                     Text("\(completedCount)/\(totalCount) done")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundColor(completedCount == totalCount ? .green : AppTheme.actionBlue)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(completedCount == totalCount ? .green : Color.accentColor)
                 }
 
                 if !checkedTodoIds.isEmpty {
@@ -909,7 +909,7 @@ struct TodoSessionRecorderView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: 56)
-                            .background(AppTheme.primaryGradient)
+                            .background(Color.accentColor)
                             .cornerRadius(16)
                         }
                     }
@@ -1070,10 +1070,10 @@ struct TodoSessionRecorderView: View {
                         Text(countdownEnabled && countdownDuration > 0 ? formattedCountdownSetting : "Set Timer")
                             .font(.system(size: 14, weight: .semibold))
                     }
-                    .foregroundColor(countdownEnabled ? AppTheme.actionBlue : .white)
+                    .foregroundColor(countdownEnabled ? Color.accentColor : .white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(countdownEnabled ? AppTheme.actionBlue.opacity(0.2) : Color.black.opacity(0.5))
+                    .background(countdownEnabled ? Color.accentColor.opacity(0.2) : Color.black.opacity(0.5))
                     .cornerRadius(20)
                 }
 
@@ -1184,7 +1184,7 @@ struct TodoSessionRecorderView: View {
                 Circle()
                     .trim(from: 0, to: uploadProgress)
                     .stroke(
-                        AppTheme.primaryGradient,
+                        Color.accentColor,
                         style: StrokeStyle(lineWidth: 12, lineCap: .round)
                     )
                     .frame(width: 120, height: 120)
@@ -1192,12 +1192,12 @@ struct TodoSessionRecorderView: View {
                     .animation(.easeInOut, value: uploadProgress)
 
                 Text("\(Int(uploadProgress * 100))%")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .font(.system(size: 28, weight: .bold))
                     .foregroundColor(.white)
             }
 
             Text("Saving...")
-                .font(AppTheme.headlineFont)
+                .font(.headline)
                 .foregroundColor(.white)
         }
         .padding()

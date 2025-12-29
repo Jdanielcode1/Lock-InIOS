@@ -30,7 +30,7 @@ struct CameraRecorderView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                AppTheme.background.ignoresSafeArea()
+                Color.black.ignoresSafeArea()
 
                 VStack(spacing: 24) {
                     Spacer()
@@ -43,7 +43,7 @@ struct CameraRecorderView: View {
                         ZStack {
                             CameraPreview(session: viewModel.captureSession)
                                 .frame(height: 600)
-                                .cornerRadius(AppTheme.cornerRadius)
+                                .cornerRadius(20)
 
                             // Camera flip button (shown when not recording)
                             if !viewModel.isRecording {
@@ -80,7 +80,7 @@ struct CameraRecorderView: View {
                                                 .opacity(viewModel.recordingPulse ? 1.0 : 0.3)
 
                                             Text("REC")
-                                                .font(AppTheme.headlineFont)
+                                                .font(.headline)
                                                 .foregroundColor(.white)
                                                 .shadow(color: .black, radius: 2)
                                         }
@@ -92,7 +92,7 @@ struct CameraRecorderView: View {
 
                                         // Timer
                                         Text(viewModel.formattedDuration)
-                                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                                            .font(.system(size: 20, weight: .bold))
                                             .foregroundColor(.white)
                                             .padding()
                                             .background(Color.black.opacity(0.5))
@@ -104,7 +104,6 @@ struct CameraRecorderView: View {
                                 }
                             }
                         }
-                        .playfulCard()
                         .padding(.horizontal)
                     }
 
@@ -128,7 +127,7 @@ struct CameraRecorderView: View {
                         viewModel.cancelRecording()
                         dismiss()
                     }
-                    .foregroundColor(AppTheme.actionBlue)
+                    .foregroundColor(Color.accentColor)
                 }
             }
             .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
@@ -162,11 +161,11 @@ struct CameraRecorderView: View {
             } label: {
                 ZStack {
                     Circle()
-                        .stroke(viewModel.isRecording ? Color.red : AppTheme.actionBlue, lineWidth: 6)
+                        .stroke(viewModel.isRecording ? Color.red : Color.accentColor, lineWidth: 6)
                         .frame(width: 100, height: 100)
 
                     Circle()
-                        .fill(viewModel.isRecording ? Color.red : AppTheme.actionBlue)
+                        .fill(viewModel.isRecording ? Color.red : Color.accentColor)
                         .frame(width: 80, height: 80)
 
                     if viewModel.isRecording {
@@ -189,10 +188,10 @@ struct CameraRecorderView: View {
                     .aspectRatio(contentMode: .fill)
                     .frame(height: 600)
                     .clipped()
-                    .cornerRadius(AppTheme.cornerRadius)
+                    .cornerRadius(20)
             } else {
                 // Loading placeholder
-                RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
+                RoundedRectangle(cornerRadius: 20)
                     .fill(Color.black)
                     .frame(height: 600)
                     .overlay(
@@ -200,7 +199,7 @@ struct CameraRecorderView: View {
                             ProgressView()
                                 .tint(.white)
                             Text("Loading preview...")
-                                .font(AppTheme.captionFont)
+                                .font(.caption)
                                 .foregroundColor(.white.opacity(0.8))
                         }
                     )
@@ -212,7 +211,7 @@ struct CameraRecorderView: View {
                 HStack {
                     Spacer()
                     Text(viewModel.formattedDuration)
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -222,7 +221,6 @@ struct CameraRecorderView: View {
                 }
             }
         }
-        .playfulCard()
         .onAppear {
             setupPlayer()
         }
@@ -243,13 +241,13 @@ struct CameraRecorderView: View {
             } label: {
                 ZStack {
                     Circle()
-                        .fill(AppTheme.cardBackground)
+                        .fill(Color(UIColor.secondarySystemGroupedBackground))
                         .frame(width: 70, height: 70)
                         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
 
                     Image(systemName: "arrow.triangle.2.circlepath")
                         .font(.system(size: 30))
-                        .foregroundColor(AppTheme.textSecondary)
+                        .foregroundColor(.secondary)
                 }
             }
 
@@ -264,9 +262,9 @@ struct CameraRecorderView: View {
             } label: {
                 ZStack {
                     Circle()
-                        .fill(AppTheme.primaryGradient)
+                        .fill(Color.accentColor)
                         .frame(width: 70, height: 70)
-                        .shadow(color: AppTheme.actionBlue.opacity(0.3), radius: 8, x: 0, y: 4)
+                        .shadow(color: Color.accentColor.opacity(0.3), radius: 8, x: 0, y: 4)
 
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 30))
@@ -281,27 +279,27 @@ struct CameraRecorderView: View {
             // Progress ring
             ZStack {
                 Circle()
-                    .stroke(AppTheme.borderLight, lineWidth: 12)
+                    .stroke(Color.white.opacity(0.2), lineWidth: 12)
                     .frame(width: 120, height: 120)
 
                 Circle()
                     .trim(from: 0, to: viewModel.uploadProgress)
                     .stroke(
-                        AppTheme.energyGradient,
+                        Color.accentColor,
                         style: StrokeStyle(lineWidth: 12, lineCap: .round)
                     )
                     .frame(width: 120, height: 120)
                     .rotationEffect(.degrees(-90))
-                    .animation(AppTheme.smoothAnimation, value: viewModel.uploadProgress)
+                    .animation(.easeInOut(duration: 0.3), value: viewModel.uploadProgress)
 
                 Text("\(Int(viewModel.uploadProgress * 100))%")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundColor(AppTheme.textPrimary)
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(.white)
             }
 
             Text("Saving...")
-                .font(AppTheme.headlineFont)
-                .foregroundColor(AppTheme.textPrimary)
+                .font(.headline)
+                .foregroundColor(.white)
         }
         .padding()
     }

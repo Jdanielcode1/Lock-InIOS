@@ -13,27 +13,23 @@ struct ArchivedItemsView: View {
     @State private var selectedTab = 0
 
     var body: some View {
-        ZStack {
-            AppTheme.background.ignoresSafeArea()
+        VStack(spacing: 0) {
+            // Segmented control
+            Picker("", selection: $selectedTab) {
+                Text("Goals").tag(0)
+                Text("To-Dos").tag(1)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
 
-            VStack(spacing: 0) {
-                // Segmented control
-                Picker("", selection: $selectedTab) {
-                    Text("Goals").tag(0)
-                    Text("To-Dos").tag(1)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-                .padding(.top, 8)
-                .padding(.bottom, 16)
-
-                if selectedTab == 0 {
-                    archivedGoalsContent
-                } else {
-                    archivedTodosContent
-                }
+            if selectedTab == 0 {
+                archivedGoalsContent
+            } else {
+                archivedTodosContent
             }
         }
+        .background(Color(UIColor.systemGroupedBackground))
         .navigationTitle("Archived")
         .navigationBarTitleDisplayMode(.large)
     }
@@ -48,8 +44,6 @@ struct ArchivedItemsView: View {
                 List {
                     ForEach(viewModel.archivedGoals) { goal in
                         ArchivedGoalRow(goal: goal)
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
                             .swipeActions(edge: .leading) {
                                 Button {
                                     Task {
@@ -58,7 +52,7 @@ struct ArchivedItemsView: View {
                                 } label: {
                                     Label("Restore", systemImage: "arrow.uturn.backward")
                                 }
-                                .tint(AppTheme.actionBlue)
+                                .tint(.accentColor)
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
@@ -71,8 +65,7 @@ struct ArchivedItemsView: View {
                             }
                     }
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
+                .listStyle(.insetGrouped)
             }
         }
     }
@@ -87,8 +80,6 @@ struct ArchivedItemsView: View {
                 List {
                     ForEach(viewModel.archivedTodos) { todo in
                         ArchivedTodoRow(todo: todo)
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
                             .swipeActions(edge: .leading) {
                                 Button {
                                     Task {
@@ -97,7 +88,7 @@ struct ArchivedItemsView: View {
                                 } label: {
                                     Label("Restore", systemImage: "arrow.uturn.backward")
                                 }
-                                .tint(AppTheme.actionBlue)
+                                .tint(.accentColor)
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
@@ -110,27 +101,25 @@ struct ArchivedItemsView: View {
                             }
                     }
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
+                .listStyle(.insetGrouped)
             }
         }
     }
 
     func emptyState(title: String, message: String) -> some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             Spacer()
 
             Image(systemName: "archivebox")
-                .font(.system(size: 50))
-                .foregroundColor(AppTheme.textSecondary.opacity(0.5))
+                .font(.system(size: 48, weight: .light))
+                .foregroundStyle(.secondary)
 
             Text(title)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(AppTheme.textPrimary)
+                .font(.title3.bold())
 
             Text(message)
-                .font(.system(size: 14))
-                .foregroundColor(AppTheme.textSecondary)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
             Spacer()
@@ -148,23 +137,19 @@ struct ArchivedGoalRow: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(goal.title)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(AppTheme.textPrimary)
+                    .font(.subheadline.bold())
 
                 Text("\(Int(goal.completedHours)) of \(Int(goal.targetHours)) hours")
-                    .font(.system(size: 13))
-                    .foregroundColor(AppTheme.textSecondary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Spacer()
 
             Text("\(Int(goal.progressPercentage))%")
-                .font(.system(size: 15, weight: .bold, design: .rounded))
-                .foregroundColor(AppTheme.textSecondary)
+                .font(.subheadline.bold())
+                .foregroundStyle(.secondary)
         }
-        .padding()
-        .background(AppTheme.cardBackground)
-        .cornerRadius(12)
     }
 }
 
@@ -174,19 +159,18 @@ struct ArchivedTodoRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: todo.isCompleted ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 20))
-                .foregroundColor(todo.isCompleted ? AppTheme.successGreen : AppTheme.textSecondary)
+                .font(.title3)
+                .foregroundStyle(todo.isCompleted ? .green : .secondary)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(todo.title)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(AppTheme.textPrimary)
+                    .font(.subheadline)
                     .strikethrough(todo.isCompleted)
 
                 if let description = todo.description, !description.isEmpty {
                     Text(description)
-                        .font(.system(size: 13))
-                        .foregroundColor(AppTheme.textSecondary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
@@ -195,13 +179,10 @@ struct ArchivedTodoRow: View {
 
             if todo.hasVideo {
                 Image(systemName: "video.fill")
-                    .font(.system(size: 14))
-                    .foregroundColor(AppTheme.actionBlue)
+                    .font(.caption)
+                    .foregroundStyle(Color.accentColor)
             }
         }
-        .padding()
-        .background(AppTheme.cardBackground)
-        .cornerRadius(12)
     }
 }
 

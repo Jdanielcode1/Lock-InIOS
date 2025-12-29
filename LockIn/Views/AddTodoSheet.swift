@@ -21,99 +21,78 @@ struct AddTodoSheet: View {
 
     var body: some View {
         NavigationView {
-            ZStack {
-                AppTheme.background.ignoresSafeArea()
+            VStack(spacing: 0) {
+                List {
+                    // Header Section
+                    Section {
+                        VStack(spacing: 12) {
+                            Image(systemName: "checklist")
+                                .font(.system(size: 48, weight: .light))
+                                .foregroundStyle(Color.accentColor)
 
-                VStack(spacing: 0) {
-                    ScrollView {
-                        VStack(spacing: 32) {
-                            // Header
-                            VStack(spacing: 12) {
-                                Image(systemName: "checklist")
-                                    .font(.system(size: 56))
-                                    .foregroundStyle(AppTheme.primaryGradient)
-                                    .padding(.top, 40)
+                            Text("New To-Do")
+                                .font(.title2.bold())
 
-                                Text("New To-Do")
-                                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                                    .foregroundColor(AppTheme.textPrimary)
-
-                                Text("What do you need to do?")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(AppTheme.textSecondary)
-                            }
-
-                            // Text field
-                            TextField("e.g., Complete chapter 5", text: $title)
-                                .font(.system(size: 20, weight: .medium))
-                                .foregroundColor(AppTheme.textPrimary)
-                                .multilineTextAlignment(.center)
-                                .padding()
-                                .padding(.horizontal, 8)
-                                .background(Color.white)
-                                .cornerRadius(16)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .stroke(isTextFieldFocused ? AppTheme.actionBlue : AppTheme.borderLight, lineWidth: isTextFieldFocused ? 2 : 1.5)
-                                )
-                                .shadow(color: isTextFieldFocused ? AppTheme.actionBlue.opacity(0.1) : .clear, radius: 8, x: 0, y: 4)
-                                .padding(.horizontal, 24)
-                                .focused($isTextFieldFocused)
-                                .submitLabel(.done)
-                                .onSubmit {
-                                    if isValid {
-                                        createTodo()
-                                    }
-                                }
+                            Text("What do you need to do?")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                         }
-                        .padding(.bottom, 100)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 20)
+                        .listRowBackground(Color.clear)
                     }
 
-                    Spacer()
-
-                    // Sticky create button
-                    VStack(spacing: 0) {
-                        Divider()
-
-                        Button {
-                            createTodo()
-                        } label: {
-                            HStack(spacing: 10) {
-                                if isCreating {
-                                    ProgressView()
-                                        .tint(.white)
-                                } else {
-                                    Image(systemName: "plus.circle.fill")
-                                        .font(.system(size: 18, weight: .semibold))
-                                    Text("Add To-Do")
-                                        .font(.system(size: 17, weight: .semibold))
+                    // Input Section
+                    Section {
+                        TextField("e.g., Complete chapter 5", text: $title)
+                            .font(.body)
+                            .focused($isTextFieldFocused)
+                            .submitLabel(.done)
+                            .onSubmit {
+                                if isValid {
+                                    createTodo()
                                 }
                             }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .foregroundColor(.white)
-                            .background(
-                                isValid && !isCreating
-                                    ? AnyShapeStyle(AppTheme.primaryGradient)
-                                    : AnyShapeStyle(Color.gray.opacity(0.3))
-                            )
-                            .cornerRadius(16)
-                            .shadow(color: isValid ? AppTheme.actionBlue.opacity(0.3) : .clear, radius: 8, x: 0, y: 4)
-                        }
-                        .disabled(!isValid || isCreating)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .background(AppTheme.background)
                     }
                 }
+                .listStyle(.insetGrouped)
+
+                // Add button
+                VStack(spacing: 0) {
+                    Divider()
+
+                    Button {
+                        createTodo()
+                    } label: {
+                        HStack(spacing: 8) {
+                            if isCreating {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Image(systemName: "plus.circle.fill")
+                                Text("Add To-Do")
+                            }
+                        }
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(isValid && !isCreating ? Color.accentColor : Color(UIColor.systemGray4))
+                        .foregroundStyle(.white)
+                        .cornerRadius(12)
+                    }
+                    .disabled(!isValid || isCreating)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(Color(UIColor.systemGroupedBackground))
+                }
             }
+            .background(Color(UIColor.systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
                         dismiss()
                     }
-                    .foregroundColor(AppTheme.actionBlue)
                 }
             }
         }

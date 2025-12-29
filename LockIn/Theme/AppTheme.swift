@@ -26,22 +26,22 @@ struct AppTheme {
     // Urgent Red - overdue, high priority (use sparingly)
     static let urgentRed = Color(red: 0.90, green: 0.35, blue: 0.35)       // #E65959
 
-    // MARK: - Neutral Colors
+    // MARK: - Adaptive Colors (Light/Dark Mode)
 
-    // Backgrounds
-    static let background = Color(red: 0.98, green: 0.98, blue: 0.98)      // #FAFAFA - clean white
-    static let cardBackground = Color.white
+    // Backgrounds - use system colors for automatic light/dark adaptation
+    static let background = Color(UIColor.systemBackground)
+    static let cardBackground = Color(UIColor.secondarySystemGroupedBackground)
 
-    // Text
-    static let textPrimary = Color(red: 0.13, green: 0.13, blue: 0.14)     // #212123 - near black
-    static let textSecondary = Color(red: 0.55, green: 0.55, blue: 0.58)   // #8C8C94 - medium gray
+    // Text - use system label colors for automatic adaptation
+    static let textPrimary = Color(UIColor.label)
+    static let textSecondary = Color(UIColor.secondaryLabel)
 
-    // Borders & Dividers
-    static let borderLight = Color(red: 0.91, green: 0.91, blue: 0.92)     // #E8E8EB
-    static let borderMedium = Color(red: 0.82, green: 0.82, blue: 0.84)    // #D1D1D6
+    // Borders & Dividers - use system separators
+    static let borderLight = Color(UIColor.separator)
+    static let borderMedium = Color(UIColor.opaqueSeparator)
 
-    // Tab Bar
-    static let tabBarBackground = Color(red: 0.12, green: 0.12, blue: 0.14) // #1F1F23
+    // Tab Bar - adaptive dark surface
+    static let tabBarBackground = Color(UIColor.secondarySystemBackground)
 
     // MARK: - Legacy Aliases (for compatibility)
 
@@ -83,12 +83,24 @@ struct AppTheme {
         endPoint: .bottom
     )
 
-    // MARK: - Typography
+    // MARK: - Typography (Apple SF Pro - system default)
 
-    static let titleFont = Font.system(size: 28, weight: .bold, design: .rounded)
-    static let headlineFont = Font.system(size: 20, weight: .semibold, design: .rounded)
-    static let bodyFont = Font.system(size: 16, weight: .regular, design: .rounded)
-    static let captionFont = Font.system(size: 14, weight: .medium, design: .rounded)
+    static let titleFont = Font.largeTitle.bold()
+    static let headlineFont = Font.headline
+    static let subheadlineFont = Font.subheadline
+    static let bodyFont = Font.body
+    static let captionFont = Font.caption
+
+    // MARK: - Apple System Semantic Colors
+
+    static let systemBackground = Color(UIColor.systemBackground)
+    static let secondarySystemBackground = Color(UIColor.secondarySystemGroupedBackground)
+    static let groupedBackground = Color(UIColor.systemGroupedBackground)
+    static let labelColor = Color(UIColor.label)
+    static let secondaryLabelColor = Color(UIColor.secondaryLabel)
+    static let tertiaryLabelColor = Color(UIColor.tertiaryLabel)
+    static let systemGray5 = Color(UIColor.systemGray5)
+    static let systemGray6 = Color(UIColor.systemGray6)
 
     // MARK: - Spacing
 
@@ -99,7 +111,7 @@ struct AppTheme {
 
     // MARK: - Shadows
 
-    static let cardShadow = Color.black.opacity(0.06)
+    static let cardShadow = Color(UIColor.label).opacity(0.06)
 
     // MARK: - Animations
 
@@ -119,19 +131,31 @@ extension View {
 
     func primaryButton() -> some View {
         self
-            .padding()
-            .background(AppTheme.actionBlue)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(Color.accentColor)
             .foregroundColor(.white)
-            .cornerRadius(AppTheme.smallCornerRadius)
-            .shadow(color: AppTheme.actionBlue.opacity(0.3), radius: 6, x: 0, y: 3)
+            .cornerRadius(10)
     }
 
     func secondaryButton() -> some View {
         self
-            .padding()
-            .background(AppTheme.actionBlueLight.opacity(0.15))
-            .foregroundColor(AppTheme.actionBlue)
-            .cornerRadius(AppTheme.smallCornerRadius)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(Color.accentColor.opacity(0.12))
+            .foregroundColor(.accentColor)
+            .cornerRadius(10)
+    }
+
+    // Apple-native filled button style
+    func appleFilledButton() -> some View {
+        self
+            .font(.headline)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(Color.accentColor)
+            .foregroundColor(.white)
+            .cornerRadius(12)
     }
 }
 

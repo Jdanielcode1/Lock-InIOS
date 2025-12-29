@@ -24,22 +24,22 @@ struct VideoRecorderView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                AppTheme.background.ignoresSafeArea()
+                Color(UIColor.systemBackground).ignoresSafeArea()
 
                 VStack(spacing: 24) {
                     // Header
                     VStack(spacing: 12) {
                         Image(systemName: "video.circle.fill")
                             .font(.system(size: 80))
-                            .foregroundStyle(AppTheme.energyGradient)
+                            .foregroundStyle(Color.accentColor)
 
                         Text("Add Study Session")
-                            .font(AppTheme.titleFont)
-                            .foregroundColor(AppTheme.textPrimary)
+                            .font(.title.bold())
+                            .foregroundColor(.primary)
 
                         Text("Select a time-lapse video of your study session")
-                            .font(AppTheme.bodyFont)
-                            .foregroundColor(AppTheme.textSecondary)
+                            .font(.body)
+                            .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
                     }
@@ -72,10 +72,13 @@ struct VideoRecorderView: View {
                                 Image(systemName: "checkmark.circle.fill")
                                 Text("Save & Add to Goal")
                             }
-                            .font(AppTheme.headlineFont)
+                            .font(.headline)
                             .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.accentColor)
+                            .foregroundStyle(.white)
+                            .cornerRadius(12)
                         }
-                        .primaryButton()
                         .padding(.horizontal)
                     }
                 }
@@ -87,7 +90,7 @@ struct VideoRecorderView: View {
                     Button("Cancel") {
                         dismiss()
                     }
-                    .foregroundColor(AppTheme.actionBlue)
+                    .foregroundColor(Color.accentColor)
                 }
             }
             .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
@@ -110,19 +113,20 @@ struct VideoRecorderView: View {
                 VStack(spacing: 16) {
                     Image(systemName: "photo.on.rectangle.angled")
                         .font(.system(size: 60))
-                        .foregroundStyle(AppTheme.primaryGradient)
+                        .foregroundStyle(Color.accentColor)
 
                     Text("Select Video")
-                        .font(AppTheme.headlineFont)
-                        .foregroundColor(AppTheme.textPrimary)
+                        .font(.headline)
+                        .foregroundColor(.primary)
 
                     Text("Choose a time-lapse video from your library")
-                        .font(AppTheme.bodyFont)
-                        .foregroundColor(AppTheme.textSecondary)
+                        .font(.body)
+                        .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                 }
                 .padding(40)
-                .playfulCard()
+                .background(Color(UIColor.secondarySystemGroupedBackground))
+                .cornerRadius(16)
             }
         }
         .sheet(isPresented: $viewModel.showingVideoPicker) {
@@ -133,8 +137,8 @@ struct VideoRecorderView: View {
     func selectedVideoView(url: URL) -> some View {
         VStack(spacing: 16) {
             ZStack {
-                RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
-                    .fill(AppTheme.primaryGradient)
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Color.accentColor)
                     .frame(height: 200)
 
                 VStack(spacing: 12) {
@@ -143,17 +147,17 @@ struct VideoRecorderView: View {
                         .foregroundColor(.white)
 
                     Text("Video Selected")
-                        .font(AppTheme.headlineFont)
+                        .font(.headline)
                         .foregroundColor(.white)
 
                     if let duration = viewModel.estimatedDuration {
                         Text("Duration: \(Int(duration)) minutes")
-                            .font(AppTheme.bodyFont)
+                            .font(.body)
                             .foregroundColor(.white.opacity(0.9))
                     }
                 }
             }
-            .playfulCard()
+            .cornerRadius(16)
 
             Button {
                 viewModel.selectedVideoURL = nil
@@ -162,9 +166,9 @@ struct VideoRecorderView: View {
                     Image(systemName: "arrow.triangle.2.circlepath")
                     Text("Choose Different Video")
                 }
-                .font(AppTheme.bodyFont)
+                .font(.body)
+                .foregroundStyle(Color.accentColor)
             }
-            .secondaryButton()
         }
         .task {
             await viewModel.calculateVideoDuration()
@@ -176,40 +180,41 @@ struct VideoRecorderView: View {
             // Progress ring
             ZStack {
                 Circle()
-                    .stroke(AppTheme.borderLight, lineWidth: 12)
+                    .stroke(Color(UIColor.separator), lineWidth: 12)
                     .frame(width: 150, height: 150)
 
                 Circle()
                     .trim(from: 0, to: viewModel.uploadProgress)
                     .stroke(
-                        AppTheme.energyGradient,
+                        Color.accentColor,
                         style: StrokeStyle(lineWidth: 12, lineCap: .round)
                     )
                     .frame(width: 150, height: 150)
                     .rotationEffect(.degrees(-90))
-                    .animation(AppTheme.smoothAnimation, value: viewModel.uploadProgress)
+                    .animation(.easeInOut(duration: 0.3), value: viewModel.uploadProgress)
 
                 VStack(spacing: 4) {
                     Text("\(Int(viewModel.uploadProgress * 100))%")
-                        .font(.system(size: 36, weight: .bold, design: .rounded))
-                        .foregroundColor(AppTheme.textPrimary)
+                        .font(.system(size: 36, weight: .bold))
+                        .foregroundColor(.primary)
 
                     Text(viewModel.uploadStatusText)
-                        .font(AppTheme.captionFont)
-                        .foregroundColor(AppTheme.textSecondary)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
 
             Text("Saving your study session...")
-                .font(AppTheme.headlineFont)
-                .foregroundColor(AppTheme.textPrimary)
+                .font(.headline)
+                .foregroundColor(.primary)
 
             Text("This may take a moment")
-                .font(AppTheme.bodyFont)
-                .foregroundColor(AppTheme.textSecondary)
+                .font(.body)
+                .foregroundColor(.secondary)
         }
         .padding()
-        .playfulCard()
+        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .cornerRadius(16)
     }
 }
 

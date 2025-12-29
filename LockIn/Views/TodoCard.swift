@@ -15,79 +15,46 @@ struct TodoCard: View {
     @State private var thumbnail: UIImage?
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             // Checkbox
             Button(action: onToggle) {
                 Image(systemName: todo.isCompleted ? "checkmark.circle.fill" : "circle")
                     .font(.title2)
-                    .foregroundColor(todo.isCompleted ? AppTheme.successGreen : AppTheme.textSecondary)
+                    .foregroundStyle(todo.isCompleted ? .green : .secondary)
             }
+            .buttonStyle(.plain)
 
             // Content
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(todo.title)
-                    .font(AppTheme.headlineFont)
-                    .foregroundColor(todo.isCompleted ? AppTheme.textSecondary : AppTheme.textPrimary)
+                    .font(.body)
+                    .foregroundStyle(todo.isCompleted ? .secondary : .primary)
                     .strikethrough(todo.isCompleted)
                     .lineLimit(2)
 
                 if let description = todo.description, !description.isEmpty {
                     Text(description)
-                        .font(AppTheme.captionFont)
-                        .foregroundColor(AppTheme.textSecondary)
-                        .lineLimit(2)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
 
-                // Video thumbnail if attached
+                // Video indicator
                 if todo.hasVideo {
-                    HStack(spacing: 8) {
-                        if let thumbnail = thumbnail {
-                            Image(uiImage: thumbnail)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 60, height: 40)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
-                                .overlay(
-                                    Image(systemName: "play.circle.fill")
-                                        .font(.caption)
-                                        .foregroundColor(.white)
-                                        .shadow(radius: 2)
-                                )
-                        } else {
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(AppTheme.actionBlue.opacity(0.2))
-                                .frame(width: 60, height: 40)
-                                .overlay(
-                                    Image(systemName: "video.fill")
-                                        .font(.caption)
-                                        .foregroundColor(AppTheme.actionBlue)
-                                )
-                        }
-
-                        Text("Video attached")
-                            .font(.caption2)
-                            .foregroundColor(AppTheme.actionBlue)
-                    }
-                    .padding(.top, 4)
+                    Label("Video attached", systemImage: "video.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 
             Spacer()
 
             // Arrow to record/view
-            if !todo.hasVideo {
+            if !todo.hasVideo && !todo.isCompleted {
                 Image(systemName: "video.badge.plus")
-                    .font(.title3)
-                    .foregroundColor(AppTheme.actionBlue.opacity(0.6))
+                    .foregroundStyle(.tertiary)
             }
         }
-        .padding()
-        .background(todo.isCompleted ? AppTheme.successGreen.opacity(0.05) : AppTheme.cardBackground)
-        .cornerRadius(AppTheme.cornerRadius)
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
-                .stroke(todo.isCompleted ? AppTheme.successGreen.opacity(0.2) : AppTheme.borderLight, lineWidth: 1)
-        )
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
         .onAppear {

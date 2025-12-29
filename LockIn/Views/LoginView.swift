@@ -12,8 +12,8 @@ struct LoginView: View {
 
     var body: some View {
         ZStack {
-            // Background
-            AppTheme.background
+            // Background - adaptive for light/dark mode
+            Color(UIColor.systemBackground)
                 .ignoresSafeArea()
 
             VStack(spacing: 40) {
@@ -21,18 +21,18 @@ struct LoginView: View {
 
                 // App Icon/Logo
                 Image(systemName: "lock.fill")
-                    .font(.system(size: 80))
-                    .foregroundStyle(AppTheme.primaryGradient)
+                    .font(.system(size: 80, weight: .light))
+                    .foregroundStyle(Color.accentColor)
 
                 // App Title
                 VStack(spacing: 8) {
                     Text("Lock In")
-                        .font(.system(size: 40, weight: .bold))
-                        .foregroundColor(AppTheme.textPrimary)
+                        .font(.largeTitle.bold())
+                        .foregroundStyle(.primary)
 
                     Text("Track your goals with video proof")
-                        .font(.system(size: 16))
-                        .foregroundColor(AppTheme.textSecondary)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
 
                 Spacer()
@@ -43,20 +43,20 @@ struct LoginView: View {
                         Image(systemName: "person.fill")
                             .font(.system(size: 20))
                         Text("Sign In")
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(.headline)
                     }
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 56)
-                    .background(AppTheme.primaryGradient)
-                    .cornerRadius(16)
+                    .background(Color.accentColor)
+                    .cornerRadius(14)
                 }
                 .padding(.horizontal, 24)
 
                 // Footer
                 Text("Secure authentication powered by Auth0")
-                    .font(.system(size: 12))
-                    .foregroundColor(AppTheme.textSecondary)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
                     .padding(.bottom, 40)
             }
         }

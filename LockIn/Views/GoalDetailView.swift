@@ -63,54 +63,51 @@ struct GoalDetailView: View {
     }
 
     var body: some View {
-        ZStack {
-            AppTheme.background.ignoresSafeArea()
+        ScrollView {
+            VStack(spacing: 20) {
+                // Motivational Header
+                motivationalHeader
+                    .frame(maxWidth: sizing.maxContentWidth)
 
-            ScrollView {
-                VStack(spacing: sizing.sectionSpacing) {
-                    // Motivational Header
-                    motivationalHeader
+                // Primary CTA - Start Session
+                if !goal.isCompleted {
+                    startSessionButton
                         .frame(maxWidth: sizing.maxContentWidth)
+                }
 
-                    // Primary CTA - Start Session
-                    if !goal.isCompleted {
-                        startSessionButton
-                            .frame(maxWidth: sizing.maxContentWidth)
+                // iPad: Side-by-side layout for subtasks and sessions
+                if sizing.isIPad {
+                    HStack(alignment: .top, spacing: sizing.cardSpacing) {
+                        // Subtasks column
+                        VStack(alignment: .leading, spacing: 12) {
+                            subtasksSection
+                        }
+                        .frame(maxWidth: .infinity)
+
+                        // Sessions column
+                        VStack(alignment: .leading, spacing: 12) {
+                            sessionsSection
+                        }
+                        .frame(maxWidth: .infinity)
                     }
+                    .frame(maxWidth: sizing.maxContentWidth)
+                    .padding(.horizontal, sizing.horizontalPadding)
+                } else {
+                    // iPhone: Vertical stack
+                    subtasksSection
+                    sessionsSection
 
-                    // iPad: Side-by-side layout for subtasks and sessions
-                    if sizing.isIPad {
-                        HStack(alignment: .top, spacing: sizing.cardSpacing) {
-                            // Subtasks column
-                            VStack(alignment: .leading, spacing: 12) {
-                                subtasksSection
-                            }
-                            .frame(maxWidth: .infinity)
-
-                            // Sessions column
-                            VStack(alignment: .leading, spacing: 12) {
-                                sessionsSection
-                            }
-                            .frame(maxWidth: .infinity)
-                        }
-                        .frame(maxWidth: sizing.maxContentWidth)
-                        .padding(.horizontal, sizing.horizontalPadding)
-                    } else {
-                        // iPhone: Vertical stack
-                        subtasksSection
-                        sessionsSection
-
-                        // Add subtask button if empty
-                        if viewModel.subtasks.isEmpty {
-                            addSubtaskButton
-                        }
+                    // Add subtask button if empty
+                    if viewModel.subtasks.isEmpty {
+                        addSubtaskButton
                     }
                 }
-                .padding(.vertical)
-                .padding(.bottom, 40)
-                .frame(maxWidth: .infinity)
             }
+            .padding(.vertical)
+            .padding(.bottom, 40)
+            .frame(maxWidth: .infinity)
         }
+        .background(Color(UIColor.systemGroupedBackground))
         .navigationTitle(goal.title)
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -149,8 +146,6 @@ struct GoalDetailView: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
-                        .font(.system(size: 20))
-                        .foregroundColor(AppTheme.actionBlue)
                 }
             }
         }
@@ -177,55 +172,41 @@ struct GoalDetailView: View {
 
     // MARK: - Motivational Header
     private var motivationalHeader: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             // Icon and message
-            VStack(spacing: 12) {
+            VStack(spacing: 8) {
                 Image(systemName: motivationalIcon)
-                    .font(.system(size: 44))
-                    .foregroundStyle(goal.isCompleted ? AnyShapeStyle(AppTheme.successGreen) : AnyShapeStyle(AppTheme.primaryGradient))
+                    .font(.system(size: 40, weight: .light))
+                    .foregroundStyle(goal.isCompleted ? .green : .accentColor)
 
                 Text(motivationalMessage)
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
-                    .foregroundColor(AppTheme.textPrimary)
+                    .font(.title3.bold())
             }
-            .padding(.top, 8)
+            .padding(.top, 4)
 
             // Progress section
-            VStack(spacing: 12) {
+            VStack(spacing: 8) {
                 // Hours text
                 HStack {
                     Text("\(Int(goal.completedHours)) of \(Int(goal.targetHours)) hours")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(AppTheme.textSecondary)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
 
                     Spacer()
 
                     Text("\(Int(goal.progressPercentage))%")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundColor(goal.progressPercentage > 0 ? AppTheme.actionBlue : AppTheme.textSecondary)
+                        .font(.headline)
+                        .foregroundStyle(goal.progressPercentage > 0 ? .primary : .secondary)
                 }
 
-                // Progress bar
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(AppTheme.borderLight)
-                            .frame(height: 12)
-
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(AppTheme.progressGradient(for: goal.progressPercentage))
-                            .frame(width: max(0, geo.size.width * min(goal.progressPercentage / 100, 1.0)), height: 12)
-                            .animation(AppTheme.smoothAnimation, value: goal.progressPercentage)
-                    }
-                }
-                .frame(height: 12)
+                // Native progress bar
+                ProgressView(value: goal.progressPercentage, total: 100)
+                    .tint(goal.isCompleted ? .green : .accentColor)
             }
-            .padding(.horizontal, 4)
         }
-        .padding(20)
-        .background(AppTheme.cardBackground)
-        .cornerRadius(20)
-        .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 4)
+        .padding(16)
+        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .cornerRadius(12)
         .padding(.horizontal, sizing.horizontalPadding)
     }
 
@@ -234,18 +215,11 @@ struct GoalDetailView: View {
         Button {
             showingTimeLapseRecorder = true
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 Image(systemName: "play.fill")
-                    .font(.system(size: 18, weight: .semibold))
                 Text("Start Session")
-                    .font(.system(size: 18, weight: .semibold))
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 60)
-            .foregroundColor(.white)
-            .background(AppTheme.primaryGradient)
-            .cornerRadius(16)
-            .shadow(color: AppTheme.actionBlue.opacity(0.4), radius: 12, x: 0, y: 6)
+            .appleFilledButton()
         }
         .padding(.horizontal, sizing.horizontalPadding)
     }
@@ -257,8 +231,7 @@ struct GoalDetailView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text("Subtasks")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(AppTheme.textPrimary)
+                        .font(.headline)
 
                     Spacer()
 
@@ -266,8 +239,8 @@ struct GoalDetailView: View {
                         showingAddSubtask = true
                     } label: {
                         Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundStyle(AppTheme.primaryGradient)
+                            .font(.title2)
+                            .foregroundStyle(Color.accentColor)
                     }
                 }
                 .padding(.horizontal, sizing.isIPad ? 0 : 16)
@@ -276,35 +249,41 @@ struct GoalDetailView: View {
                     // Empty state for iPad
                     VStack(spacing: 12) {
                         Image(systemName: "checklist")
-                            .font(.system(size: 32))
-                            .foregroundStyle(AppTheme.primaryGradient)
+                            .font(.system(size: 32, weight: .light))
+                            .foregroundStyle(.secondary)
                         Text("No subtasks yet")
-                            .font(AppTheme.bodyFont)
-                            .foregroundColor(AppTheme.textSecondary)
-                        Button {
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Button("Add Subtask") {
                             showingAddSubtask = true
-                        } label: {
-                            Text("Add Subtask")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(AppTheme.actionBlue)
                         }
+                        .font(.subheadline)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 24)
-                    .background(AppTheme.cardBackground)
-                    .cornerRadius(16)
+                    .background(Color(UIColor.secondarySystemGroupedBackground))
+                    .cornerRadius(12)
                     .padding(.horizontal, sizing.isIPad ? 0 : 16)
                 } else {
-                    ForEach(viewModel.subtasks) { subtask in
-                        Button {
-                            selectedSubtask = subtask
-                            showingTimeLapseRecorder = true
-                        } label: {
-                            SubtaskCard(subtask: subtask)
+                    VStack(spacing: 0) {
+                        ForEach(Array(viewModel.subtasks.enumerated()), id: \.element.id) { index, subtask in
+                            Button {
+                                selectedSubtask = subtask
+                                showingTimeLapseRecorder = true
+                            } label: {
+                                SubtaskCard(subtask: subtask)
+                            }
+                            .buttonStyle(.plain)
+
+                            if index < viewModel.subtasks.count - 1 {
+                                Divider()
+                                    .padding(.leading, 16)
+                            }
                         }
-                        .buttonStyle(PlainButtonStyle())
-                        .padding(.horizontal, sizing.isIPad ? 0 : 16)
                     }
+                    .background(Color(UIColor.secondarySystemGroupedBackground))
+                    .cornerRadius(12)
+                    .padding(.horizontal, sizing.isIPad ? 0 : 16)
                 }
             }
         }
@@ -315,52 +294,60 @@ struct GoalDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Recent Sessions")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(AppTheme.textPrimary)
+                    .font(.headline)
 
                 Spacer()
 
                 if !viewModel.studySessions.isEmpty {
                     Text("\(viewModel.studySessions.count)")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 10)
+                        .font(.caption.bold())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(AppTheme.actionBlue)
-                        .cornerRadius(10)
+                        .background(Color.accentColor)
+                        .cornerRadius(8)
                 }
             }
             .padding(.horizontal, sizing.isIPad ? 0 : 16)
 
             if viewModel.studySessions.isEmpty {
                 // Friendly empty state
-                VStack(spacing: 16) {
+                VStack(spacing: 12) {
                     Image(systemName: "video.badge.plus")
-                        .font(.system(size: 40))
-                        .foregroundStyle(AppTheme.primaryGradient)
+                        .font(.system(size: 36, weight: .light))
+                        .foregroundStyle(.secondary)
 
-                    VStack(spacing: 6) {
+                    VStack(spacing: 4) {
                         Text("No sessions yet")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(AppTheme.textPrimary)
+                            .font(.subheadline.bold())
 
                         Text("Start your first study session\nand it will appear here!")
-                            .font(.system(size: 14))
-                            .foregroundColor(AppTheme.textSecondary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 32)
-                .background(AppTheme.cardBackground)
-                .cornerRadius(16)
+                .padding(.vertical, 24)
+                .background(Color(UIColor.secondarySystemGroupedBackground))
+                .cornerRadius(12)
                 .padding(.horizontal, sizing.isIPad ? 0 : 16)
             } else {
-                ForEach(viewModel.studySessions) { session in
-                    NavigationLink(destination: VideoPlayerView(session: session)) {
-                        StudySessionCard(session: session, subtasks: viewModel.subtasks, isIPad: sizing.isIPad)
+                VStack(spacing: 0) {
+                    ForEach(Array(viewModel.studySessions.enumerated()), id: \.element.id) { index, session in
+                        NavigationLink(destination: VideoPlayerView(session: session)) {
+                            StudySessionCard(session: session, subtasks: viewModel.subtasks, isIPad: sizing.isIPad)
+                        }
+
+                        if index < viewModel.studySessions.count - 1 {
+                            Divider()
+                                .padding(.leading, 96)
+                        }
                     }
                 }
+                .background(Color(UIColor.secondarySystemGroupedBackground))
+                .cornerRadius(12)
+                .padding(.horizontal, sizing.isIPad ? 0 : 16)
             }
         }
     }
@@ -370,17 +357,16 @@ struct GoalDetailView: View {
         Button {
             showingAddSubtask = true
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Image(systemName: "plus.circle")
-                    .font(.system(size: 16))
                 Text("Add subtasks to break down your goal")
-                    .font(.system(size: 14, weight: .medium))
             }
-            .foregroundColor(AppTheme.actionBlue)
+            .font(.subheadline)
+            .foregroundStyle(Color.accentColor)
             .padding()
             .frame(maxWidth: .infinity)
-            .background(AppTheme.actionBlue.opacity(0.1))
-            .cornerRadius(12)
+            .background(Color.accentColor.opacity(0.1))
+            .cornerRadius(10)
         }
         .padding(.horizontal)
     }
@@ -399,11 +385,11 @@ struct StudySessionCard: View {
     }
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             // Video thumbnail
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(AppTheme.primaryGradient)
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(UIColor.systemGray5))
                     .frame(width: 80, height: 60)
 
                 if let thumbnail = thumbnail {
@@ -411,14 +397,14 @@ struct StudySessionCard: View {
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 80, height: 60)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
 
                 // Play button overlay
                 Image(systemName: "play.circle.fill")
                     .font(.title2)
-                    .foregroundColor(.white)
-                    .shadow(color: .black.opacity(0.5), radius: 4)
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.3), radius: 2)
             }
             .onAppear {
                 Task {
@@ -427,43 +413,35 @@ struct StudySessionCard: View {
             }
 
             // Session info
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(session.formattedDuration)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(AppTheme.textPrimary)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.primary)
 
                 // Show subtask name if available
                 if let subtaskName = subtaskName {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checklist")
-                            .font(.caption)
-                        Text(subtaskName)
-                            .font(.system(size: 12))
-                    }
-                    .foregroundColor(AppTheme.actionBlue)
+                    Label(subtaskName, systemImage: "checklist")
+                        .font(.caption)
+                        .foregroundStyle(Color.accentColor)
                 }
 
                 Text(session.createdDate, style: .date)
-                    .font(.system(size: 12))
-                    .foregroundColor(AppTheme.textSecondary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Spacer()
 
             // Duration badge
             Text(String(format: "%.1fh", session.durationHours))
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(AppTheme.primaryGradient)
-                .cornerRadius(10)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
         .padding(12)
-        .background(AppTheme.cardBackground)
-        .cornerRadius(14)
-        .shadow(color: .black.opacity(0.04), radius: 6, x: 0, y: 2)
-        .padding(.horizontal, isIPad ? 0 : 16)
     }
 
     private func loadThumbnail() async {

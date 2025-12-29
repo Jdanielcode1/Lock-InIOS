@@ -195,7 +195,7 @@ struct TodoRecorderView: View {
                     .symbolEffect(.pulse, options: .repeating)
 
                 Text("Time's Up!")
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .font(.system(size: 32, weight: .bold))
                     .foregroundColor(.white)
 
                 Text("Your countdown has finished")
@@ -236,7 +236,7 @@ struct TodoRecorderView: View {
                     .trim(from: 0, to: 0.7)
                     .stroke(
                         AngularGradient(
-                            colors: [AppTheme.actionBlue, AppTheme.actionBlue.opacity(0.3)],
+                            colors: [Color.accentColor, Color.accentColor.opacity(0.3)],
                             center: .center
                         ),
                         style: StrokeStyle(lineWidth: 8, lineCap: .round)
@@ -252,7 +252,7 @@ struct TodoRecorderView: View {
 
             VStack(spacing: 12) {
                 Text("Creating Video")
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .font(.system(size: 24, weight: .bold))
                     .foregroundColor(.white)
 
                 Text("Compiling \(recorder.frameCount) frames...")
@@ -358,7 +358,7 @@ struct TodoRecorderView: View {
 
             VStack(spacing: 20) {
                 Text("\(voiceoverCountdownNumber)")
-                    .font(.system(size: 120, weight: .bold, design: .rounded))
+                    .font(.system(size: 120, weight: .bold))
                     .foregroundColor(.white)
 
                 Text("Get ready to narrate...")
@@ -584,7 +584,7 @@ struct TodoRecorderView: View {
                         }
 
                         Text(timerDisplayText)
-                            .font(.system(size: 17, weight: .bold, design: .rounded))
+                            .font(.system(size: 17, weight: .bold))
                             .foregroundColor(isOvertime ? .red : .white)
 
                         if recorder.isPaused {
@@ -691,7 +691,7 @@ struct TodoRecorderView: View {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 24))
-                        .foregroundColor(AppTheme.successGreen)
+                        .foregroundColor(.green)
 
                     Text(todo.title)
                         .font(.system(size: 18, weight: .semibold))
@@ -766,7 +766,7 @@ struct TodoRecorderView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: 56)
-                            .background(AppTheme.successGreen)
+                            .background(.green)
                             .cornerRadius(16)
                         }
                     }
@@ -915,10 +915,10 @@ struct TodoRecorderView: View {
                         Text(countdownEnabled && countdownDuration > 0 ? formattedCountdownSetting : "Set Timer")
                             .font(.system(size: 14, weight: .semibold))
                     }
-                    .foregroundColor(countdownEnabled ? AppTheme.actionBlue : .white)
+                    .foregroundColor(countdownEnabled ? Color.accentColor : .white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(countdownEnabled ? AppTheme.actionBlue.opacity(0.2) : Color.black.opacity(0.5))
+                    .background(countdownEnabled ? Color.accentColor.opacity(0.2) : Color.black.opacity(0.5))
                     .cornerRadius(20)
                 }
 
@@ -1034,7 +1034,7 @@ struct TodoRecorderView: View {
                 Circle()
                     .trim(from: 0, to: uploadProgress)
                     .stroke(
-                        AppTheme.successGreen,
+                        .green,
                         style: StrokeStyle(lineWidth: 12, lineCap: .round)
                     )
                     .frame(width: 120, height: 120)
@@ -1042,12 +1042,12 @@ struct TodoRecorderView: View {
                     .animation(.easeInOut, value: uploadProgress)
 
                 Text("\(Int(uploadProgress * 100))%")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .font(.system(size: 28, weight: .bold))
                     .foregroundColor(.white)
             }
 
             Text("Saving...")
-                .font(AppTheme.headlineFont)
+                .font(.headline)
                 .foregroundColor(.white)
         }
         .padding()

@@ -152,8 +152,8 @@ struct TodoVideoPlayerView: View {
                 // Todo title
                 VStack(alignment: .trailing, spacing: 4) {
                     Text(todo.title)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
                         .lineLimit(1)
 
                     if todo.isCompleted {
@@ -162,7 +162,7 @@ struct TodoVideoPlayerView: View {
                             Text("Completed")
                         }
                         .font(.caption)
-                        .foregroundColor(AppTheme.successGreen)
+                        .foregroundStyle(.green)
                     }
                 }
                 .padding(.horizontal, 12)
@@ -287,12 +287,12 @@ struct TodoVideoPlayerView: View {
 
             VStack(spacing: 20) {
                 Text("\(voiceoverCountdownNumber)")
-                    .font(.system(size: 120, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .font(.system(size: 120, weight: .bold))
+                    .foregroundStyle(.white)
 
                 Text("Get ready to narrate...")
-                    .font(.system(size: 18))
-                    .foregroundColor(.white.opacity(0.7))
+                    .font(.body)
+                    .foregroundStyle(.white.opacity(0.7))
             }
         }
     }

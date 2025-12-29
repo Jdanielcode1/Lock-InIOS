@@ -22,17 +22,17 @@ struct TodoSelectionSheet: View {
             // Header
             VStack(spacing: 12) {
                 Image(systemName: "checklist")
-                    .font(.system(size: 44))
-                    .foregroundStyle(AppTheme.primaryGradient)
+                    .font(.system(size: 48, weight: .light))
+                    .foregroundStyle(Color.accentColor)
                     .padding(.top, 24)
 
                 Text("Select Tasks")
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .foregroundColor(AppTheme.textPrimary)
+                    .font(.title2.bold())
+                    .foregroundStyle(.primary)
 
                 Text("What do you want to work on?")
-                    .font(.system(size: 15))
-                    .foregroundColor(AppTheme.textSecondary)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
             .padding(.bottom, 20)
 
@@ -40,17 +40,17 @@ struct TodoSelectionSheet: View {
             if todoViewModel.isLoading {
                 Spacer()
                 ProgressView()
-                    .tint(AppTheme.actionBlue)
+                    .tint(.accentColor)
                 Spacer()
             } else if incompleteTodos.isEmpty {
                 Spacer()
                 VStack(spacing: 12) {
                     Image(systemName: "tray")
-                        .font(.system(size: 40))
-                        .foregroundColor(AppTheme.textSecondary)
+                        .font(.system(size: 40, weight: .light))
+                        .foregroundStyle(.secondary)
                     Text("No pending todos")
-                        .font(AppTheme.bodyFont)
-                        .foregroundColor(AppTheme.textSecondary)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
             } else {
@@ -82,14 +82,13 @@ struct TodoSelectionSheet: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "video.fill")
-                            .font(.system(size: 16, weight: .semibold))
                         Text(selectedTodoIds.isEmpty ? "Start Without Tasks" : "Start Recording")
-                            .font(.system(size: 17, weight: .semibold))
                     }
+                    .font(.headline)
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
-                    .foregroundColor(.white)
-                    .background(AppTheme.primaryGradient)
+                    .foregroundStyle(.white)
+                    .background(Color.accentColor)
                     .cornerRadius(14)
                 }
 
@@ -99,8 +98,8 @@ struct TodoSelectionSheet: View {
                         onSkip()
                     } label: {
                         Text("Skip task selection")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(AppTheme.textSecondary)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -108,7 +107,7 @@ struct TodoSelectionSheet: View {
             .padding(.bottom, 30)
             .padding(.top, 16)
         }
-        .background(Color.white)
+        .background(Color(UIColor.systemBackground))
     }
 }
 
@@ -122,13 +121,13 @@ struct TodoSelectionRow: View {
             HStack(spacing: 14) {
                 // Checkbox
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 24))
-                    .foregroundColor(isSelected ? AppTheme.actionBlue : AppTheme.textSecondary)
+                    .font(.title2)
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
 
                 // Title
                 Text(todo.title)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(AppTheme.textPrimary)
+                    .font(.body)
+                    .foregroundStyle(.primary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
 
@@ -136,11 +135,11 @@ struct TodoSelectionRow: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            .background(isSelected ? AppTheme.actionBlue.opacity(0.1) : Color.gray.opacity(0.08))
+            .background(isSelected ? Color.accentColor.opacity(0.1) : Color(UIColor.secondarySystemGroupedBackground))
             .cornerRadius(12)
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? AppTheme.actionBlue : Color.gray.opacity(0.2), lineWidth: isSelected ? 2 : 1)
+                    .stroke(isSelected ? Color.accentColor : Color(UIColor.separator), lineWidth: isSelected ? 2 : 0.5)
             )
         }
         .buttonStyle(PlainButtonStyle())

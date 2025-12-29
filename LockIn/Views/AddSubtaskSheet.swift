@@ -16,154 +16,122 @@ struct AddSubtaskSheet: View {
     @State private var estimatedHours: Double = 5
     @State private var isCreating = false
     @State private var errorMessage: String?
+    @FocusState private var titleFocused: Bool
 
     private let convexService = ConvexService.shared
 
+    var isValid: Bool {
+        !title.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !description.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
     var body: some View {
         NavigationView {
-            ZStack {
-                AppTheme.background.ignoresSafeArea()
-
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Header
+            VStack(spacing: 0) {
+                List {
+                    // Header Section
+                    Section {
                         VStack(spacing: 12) {
                             Image(systemName: "checklist")
-                                .font(.system(size: 60))
-                                .foregroundStyle(AppTheme.energyGradient)
+                                .font(.system(size: 48, weight: .light))
+                                .foregroundStyle(Color.accentColor)
 
                             Text("New Subtask")
-                                .font(AppTheme.titleFont)
-                                .foregroundColor(AppTheme.textPrimary)
+                                .font(.title2.bold())
 
                             Text("Break down your goal into manageable pieces")
-                                .font(AppTheme.bodyFont)
-                                .foregroundColor(AppTheme.textSecondary)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
                         }
-                        .padding(.top, 20)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .listRowBackground(Color.clear)
+                    }
 
-                        // Form
-                        VStack(spacing: 20) {
-                            // Title
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Title")
-                                    .font(AppTheme.headlineFont)
-                                    .foregroundColor(AppTheme.textPrimary)
+                    // Title Section
+                    Section {
+                        TextField("e.g., Learn SwiftUI basics", text: $title)
+                            .focused($titleFocused)
+                    } header: {
+                        Text("Title")
+                    }
 
-                                ZStack(alignment: .leading) {
-                                    if title.isEmpty {
-                                        Text("e.g., Learn SwiftUI basics")
-                                            .foregroundColor(.gray)
-                                            .padding()
-                                    }
-                                    TextField("", text: $title)
-                                        .textFieldStyle(.plain)
-                                        .foregroundColor(.black)
-                                        .padding()
-                                }
-                                .background(AppTheme.cardBackground)
-                                .cornerRadius(AppTheme.smallCornerRadius)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: AppTheme.smallCornerRadius)
-                                        .stroke(AppTheme.lightPurple.opacity(0.3), lineWidth: 1)
-                                )
+                    // Description Section
+                    Section {
+                        TextField("What will you accomplish?", text: $description, axis: .vertical)
+                            .lineLimit(3...6)
+                    } header: {
+                        Text("Description")
+                    }
+
+                    // Hours Section
+                    Section {
+                        VStack(spacing: 12) {
+                            HStack {
+                                Text("Hours")
+                                Spacer()
+                                Text("\(Int(estimatedHours)) hours")
+                                    .font(.headline)
+                                    .foregroundStyle(Color.accentColor)
                             }
 
-                            // Description
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Description")
-                                    .font(AppTheme.headlineFont)
-                                    .foregroundColor(AppTheme.textPrimary)
+                            Slider(value: $estimatedHours, in: 1...50, step: 1)
 
-                                ZStack(alignment: .topLeading) {
-                                    if description.isEmpty {
-                                        Text("What will you accomplish?")
-                                            .foregroundColor(.gray)
-                                            .padding()
-                                    }
-                                    TextField("", text: $description, axis: .vertical)
-                                        .textFieldStyle(.plain)
-                                        .foregroundColor(.black)
-                                        .lineLimit(3...6)
-                                        .padding()
-                                }
-                                .background(AppTheme.cardBackground)
-                                .cornerRadius(AppTheme.smallCornerRadius)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: AppTheme.smallCornerRadius)
-                                        .stroke(AppTheme.lightPurple.opacity(0.3), lineWidth: 1)
-                                )
-                            }
-
-                            // Estimated Hours
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text("Estimated Hours")
-                                        .font(AppTheme.headlineFont)
-                                        .foregroundColor(AppTheme.textPrimary)
-
-                                    Spacer()
-
-                                    Text("\(Int(estimatedHours)) hours")
-                                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                                        .foregroundStyle(AppTheme.energyGradient)
-                                }
-
-                                Slider(value: $estimatedHours, in: 1...50, step: 1)
-                                    .tint(AppTheme.primaryPurple)
-
-                                HStack {
-                                    Text("1 hr")
-                                        .font(AppTheme.captionFont)
-                                        .foregroundColor(AppTheme.textSecondary)
-
-                                    Spacer()
-
-                                    Text("50 hrs")
-                                        .font(AppTheme.captionFont)
-                                        .foregroundColor(AppTheme.textSecondary)
-                                }
+                            HStack {
+                                Text("1 hr")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text("50 hrs")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
                         }
-                        .padding()
-                        .playfulCard()
-                        .padding(.horizontal)
+                    } header: {
+                        Text("Estimated Time")
+                    }
+                }
+                .listStyle(.insetGrouped)
 
-                        // Create Button
-                        Button {
-                            Task {
-                                await createSubtask()
-                            }
-                        } label: {
+                // Create button
+                VStack(spacing: 0) {
+                    Divider()
+
+                    Button {
+                        Task {
+                            await createSubtask()
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
                             if isCreating {
                                 ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
+                                    .tint(.white)
                             } else {
+                                Image(systemName: "plus.circle.fill")
                                 Text("Create Subtask")
-                                    .font(AppTheme.headlineFont)
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
                             }
                         }
-                        .primaryButton()
-                        .padding(.horizontal)
-                        .disabled(title.isEmpty || description.isEmpty || isCreating)
-                        .opacity(title.isEmpty || description.isEmpty || isCreating ? 0.6 : 1.0)
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(isValid && !isCreating ? Color.accentColor : Color(UIColor.systemGray4))
+                        .foregroundStyle(.white)
+                        .cornerRadius(12)
                     }
-                    .padding(.vertical)
+                    .disabled(!isValid || isCreating)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(Color(UIColor.systemGroupedBackground))
                 }
             }
+            .background(Color(UIColor.systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
                         dismiss()
                     }
-                    .foregroundColor(AppTheme.primaryPurple)
                 }
             }
             .alert("Error", isPresented: .constant(errorMessage != nil)) {
@@ -176,6 +144,11 @@ struct AddSubtaskSheet: View {
                 }
             }
         }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                titleFocused = true
+            }
+        }
     }
 
     private func createSubtask() async {
@@ -185,8 +158,8 @@ struct AddSubtaskSheet: View {
         do {
             _ = try await convexService.createSubtask(
                 goalId: goalId,
-                title: title,
-                description: description,
+                title: title.trimmingCharacters(in: .whitespaces),
+                description: description.trimmingCharacters(in: .whitespaces),
                 estimatedHours: estimatedHours
             )
 

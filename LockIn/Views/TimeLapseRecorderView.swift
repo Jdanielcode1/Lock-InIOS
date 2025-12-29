@@ -281,7 +281,7 @@ struct TimeLapseRecorderView: View {
                     .symbolEffect(.pulse, options: .repeating)
 
                 Text("Time's Up!")
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .font(.system(size: 32, weight: .bold))
                     .foregroundColor(.white)
 
                 Text("Your countdown has finished")
@@ -322,7 +322,7 @@ struct TimeLapseRecorderView: View {
                     .trim(from: 0, to: recorder.compilationProgress)
                     .stroke(
                         AngularGradient(
-                            colors: [AppTheme.actionBlue, AppTheme.successGreen],
+                            colors: [Color.accentColor, .green],
                             center: .center
                         ),
                         style: StrokeStyle(lineWidth: 8, lineCap: .round)
@@ -333,7 +333,7 @@ struct TimeLapseRecorderView: View {
 
                 VStack(spacing: 4) {
                     Text("\(Int(recorder.compilationProgress * 100))%")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .font(.system(size: 28, weight: .bold))
                         .foregroundColor(.white)
 
                     Image(systemName: "film.stack")
@@ -344,7 +344,7 @@ struct TimeLapseRecorderView: View {
 
             VStack(spacing: 12) {
                 Text("Creating Video")
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .font(.system(size: 24, weight: .bold))
                     .foregroundColor(.white)
 
                 Text("Processing \(recorder.frameCount) frames...")
@@ -478,7 +478,7 @@ struct TimeLapseRecorderView: View {
 
             VStack(spacing: 20) {
                 Text("\(voiceoverCountdownNumber)")
-                    .font(.system(size: 120, weight: .bold, design: .rounded))
+                    .font(.system(size: 120, weight: .bold))
                     .foregroundColor(.white)
 
                 Text("Get ready to narrate...")
@@ -702,7 +702,7 @@ struct TimeLapseRecorderView: View {
                             }
 
                             Text(timerDisplayText)
-                                .font(.system(size: 17, weight: .bold, design: .rounded))
+                                .font(.system(size: 17, weight: .bold))
                                 .foregroundColor(isOvertime ? .red : .white)
 
                             if recorder.isPaused {
@@ -825,7 +825,7 @@ struct TimeLapseRecorderView: View {
                 HStack {
                     Image(systemName: "clock.fill")
                         .font(.system(size: 24))
-                        .foregroundStyle(AppTheme.primaryGradient)
+                        .foregroundStyle(Color.accentColor)
 
                     Text("Study Session")
                         .font(.system(size: 18, weight: .semibold))
@@ -834,8 +834,8 @@ struct TimeLapseRecorderView: View {
                     Spacer()
 
                     Text(formattedDuration)
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundColor(AppTheme.actionBlue)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(Color.accentColor)
                 }
 
                 HStack {
@@ -904,7 +904,7 @@ struct TimeLapseRecorderView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: 56)
-                            .background(AppTheme.primaryGradient)
+                            .background(Color.accentColor)
                             .cornerRadius(16)
                         }
                     }
@@ -1071,10 +1071,10 @@ struct TimeLapseRecorderView: View {
                         Text(countdownEnabled && countdownDuration > 0 ? formattedCountdownSetting : "Set Timer")
                             .font(.system(size: 14, weight: .semibold))
                     }
-                    .foregroundColor(countdownEnabled ? AppTheme.actionBlue : .white)
+                    .foregroundColor(countdownEnabled ? Color.accentColor : .white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(countdownEnabled ? AppTheme.actionBlue.opacity(0.2) : Color.black.opacity(0.5))
+                    .background(countdownEnabled ? Color.accentColor.opacity(0.2) : Color.black.opacity(0.5))
                     .cornerRadius(20)
                 }
 
@@ -1145,7 +1145,7 @@ struct TimeLapseRecorderView: View {
                 Image(systemName: completedTodoCount == totalTodoCount ? "checkmark.circle.fill" : "checklist")
                     .font(.system(size: 14, weight: .semibold))
                 Text("\(completedTodoCount)/\(totalTodoCount)")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .font(.system(size: 14, weight: .bold))
             }
             .foregroundColor(completedTodoCount == totalTodoCount ? .green : .white)
             .padding(.horizontal, 12)
@@ -1291,27 +1291,27 @@ struct TimeLapseRecorderView: View {
             // Progress ring
             ZStack {
                 Circle()
-                    .stroke(AppTheme.borderLight, lineWidth: 12)
+                    .stroke(Color.white.opacity(0.2), lineWidth: 12)
                     .frame(width: 120, height: 120)
 
                 Circle()
                     .trim(from: 0, to: uploadProgress)
                     .stroke(
-                        AppTheme.energyGradient,
+                        Color.accentColor,
                         style: StrokeStyle(lineWidth: 12, lineCap: .round)
                     )
                     .frame(width: 120, height: 120)
                     .rotationEffect(.degrees(-90))
-                    .animation(AppTheme.smoothAnimation, value: uploadProgress)
+                    .animation(.easeInOut(duration: 0.3), value: uploadProgress)
 
                 Text("\(Int(uploadProgress * 100))%")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundColor(AppTheme.textPrimary)
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(.white)
             }
 
             Text("Saving...")
-                .font(AppTheme.headlineFont)
-                .foregroundColor(AppTheme.textPrimary)
+                .font(.headline)
+                .foregroundColor(.white)
         }
         .padding()
     }

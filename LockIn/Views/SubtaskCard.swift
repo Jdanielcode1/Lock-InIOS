@@ -11,99 +11,51 @@ struct SubtaskCard: View {
     let subtask: Subtask
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Title and hours
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(subtask.title)
-                        .font(AppTheme.headlineFont)
-                        .foregroundColor(AppTheme.textPrimary)
-
-                    Text(subtask.description)
-                        .font(AppTheme.bodyFont)
-                        .foregroundColor(AppTheme.textSecondary)
-                        .lineLimit(2)
-                }
-
-                Spacer()
-
-                // Progress percentage
-                ZStack {
-                    Circle()
-                        .stroke(AppTheme.borderLight, lineWidth: 6)
-                        .frame(width: 60, height: 60)
-
-                    Circle()
-                        .trim(from: 0, to: subtask.progressPercentage / 100)
-                        .stroke(
-                            AppTheme.progressGradient(for: subtask.progressPercentage),
-                            style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                        )
-                        .frame(width: 60, height: 60)
-                        .rotationEffect(.degrees(-90))
-                        .animation(AppTheme.smoothAnimation, value: subtask.progressPercentage)
-
-                    Text("\(Int(subtask.progressPercentage))%")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundColor(AppTheme.textPrimary)
-                }
-            }
-
-            // Progress bar
+        HStack(spacing: 12) {
+            // Content
             VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    HStack(spacing: 4) {
-                        Image(systemName: "clock.fill")
-                            .font(.caption)
-                        Text("\(String(format: "%.1f", subtask.completedHours))/\(String(format: "%.1f", subtask.estimatedHours)) hrs")
-                            .font(AppTheme.captionFont)
-                    }
-                    .foregroundColor(AppTheme.textSecondary)
+                Text(subtask.title)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.primary)
 
-                    Spacer()
+                if !subtask.description.isEmpty {
+                    Text(subtask.description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                // Hours info
+                HStack(spacing: 12) {
+                    Label("\(String(format: "%.1f", subtask.completedHours))/\(String(format: "%.1f", subtask.estimatedHours)) hrs", systemImage: "clock")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
                     if subtask.isCompleted {
-                        HStack(spacing: 4) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.caption)
-                            Text("Complete")
-                                .font(AppTheme.captionFont)
-                        }
-                        .foregroundStyle(AppTheme.successGradient)
-                    } else {
-                        HStack(spacing: 4) {
-                            Image(systemName: "timer")
-                                .font(.caption)
-                            Text("\(String(format: "%.1f", subtask.hoursRemaining)) hrs left")
-                                .font(AppTheme.captionFont)
-                        }
-                        .foregroundColor(AppTheme.warningAmber)
+                        Label("Complete", systemImage: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.green)
                     }
                 }
-
-                // Progress bar
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(AppTheme.borderLight)
-                            .frame(height: 8)
-
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(AppTheme.progressGradient(for: subtask.progressPercentage))
-                            .frame(width: geometry.size.width * (subtask.progressPercentage / 100), height: 8)
-                            .animation(AppTheme.smoothAnimation, value: subtask.progressPercentage)
-                    }
-                }
-                .frame(height: 8)
             }
+
+            Spacer()
+
+            // Progress percentage
+            Text("\(Int(subtask.progressPercentage))%")
+                .font(.subheadline.bold())
+                .foregroundStyle(subtask.isCompleted ? .green : .secondary)
+
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
-        .padding()
-        .playfulCard()
+        .padding(12)
     }
 }
 
 #Preview {
-    VStack(spacing: 16) {
+    VStack(spacing: 0) {
         SubtaskCard(subtask: Subtask(
             _id: "1",
             goalId: "goal1",
@@ -113,7 +65,7 @@ struct SubtaskCard: View {
             completedHours: 3.5,
             createdAt: Date().timeIntervalSince1970 * 1000
         ))
-
+        Divider().padding(.leading, 16)
         SubtaskCard(subtask: Subtask(
             _id: "2",
             goalId: "goal1",
@@ -124,6 +76,8 @@ struct SubtaskCard: View {
             createdAt: Date().timeIntervalSince1970 * 1000
         ))
     }
+    .background(Color(UIColor.secondarySystemGroupedBackground))
+    .cornerRadius(12)
     .padding()
-    .background(AppTheme.background)
+    .background(Color(UIColor.systemGroupedBackground))
 }

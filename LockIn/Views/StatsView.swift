@@ -19,67 +19,61 @@ struct StatsView: View {
 
     var body: some View {
         NavigationView {
-            ZStack {
-                AppTheme.background.ignoresSafeArea()
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Hero stat
+                    heroCard
 
-                ScrollView {
-                    VStack(spacing: sizing.sectionSpacing) {
-                        // Hero stat
-                        heroCard
+                    // Quick stats grid
+                    statsGrid
 
-                        // Quick stats grid
-                        statsGrid
+                    // Weekly chart
+                    weeklyChart
 
-                        // Weekly chart
-                        weeklyChart
+                    // Goals breakdown
+                    goalsBreakdown
 
-                        // Goals breakdown
-                        goalsBreakdown
-
-                        // Todos section
-                        todosSection
-                    }
-                    .padding(.horizontal, sizing.horizontalPadding)
-                    .padding(.vertical)
-                    .padding(.bottom, 100)
-                    .frame(maxWidth: sizing.maxContentWidth)
-                    .frame(maxWidth: .infinity) // Center on iPad
+                    // Todos section
+                    todosSection
                 }
+                .padding(.horizontal, sizing.horizontalPadding)
+                .padding(.vertical)
+                .padding(.bottom, 100)
+                .frame(maxWidth: sizing.maxContentWidth)
+                .frame(maxWidth: .infinity)
             }
+            .background(Color(UIColor.systemGroupedBackground))
             .navigationTitle("Stats")
             .navigationBarTitleDisplayMode(.large)
-            .toolbarColorScheme(.light, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
         }
         .navigationViewStyle(.stack)
     }
 
     var heroCard: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             Text("Total Study Time")
-                .font(AppTheme.bodyFont)
-                .foregroundColor(.white.opacity(0.8))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
 
             Text(viewModel.formattedTotalHours)
-                .font(.system(size: 56, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .font(.system(size: 48, weight: .bold))
+                .foregroundStyle(.primary)
 
-            HStack(spacing: 24) {
+            HStack(spacing: 32) {
                 HeroStat(value: "\(viewModel.totalSessions)", label: "Sessions")
                 HeroStat(value: "\(viewModel.currentStreak)", label: "Day Streak")
                 HeroStat(value: "\(viewModel.completedGoals)", label: "Completed")
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 32)
+        .padding(.vertical, 24)
         .padding(.horizontal)
-        .background(AppTheme.primaryGradient)
-        .cornerRadius(AppTheme.cornerRadius)
-        .shadow(color: AppTheme.actionBlue.opacity(0.3), radius: 16, x: 0, y: 8)
+        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .cornerRadius(12)
     }
 
     var statsGrid: some View {
-        LazyVGrid(columns: sizing.gridItems(count: sizing.statsGridColumns, spacing: sizing.cardSpacing), spacing: sizing.cardSpacing) {
+        LazyVGrid(columns: sizing.gridItems(count: sizing.statsGridColumns, spacing: 12), spacing: 12) {
             StatBox(
                 icon: "flame.fill",
                 value: "\(viewModel.currentStreak)",
@@ -91,121 +85,121 @@ struct StatsView: View {
                 icon: "calendar",
                 value: viewModel.formattedHoursThisWeek,
                 label: viewModel.weeklyTrendLabel,
-                color: AppTheme.actionBlue
+                color: .accentColor
             )
 
             StatBox(
                 icon: "star.fill",
                 value: viewModel.bestDay,
                 label: "Best Day",
-                color: AppTheme.warningAmber
+                color: .yellow
             )
 
             StatBox(
                 icon: "checkmark.circle.fill",
                 value: "\(viewModel.completedGoals)",
                 label: "Goals Done",
-                color: AppTheme.successGreen
+                color: .green
             )
         }
     }
 
     var weeklyChart: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("This Week")
-                .font(AppTheme.headlineFont)
-                .foregroundColor(AppTheme.textPrimary)
+                .font(.headline)
 
             HStack(alignment: .bottom, spacing: 8) {
                 ForEach(viewModel.weeklyData, id: \.day) { data in
-                    VStack(spacing: 8) {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(data.hours > 0 ? AnyShapeStyle(AppTheme.primaryGradient) : AnyShapeStyle(Color.gray.opacity(0.2)))
-                            .frame(width: 36, height: max(8, CGFloat(data.hours) * 30))
+                    VStack(spacing: 6) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(data.hours > 0 ? Color.accentColor : Color(UIColor.systemGray5))
+                            .frame(width: 32, height: max(8, CGFloat(data.hours) * 25))
 
                         Text(data.day)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(data.isToday ? AppTheme.actionBlue : AppTheme.textSecondary)
+                            .font(.caption2)
+                            .foregroundStyle(data.isToday ? Color.accentColor : Color.secondary)
                     }
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 120, alignment: .bottom)
+            .frame(height: 100, alignment: .bottom)
         }
-        .padding()
-        .background(AppTheme.cardBackground)
-        .cornerRadius(AppTheme.cornerRadius)
-        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+        .padding(16)
+        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .cornerRadius(12)
     }
 
     var goalsBreakdown: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("Goals Progress")
-                .font(AppTheme.headlineFont)
-                .foregroundColor(AppTheme.textPrimary)
+                .font(.headline)
 
             if viewModel.goals.isEmpty {
                 Text("No goals yet")
-                    .font(AppTheme.bodyFont)
-                    .foregroundColor(AppTheme.textSecondary)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
+                    .padding(.vertical, 16)
             } else {
-                ForEach(viewModel.goals) { goal in
-                    GoalProgressRow(goal: goal)
+                VStack(spacing: 0) {
+                    ForEach(Array(viewModel.goals.enumerated()), id: \.element.id) { index, goal in
+                        GoalProgressRow(goal: goal)
+
+                        if index < viewModel.goals.count - 1 {
+                            Divider()
+                        }
+                    }
                 }
             }
         }
-        .padding()
-        .background(AppTheme.cardBackground)
-        .cornerRadius(AppTheme.cornerRadius)
-        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+        .padding(16)
+        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .cornerRadius(12)
     }
 
     var todosSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("Todos")
-                .font(AppTheme.headlineFont)
-                .foregroundColor(AppTheme.textPrimary)
+                .font(.headline)
 
             if viewModel.todos.isEmpty {
                 Text("No todos yet")
-                    .font(AppTheme.bodyFont)
-                    .foregroundColor(AppTheme.textSecondary)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
+                    .padding(.vertical, 16)
             } else {
                 HStack(spacing: 16) {
                     // Streak
-                    VStack(spacing: 8) {
+                    VStack(spacing: 4) {
                         HStack(spacing: 4) {
-                            Text("🔥")
-                                .font(.system(size: 24))
+                            Image(systemName: "flame.fill")
+                                .foregroundStyle(.orange)
                             Text("\(viewModel.todoStreak)")
-                                .font(.system(size: 32, weight: .bold, design: .rounded))
-                                .foregroundColor(.orange)
+                                .font(.title.bold())
                         }
                         Text("Day Streak")
-                            .font(AppTheme.captionFont)
-                            .foregroundColor(AppTheme.textSecondary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity)
 
                     // This week with trend
-                    VStack(spacing: 8) {
+                    VStack(spacing: 4) {
                         Text("\(viewModel.todosThisWeek)")
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                            .foregroundColor(AppTheme.successGreen)
+                            .font(.title.bold())
+                            .foregroundStyle(.green)
 
                         HStack(spacing: 4) {
                             Text("This Week")
-                                .font(AppTheme.captionFont)
-                                .foregroundColor(AppTheme.textSecondary)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
 
                             if viewModel.todoWeeklyTrend != 0 {
-                                Text(viewModel.todoWeeklyTrend > 0 ? "↑\(viewModel.todoWeeklyTrend)" : "↓\(abs(viewModel.todoWeeklyTrend))")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(viewModel.todoWeeklyTrend > 0 ? AppTheme.successGreen : .orange)
+                                Text(viewModel.todoWeeklyTrend > 0 ? "+\(viewModel.todoWeeklyTrend)" : "\(viewModel.todoWeeklyTrend)")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(viewModel.todoWeeklyTrend > 0 ? .green : .orange)
                             }
                         }
                     }
@@ -213,10 +207,9 @@ struct StatsView: View {
                 }
             }
         }
-        .padding()
-        .background(AppTheme.cardBackground)
-        .cornerRadius(AppTheme.cornerRadius)
-        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+        .padding(16)
+        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .cornerRadius(12)
     }
 }
 
@@ -225,14 +218,13 @@ struct HeroStat: View {
     let label: String
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 2) {
             Text(value)
-                .font(.system(size: 24, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .font(.title3.bold())
 
             Text(label)
-                .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.8))
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }
@@ -244,25 +236,25 @@ struct StatBox: View {
     let color: Color
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.title2)
-                .foregroundColor(color)
+                .font(.title3)
+                .foregroundStyle(color)
 
             Text(value)
-                .font(.system(size: 28, weight: .bold, design: .rounded))
-                .foregroundColor(AppTheme.textPrimary)
+                .font(.title2.bold())
 
             Text(label)
-                .font(AppTheme.captionFont)
-                .foregroundColor(AppTheme.textSecondary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
-        .background(AppTheme.cardBackground)
-        .cornerRadius(AppTheme.cornerRadius)
-        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+        .padding(.vertical, 16)
+        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .cornerRadius(12)
     }
 }
 
@@ -270,34 +262,23 @@ struct GoalProgressRow: View {
     let goal: Goal
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             HStack {
                 Text(goal.title)
-                    .font(AppTheme.bodyFont)
-                    .foregroundColor(AppTheme.textPrimary)
+                    .font(.subheadline)
                     .lineLimit(1)
 
                 Spacer()
 
                 Text("\(Int(goal.completedHours))/\(Int(goal.targetHours))h")
-                    .font(AppTheme.captionFont)
-                    .foregroundColor(AppTheme.textSecondary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.gray.opacity(0.2))
-                        .frame(height: 8)
-
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(AppTheme.progressGradient(for: goal.progressPercentage))
-                        .frame(width: geo.size.width * min(goal.progressPercentage / 100, 1.0), height: 8)
-                }
-            }
-            .frame(height: 8)
+            ProgressView(value: goal.progressPercentage, total: 100)
+                .tint(goal.isCompleted ? .green : .accentColor)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
     }
 }
 

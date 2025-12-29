@@ -27,15 +27,14 @@ struct CreateGoalView: View {
 
     var body: some View {
         NavigationView {
-            ZStack {
-                AppTheme.background.ignoresSafeArea()
-
+            Group {
                 if currentStep == 1 {
                     stepOneView
                 } else {
                     stepTwoView
                 }
             }
+            .background(Color(UIColor.systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -53,10 +52,8 @@ struct CreateGoalView: View {
                                 Image(systemName: "chevron.left")
                                 Text("Back")
                             }
-                            .foregroundColor(AppTheme.actionBlue)
                         } else {
                             Text("Cancel")
-                                .foregroundColor(AppTheme.actionBlue)
                         }
                     }
                 }
@@ -68,39 +65,30 @@ struct CreateGoalView: View {
 
     var stepOneView: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: 32) {
-                    // Header
+            List {
+                // Header Section
+                Section {
                     VStack(spacing: 12) {
                         Image(systemName: "target")
-                            .font(.system(size: 56))
-                            .foregroundStyle(AppTheme.primaryGradient)
-                            .padding(.top, 40)
+                            .font(.system(size: 48, weight: .light))
+                            .foregroundStyle(Color.accentColor)
 
                         Text("What's your goal?")
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundColor(AppTheme.textPrimary)
+                            .font(.title2.bold())
 
                         Text("Give your goal a name")
-                            .font(.system(size: 16))
-                            .foregroundColor(AppTheme.textSecondary)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+                    .listRowBackground(Color.clear)
+                }
 
-                    // Text field
+                // Input Section
+                Section {
                     TextField("e.g., Learn Swift", text: $title)
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(AppTheme.textPrimary)
-                        .multilineTextAlignment(.center)
-                        .padding()
-                        .padding(.horizontal, 8)
-                        .background(Color.white)
-                        .cornerRadius(16)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(isTextFieldFocused ? AppTheme.actionBlue : AppTheme.borderLight, lineWidth: isTextFieldFocused ? 2 : 1.5)
-                        )
-                        .shadow(color: isTextFieldFocused ? AppTheme.actionBlue.opacity(0.1) : .clear, radius: 8, x: 0, y: 4)
-                        .padding(.horizontal, 24)
+                        .font(.body)
                         .focused($isTextFieldFocused)
                         .submitLabel(.continue)
                         .onSubmit {
@@ -109,12 +97,10 @@ struct CreateGoalView: View {
                             }
                         }
                 }
-                .padding(.bottom, 100)
             }
+            .listStyle(.insetGrouped)
 
-            Spacer()
-
-            // Sticky continue button
+            // Continue button
             VStack(spacing: 0) {
                 Divider()
 
@@ -123,24 +109,19 @@ struct CreateGoalView: View {
                 } label: {
                     HStack(spacing: 8) {
                         Text("Continue")
-                            .font(.system(size: 17, weight: .semibold))
                         Image(systemName: "arrow.right")
-                            .font(.system(size: 15, weight: .semibold))
                     }
+                    .font(.headline)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                    .foregroundColor(.white)
-                    .background(
-                        isTitleValid
-                            ? AnyShapeStyle(AppTheme.primaryGradient)
-                            : AnyShapeStyle(Color.gray.opacity(0.3))
-                    )
-                    .cornerRadius(16)
+                    .padding(.vertical, 14)
+                    .background(isTitleValid ? Color.accentColor : Color(UIColor.systemGray4))
+                    .foregroundStyle(.white)
+                    .cornerRadius(12)
                 }
                 .disabled(!isTitleValid)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
-                .background(AppTheme.background)
+                .background(Color(UIColor.systemGroupedBackground))
             }
         }
         .onAppear {
@@ -150,50 +131,56 @@ struct CreateGoalView: View {
         }
     }
 
-    // MARK: - Step 2: Target Hours Slider
+    // MARK: - Step 2: Target Hours
 
     var stepTwoView: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: 40) {
-                    // Header
+            List {
+                // Header Section
+                Section {
                     VStack(spacing: 12) {
                         Image(systemName: "clock.fill")
-                            .font(.system(size: 56))
-                            .foregroundStyle(AppTheme.primaryGradient)
-                            .padding(.top, 40)
+                            .font(.system(size: 48, weight: .light))
+                            .foregroundStyle(Color.accentColor)
 
                         Text("How many hours?")
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundColor(AppTheme.textPrimary)
+                            .font(.title2.bold())
 
                         Text("Set your target for \"\(title)\"")
-                            .font(.system(size: 16))
-                            .foregroundColor(AppTheme.textSecondary)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+                    .listRowBackground(Color.clear)
+                }
 
-                    // Hours display
+                // Hours Display
+                Section {
                     VStack(spacing: 8) {
                         Text("\(Int(targetHours))")
-                            .font(.system(size: 72, weight: .bold, design: .rounded))
-                            .foregroundStyle(AppTheme.primaryGradient)
+                            .font(.system(size: 56, weight: .bold))
+                            .foregroundStyle(Color.accentColor)
                             .contentTransition(.numericText())
                             .animation(.snappy, value: targetHours)
 
                         Text("hours")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundColor(AppTheme.textSecondary)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .listRowBackground(Color.clear)
+                }
 
-                    // Slider
+                // Slider Section
+                Section {
                     VStack(spacing: 16) {
                         Slider(value: $targetHours, in: 1...100, step: 1)
-                            .tint(AppTheme.actionBlue)
-                            .padding(.horizontal, 8)
 
                         // Quick select buttons
-                        HStack(spacing: 12) {
+                        HStack(spacing: 10) {
                             ForEach([5, 10, 20, 50], id: \.self) { hours in
                                 Button {
                                     withAnimation(.snappy) {
@@ -201,26 +188,24 @@ struct CreateGoalView: View {
                                     }
                                 } label: {
                                     Text("\(hours)h")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(Int(targetHours) == hours ? .white : AppTheme.actionBlue)
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 10)
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(Int(targetHours) == hours ? .white : Color.accentColor)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 8)
                                         .background(
                                             Int(targetHours) == hours
-                                                ? AnyShapeStyle(AppTheme.primaryGradient)
-                                                : AnyShapeStyle(AppTheme.actionBlue.opacity(0.1))
+                                                ? Color.accentColor
+                                                : Color.accentColor.opacity(0.12)
                                         )
-                                        .cornerRadius(12)
+                                        .cornerRadius(8)
                                 }
                             }
                         }
                     }
-                    .padding(.horizontal, 24)
+                    .padding(.vertical, 8)
                 }
-                .padding(.bottom, 100)
             }
-
-            Spacer()
+            .listStyle(.insetGrouped)
 
             // Create button
             VStack(spacing: 0) {
@@ -229,28 +214,26 @@ struct CreateGoalView: View {
                 Button {
                     createGoal()
                 } label: {
-                    HStack(spacing: 10) {
+                    HStack(spacing: 8) {
                         if isCreating {
                             ProgressView()
                                 .tint(.white)
                         } else {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 18, weight: .semibold))
                             Text("Create Goal")
-                                .font(.system(size: 17, weight: .semibold))
                         }
                     }
+                    .font(.headline)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                    .foregroundColor(.white)
-                    .background(AppTheme.primaryGradient)
-                    .cornerRadius(16)
-                    .shadow(color: AppTheme.actionBlue.opacity(0.3), radius: 8, x: 0, y: 4)
+                    .padding(.vertical, 14)
+                    .background(Color.accentColor)
+                    .foregroundStyle(.white)
+                    .cornerRadius(12)
                 }
                 .disabled(isCreating)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
-                .background(AppTheme.background)
+                .background(Color(UIColor.systemGroupedBackground))
             }
         }
         .transition(.asymmetric(
@@ -277,36 +260,6 @@ struct CreateGoalView: View {
             )
             isCreating = false
             dismiss()
-        }
-    }
-}
-
-// Custom TextField Style
-struct PlayfulTextFieldStyle: TextFieldStyle {
-    func _body(configuration: TextField<Self._Label>) -> some View {
-        configuration
-            .foregroundColor(AppTheme.textPrimary)
-            .tint(AppTheme.actionBlue)
-            .padding()
-            .background(Color.white)
-            .cornerRadius(AppTheme.smallCornerRadius)
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.smallCornerRadius)
-                    .stroke(AppTheme.borderLight, lineWidth: 1.5)
-            )
-    }
-}
-
-// Custom placeholder modifier for better contrast
-extension View {
-    func placeholder<Content: View>(
-        when shouldShow: Bool,
-        alignment: Alignment = .leading,
-        @ViewBuilder placeholder: () -> Content
-    ) -> some View {
-        ZStack(alignment: alignment) {
-            placeholder().opacity(shouldShow ? 1 : 0)
-            self
         }
     }
 }

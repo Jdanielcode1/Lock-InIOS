@@ -52,8 +52,8 @@ struct VideoPlayerView: View {
                         .tint(.white)
 
                     Text("Loading video...")
-                        .font(AppTheme.bodyFont)
-                        .foregroundColor(.white)
+                        .font(.body)
+                        .foregroundStyle(.white)
                 }
             } else if let player = viewModel.player {
                 ZStack {
@@ -80,19 +80,24 @@ struct VideoPlayerView: View {
             } else if let errorMessage = viewModel.errorMessage {
                 VStack(spacing: 20) {
                     Image(systemName: "exclamationmark.triangle")
-                        .font(.system(size: 60))
-                        .foregroundColor(.red)
+                        .font(.system(size: 60, weight: .light))
+                        .foregroundStyle(.red)
 
                     Text(errorMessage)
-                        .font(AppTheme.bodyFont)
-                        .foregroundColor(.white)
+                        .font(.body)
+                        .foregroundStyle(.white)
                         .multilineTextAlignment(.center)
                         .padding()
 
                     Button("Close") {
                         dismiss()
                     }
-                    .primaryButton()
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(Color.accentColor)
+                    .cornerRadius(10)
                 }
             }
 
@@ -123,12 +128,12 @@ struct VideoPlayerView: View {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 4) {
                         Text(session.formattedDuration)
-                            .font(AppTheme.headlineFont)
-                            .foregroundColor(.white)
+                            .font(.headline)
+                            .foregroundStyle(.white)
 
                         Text("\(String(format: "%.1f", session.durationHours))h study time")
-                            .font(AppTheme.captionFont)
-                            .foregroundColor(.white.opacity(0.8))
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.8))
                     }
                 }
 
@@ -288,12 +293,12 @@ struct VideoPlayerView: View {
 
             VStack(spacing: 20) {
                 Text("\(voiceoverCountdownNumber)")
-                    .font(.system(size: 120, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .font(.system(size: 120, weight: .bold))
+                    .foregroundStyle(.white)
 
                 Text("Get ready to narrate...")
-                    .font(.system(size: 18))
-                    .foregroundColor(.white.opacity(0.7))
+                    .font(.body)
+                    .foregroundStyle(.white.opacity(0.7))
             }
         }
     }

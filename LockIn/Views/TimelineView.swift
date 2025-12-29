@@ -26,33 +26,27 @@ struct TimelineView: View {
 
     var body: some View {
         NavigationView {
-            ZStack {
-                AppTheme.background.ignoresSafeArea()
-
-                VStack(spacing: 0) {
-                    // Segmented control
-                    Picker("", selection: $selectedMode) {
-                        ForEach(TimelineMode.allCases, id: \.self) { mode in
-                            Text(mode.rawValue).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-                    .padding(.bottom, 16)
-
-                    // Content based on selection
-                    if selectedMode == .goals {
-                        goalsTimeline
-                    } else {
-                        todosTimeline
+            VStack(spacing: 0) {
+                // Segmented control
+                Picker("", selection: $selectedMode) {
+                    ForEach(TimelineMode.allCases, id: \.self) { mode in
+                        Text(mode.rawValue).tag(mode)
                     }
                 }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+
+                // Content based on selection
+                if selectedMode == .goals {
+                    goalsTimeline
+                } else {
+                    todosTimeline
+                }
             }
+            .background(Color(UIColor.systemGroupedBackground))
             .navigationTitle("Timeline")
             .navigationBarTitleDisplayMode(.large)
-            .toolbarColorScheme(.light, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
             .fullScreenCover(item: $selectedTodoForPlayback) { todo in
                 if let videoURL = todo.videoURL {
                     TodoVideoPlayerView(videoURL: videoURL, todo: todo)
@@ -70,7 +64,6 @@ struct TimelineView: View {
                 VStack {
                     Spacer()
                     ProgressView()
-                        .tint(AppTheme.actionBlue)
                     Spacer()
                 }
             } else if viewModel.sessionsByDate.isEmpty {
@@ -81,35 +74,31 @@ struct TimelineView: View {
                 }
             } else {
                 ScrollView {
-                    LazyVStack(spacing: sizing.sectionSpacing, pinnedViews: .sectionHeaders) {
+                    LazyVStack(spacing: 20, pinnedViews: .sectionHeaders) {
                         ForEach(viewModel.sortedDates, id: \.self) { date in
                             Section {
-                                if sizing.isIPad {
-                                    // iPad: Grid layout within each section
-                                    LazyVGrid(columns: sizing.gridItems(count: sizing.gridColumns, spacing: sizing.cardSpacing), spacing: sizing.cardSpacing) {
-                                        ForEach(viewModel.sessionsByDate[date] ?? []) { item in
-                                            NavigationLink(destination: VideoPlayerView(session: item.session)) {
-                                                TimelineCard(item: item)
-                                            }
-                                            .buttonStyle(PlainButtonStyle())
-                                        }
-                                    }
-                                } else {
-                                    // iPhone: Vertical stack
-                                    ForEach(viewModel.sessionsByDate[date] ?? []) { item in
+                                VStack(spacing: 0) {
+                                    ForEach(Array((viewModel.sessionsByDate[date] ?? []).enumerated()), id: \.element.id) { index, item in
                                         NavigationLink(destination: VideoPlayerView(session: item.session)) {
                                             TimelineCard(item: item)
                                         }
-                                        .buttonStyle(PlainButtonStyle())
+                                        .buttonStyle(.plain)
+
+                                        if index < (viewModel.sessionsByDate[date]?.count ?? 0) - 1 {
+                                            Divider()
+                                                .padding(.leading, 96)
+                                        }
                                     }
                                 }
+                                .background(Color(UIColor.secondarySystemGroupedBackground))
+                                .cornerRadius(12)
                             } header: {
                                 DateHeader(date: date)
                             }
                         }
                     }
                     .padding(.horizontal, sizing.horizontalPadding)
-                    .padding(.top, 16)
+                    .padding(.top, 8)
                     .padding(.bottom, 100)
                 }
             }
@@ -124,7 +113,6 @@ struct TimelineView: View {
                 VStack {
                     Spacer()
                     ProgressView()
-                        .tint(AppTheme.actionBlue)
                     Spacer()
                 }
             } else if viewModel.todosByDate.isEmpty {
@@ -135,26 +123,11 @@ struct TimelineView: View {
                 }
             } else {
                 ScrollView {
-                    LazyVStack(spacing: sizing.sectionSpacing, pinnedViews: .sectionHeaders) {
+                    LazyVStack(spacing: 20, pinnedViews: .sectionHeaders) {
                         ForEach(viewModel.sortedTodoDates, id: \.self) { date in
                             Section {
-                                if sizing.isIPad {
-                                    // iPad: Grid layout within each section
-                                    LazyVGrid(columns: sizing.gridItems(count: sizing.gridColumns, spacing: sizing.cardSpacing), spacing: sizing.cardSpacing) {
-                                        ForEach(viewModel.todosByDate[date] ?? []) { todo in
-                                            Button {
-                                                if todo.hasVideo {
-                                                    selectedTodoForPlayback = todo
-                                                }
-                                            } label: {
-                                                TodoTimelineCard(todo: todo)
-                                            }
-                                            .buttonStyle(PlainButtonStyle())
-                                        }
-                                    }
-                                } else {
-                                    // iPhone: Vertical stack
-                                    ForEach(viewModel.todosByDate[date] ?? []) { todo in
+                                VStack(spacing: 0) {
+                                    ForEach(Array((viewModel.todosByDate[date] ?? []).enumerated()), id: \.element.id) { index, todo in
                                         Button {
                                             if todo.hasVideo {
                                                 selectedTodoForPlayback = todo
@@ -162,16 +135,23 @@ struct TimelineView: View {
                                         } label: {
                                             TodoTimelineCard(todo: todo)
                                         }
-                                        .buttonStyle(PlainButtonStyle())
+                                        .buttonStyle(.plain)
+
+                                        if index < (viewModel.todosByDate[date]?.count ?? 0) - 1 {
+                                            Divider()
+                                                .padding(.leading, 96)
+                                        }
                                     }
                                 }
+                                .background(Color(UIColor.secondarySystemGroupedBackground))
+                                .cornerRadius(12)
                             } header: {
                                 DateHeader(date: date)
                             }
                         }
                     }
                     .padding(.horizontal, sizing.horizontalPadding)
-                    .padding(.top, 16)
+                    .padding(.top, 8)
                     .padding(.bottom, 100)
                 }
             }
@@ -179,36 +159,34 @@ struct TimelineView: View {
     }
 
     var emptyState: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 60))
-                .foregroundStyle(AppTheme.primaryGradient)
+                .font(.system(size: 48, weight: .light))
+                .foregroundStyle(.secondary)
 
             Text("No Study Sessions Yet")
-                .font(AppTheme.titleFont)
-                .foregroundColor(AppTheme.textPrimary)
+                .font(.title3.bold())
 
             Text("Start a timelapse recording to\ntrack your study sessions")
-                .font(AppTheme.bodyFont)
-                .foregroundColor(AppTheme.textSecondary)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
         .padding()
     }
 
     var todoEmptyState: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             Image(systemName: "checklist")
-                .font(.system(size: 60))
-                .foregroundStyle(AppTheme.primaryGradient)
+                .font(.system(size: 48, weight: .light))
+                .foregroundStyle(.secondary)
 
             Text("No Completed Todos Yet")
-                .font(AppTheme.titleFont)
-                .foregroundColor(AppTheme.textPrimary)
+                .font(.title3.bold())
 
             Text("Complete todos to see them\nin your timeline")
-                .font(AppTheme.bodyFont)
-                .foregroundColor(AppTheme.textSecondary)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
         .padding()
@@ -221,15 +199,15 @@ struct DateHeader: View {
     var body: some View {
         HStack {
             Text(formatDate(date))
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                .foregroundColor(AppTheme.textSecondary)
+                .font(.subheadline.bold())
+                .foregroundStyle(.secondary)
                 .textCase(.uppercase)
 
             Spacer()
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 4)
-        .background(AppTheme.background)
+        .background(Color(UIColor.systemGroupedBackground))
     }
 
     func formatDate(_ date: Date) -> String {
@@ -251,11 +229,11 @@ struct TimelineCard: View {
     @State private var thumbnail: UIImage?
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             // Thumbnail
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(AppTheme.primaryGradient)
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(UIColor.systemGray5))
                     .frame(width: 80, height: 60)
 
                 if let thumbnail = thumbnail {
@@ -263,51 +241,48 @@ struct TimelineCard: View {
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 80, height: 60)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
 
                 Image(systemName: "play.circle.fill")
                     .font(.title2)
-                    .foregroundColor(.white)
-                    .shadow(color: .black.opacity(0.5), radius: 4)
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.3), radius: 2)
             }
             .onAppear {
                 loadThumbnail()
             }
 
             // Info
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(item.goalTitle)
-                    .font(AppTheme.headlineFont)
-                    .foregroundColor(AppTheme.textPrimary)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                HStack(spacing: 12) {
-                    Label(item.session.formattedDuration, systemImage: "clock.fill")
-                        .font(AppTheme.captionFont)
-                        .foregroundColor(AppTheme.textSecondary)
+                HStack(spacing: 8) {
+                    Label(item.session.formattedDuration, systemImage: "clock")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
                     Label(formatTime(item.session.createdDate), systemImage: "calendar")
-                        .font(AppTheme.captionFont)
-                        .foregroundColor(AppTheme.textSecondary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 
             Spacer()
 
-            // Duration badge
+            // Duration
             Text(String(format: "%.1fh", item.session.durationHours))
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(AppTheme.energyGradient)
-                .clipShape(Capsule())
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
-        .padding()
-        .background(AppTheme.cardBackground)
-        .cornerRadius(AppTheme.cornerRadius)
-        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+        .padding(12)
     }
 
     func formatTime(_ date: Date) -> String {
@@ -341,11 +316,11 @@ struct TodoTimelineCard: View {
     @State private var thumbnail: UIImage?
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             // Thumbnail or placeholder
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(todo.isCompleted ? AnyShapeStyle(AppTheme.successGreen.opacity(0.3)) : AnyShapeStyle(AppTheme.primaryGradient.opacity(0.3)))
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(UIColor.systemGray5))
                     .frame(width: 80, height: 60)
 
                 if let thumbnail = thumbnail {
@@ -353,16 +328,16 @@ struct TodoTimelineCard: View {
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 80, height: 60)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
 
                     Image(systemName: "play.circle.fill")
                         .font(.title2)
-                        .foregroundColor(.white)
-                        .shadow(color: .black.opacity(0.5), radius: 4)
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.3), radius: 2)
                 } else {
                     Image(systemName: todo.isCompleted ? "checkmark.circle.fill" : "circle")
-                        .font(.title)
-                        .foregroundColor(todo.isCompleted ? AppTheme.successGreen : AppTheme.textSecondary)
+                        .font(.title2)
+                        .foregroundStyle(todo.isCompleted ? .green : .secondary)
                 }
             }
             .onAppear {
@@ -370,39 +345,36 @@ struct TodoTimelineCard: View {
             }
 
             // Info
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(todo.title)
-                    .font(AppTheme.headlineFont)
-                    .foregroundColor(todo.isCompleted ? AppTheme.textPrimary : AppTheme.textSecondary)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(todo.isCompleted ? .primary : .secondary)
                     .strikethrough(todo.isCompleted)
                     .lineLimit(2)
 
-                HStack(spacing: 12) {
+                HStack(spacing: 8) {
                     Label(formatTime(todo.createdDate), systemImage: "calendar")
-                        .font(AppTheme.captionFont)
-                        .foregroundColor(AppTheme.textSecondary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
                     if todo.hasVideo {
                         Label("Video", systemImage: "video.fill")
-                            .font(AppTheme.captionFont)
-                            .foregroundColor(AppTheme.actionBlue)
+                            .font(.caption)
+                            .foregroundStyle(Color.accentColor)
                     }
                 }
             }
 
             Spacer()
 
-            // Status badge
+            // Status
             if todo.isCompleted {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(AppTheme.successGreen)
+                    .font(.title3)
+                    .foregroundStyle(.green)
             }
         }
-        .padding()
-        .background(AppTheme.cardBackground)
-        .cornerRadius(AppTheme.cornerRadius)
-        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+        .padding(12)
     }
 
     func formatTime(_ date: Date) -> String {
