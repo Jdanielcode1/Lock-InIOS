@@ -14,8 +14,8 @@ struct GoalDetailView: View {
     @StateObject private var viewModel: GoalDetailViewModel
     @State private var showingVideoPicker = false
     @State private var showingTimeLapseRecorder = false
-    @State private var showingAddSubtask = false
-    @State private var selectedSubtask: Subtask?
+    @State private var showingAddGoalTodo = false
+    @State private var selectedGoalTodo: GoalTodo?
     @Environment(\.dismiss) private var dismiss
 
     // iPad adaptation
@@ -75,12 +75,12 @@ struct GoalDetailView: View {
                         .frame(maxWidth: sizing.maxContentWidth)
                 }
 
-                // iPad: Side-by-side layout for subtasks and sessions
+                // iPad: Side-by-side layout for tasks and sessions
                 if sizing.isIPad {
                     HStack(alignment: .top, spacing: sizing.cardSpacing) {
-                        // Subtasks column
+                        // Tasks column
                         VStack(alignment: .leading, spacing: 12) {
-                            subtasksSection
+                            goalTodosSection
                         }
                         .frame(maxWidth: .infinity)
 
@@ -94,12 +94,12 @@ struct GoalDetailView: View {
                     .padding(.horizontal, sizing.horizontalPadding)
                 } else {
                     // iPhone: Vertical stack
-                    subtasksSection
+                    goalTodosSection
                     sessionsSection
 
-                    // Add subtask button if empty
-                    if viewModel.subtasks.isEmpty {
-                        addSubtaskButton
+                    // Add task button if empty
+                    if viewModel.goalTodos.isEmpty {
+                        addGoalTodoButton
                     }
                 }
             }
@@ -120,9 +120,9 @@ struct GoalDetailView: View {
                     }
 
                     Button {
-                        showingAddSubtask = true
+                        showingAddGoalTodo = true
                     } label: {
-                        Label("Add Subtask", systemImage: "checklist")
+                        Label("Add Task", systemImage: "checklist")
                     }
 
                     Divider()
@@ -150,23 +150,27 @@ struct GoalDetailView: View {
             }
         }
         .fullScreenCover(isPresented: $showingTimeLapseRecorder) {
-            TimeLapseRecorderView(goalId: goal.id, subtaskId: selectedSubtask?.id)
+            TimeLapseRecorderView(goalId: goal.id, goalTodoId: selectedGoalTodo?.id)
         }
         .fullScreenCover(isPresented: $showingVideoPicker) {
-            VideoRecorderView(goalId: goal.id, subtaskId: selectedSubtask?.id)
+            VideoRecorderView(goalId: goal.id, goalTodoId: selectedGoalTodo?.id)
         }
-        .sheet(isPresented: $showingAddSubtask) {
-            AddSubtaskSheet(goalId: goal.id)
+        .sheet(isPresented: $showingAddGoalTodo) {
+            AddGoalTodoSheet(goalId: goal.id)
         }
         .onChange(of: showingTimeLapseRecorder) { _, isShowing in
             if !isShowing {
-                selectedSubtask = nil
+                selectedGoalTodo = nil
             }
         }
         .onChange(of: showingVideoPicker) { _, isShowing in
             if !isShowing {
-                selectedSubtask = nil
+                selectedGoalTodo = nil
             }
+        }
+        .task {
+            // Check and reset recurring todos on view appear
+            try? await ConvexService.shared.checkAndResetRecurringTodos(goalId: goal.id)
         }
     }
 
@@ -224,19 +228,19 @@ struct GoalDetailView: View {
         .padding(.horizontal, sizing.horizontalPadding)
     }
 
-    // MARK: - Subtasks Section
+    // MARK: - Goal Todos Section
     @ViewBuilder
-    private var subtasksSection: some View {
-        if !viewModel.subtasks.isEmpty || sizing.isIPad {
+    private var goalTodosSection: some View {
+        if !viewModel.goalTodos.isEmpty || sizing.isIPad {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("Subtasks")
+                    Text("Tasks")
                         .font(.headline)
 
                     Spacer()
 
                     Button {
-                        showingAddSubtask = true
+                        showingAddGoalTodo = true
                     } label: {
                         Image(systemName: "plus.circle.fill")
                             .font(.title2)
@@ -245,17 +249,17 @@ struct GoalDetailView: View {
                 }
                 .padding(.horizontal, sizing.isIPad ? 0 : 16)
 
-                if viewModel.subtasks.isEmpty {
+                if viewModel.goalTodos.isEmpty {
                     // Empty state for iPad
                     VStack(spacing: 12) {
                         Image(systemName: "checklist")
                             .font(.system(size: 32, weight: .light))
                             .foregroundStyle(.secondary)
-                        Text("No subtasks yet")
+                        Text("No tasks yet")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                        Button("Add Subtask") {
-                            showingAddSubtask = true
+                        Button("Add Task") {
+                            showingAddGoalTodo = true
                         }
                         .font(.subheadline)
                     }
@@ -266,16 +270,24 @@ struct GoalDetailView: View {
                     .padding(.horizontal, sizing.isIPad ? 0 : 16)
                 } else {
                     VStack(spacing: 0) {
-                        ForEach(Array(viewModel.subtasks.enumerated()), id: \.element.id) { index, subtask in
-                            Button {
-                                selectedSubtask = subtask
-                                showingTimeLapseRecorder = true
-                            } label: {
-                                SubtaskCard(subtask: subtask)
-                            }
-                            .buttonStyle(.plain)
+                        ForEach(Array(viewModel.goalTodos.enumerated()), id: \.element.id) { index, todo in
+                            GoalTodoCard(
+                                todo: todo,
+                                onToggle: {
+                                    Task {
+                                        try? await ConvexService.shared.toggleGoalTodo(
+                                            id: todo.id,
+                                            isCompleted: !todo.isCompleted
+                                        )
+                                    }
+                                },
+                                onTap: {
+                                    selectedGoalTodo = todo
+                                    showingTimeLapseRecorder = true
+                                }
+                            )
 
-                            if index < viewModel.subtasks.count - 1 {
+                            if index < viewModel.goalTodos.count - 1 {
                                 Divider()
                                     .padding(.leading, 16)
                             }
@@ -336,7 +348,7 @@ struct GoalDetailView: View {
                 VStack(spacing: 0) {
                     ForEach(Array(viewModel.studySessions.enumerated()), id: \.element.id) { index, session in
                         NavigationLink(destination: VideoPlayerView(session: session)) {
-                            StudySessionCard(session: session, subtasks: viewModel.subtasks, isIPad: sizing.isIPad)
+                            StudySessionCard(session: session, goalTodos: viewModel.goalTodos, isIPad: sizing.isIPad)
                         }
 
                         if index < viewModel.studySessions.count - 1 {
@@ -352,14 +364,14 @@ struct GoalDetailView: View {
         }
     }
 
-    // MARK: - Add Subtask Button
-    private var addSubtaskButton: some View {
+    // MARK: - Add Goal Todo Button
+    private var addGoalTodoButton: some View {
         Button {
-            showingAddSubtask = true
+            showingAddGoalTodo = true
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "plus.circle")
-                Text("Add subtasks to break down your goal")
+                Text("Add tasks to break down your goal")
             }
             .font(.subheadline)
             .foregroundStyle(Color.accentColor)
@@ -374,14 +386,14 @@ struct GoalDetailView: View {
 
 struct StudySessionCard: View {
     let session: StudySession
-    let subtasks: [Subtask]
+    let goalTodos: [GoalTodo]
     var isIPad: Bool = false
 
     @State private var thumbnail: UIImage?
 
-    private var subtaskName: String? {
-        guard let subtaskId = session.subtaskId else { return nil }
-        return subtasks.first(where: { $0.id == subtaskId })?.title
+    private var goalTodoName: String? {
+        guard let todoId = session.goalTodoId else { return nil }
+        return goalTodos.first(where: { $0.id == todoId })?.title
     }
 
     var body: some View {
@@ -418,9 +430,9 @@ struct StudySessionCard: View {
                     .font(.subheadline.bold())
                     .foregroundStyle(.primary)
 
-                // Show subtask name if available
-                if let subtaskName = subtaskName {
-                    Label(subtaskName, systemImage: "checklist")
+                // Show goal todo name if available
+                if let todoName = goalTodoName {
+                    Label(todoName, systemImage: "checklist")
                         .font(.caption)
                         .foregroundStyle(Color.accentColor)
                 }
@@ -477,7 +489,7 @@ struct StudySessionCard: View {
 @MainActor
 class GoalDetailViewModel: ObservableObject {
     @Published var studySessions: [StudySession] = []
-    @Published var subtasks: [Subtask] = []
+    @Published var goalTodos: [GoalTodo] = []
 
     private var cancellables = Set<AnyCancellable>()
     private let convexService = ConvexService.shared
@@ -497,11 +509,11 @@ class GoalDetailViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Subscribe to subtasks
-        convexService.listSubtasks(goalId: goalId)
+        // Subscribe to goal todos
+        convexService.listGoalTodos(goalId: goalId)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] subtasks in
-                self?.subtasks = subtasks
+            .sink { [weak self] todos in
+                self?.goalTodos = todos
             }
             .store(in: &cancellables)
     }
@@ -521,13 +533,13 @@ class GoalDetailViewModel: ObservableObject {
         }
     }
 
-    func deleteSubtasks(at indexSet: IndexSet) async {
+    func deleteGoalTodos(at indexSet: IndexSet) async {
         for index in indexSet {
-            let subtask = subtasks[index]
+            let todo = goalTodos[index]
             do {
-                try await convexService.deleteSubtask(id: subtask.id)
+                try await convexService.deleteGoalTodo(id: todo.id)
             } catch {
-                print("Failed to delete subtask: \(error)")
+                print("Failed to delete goal todo: \(error)")
             }
         }
     }

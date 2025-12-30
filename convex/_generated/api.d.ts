@@ -9,9 +9,10 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as crons from "../crons.js";
+import type * as goalTodos from "../goalTodos.js";
 import type * as goals from "../goals.js";
 import type * as studySessions from "../studySessions.js";
-import type * as subtasks from "../subtasks.js";
 import type * as todos from "../todos.js";
 
 import type {
@@ -30,9 +31,10 @@ import type {
  */
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  crons: typeof crons;
+  goalTodos: typeof goalTodos;
   goals: typeof goals;
   studySessions: typeof studySessions;
-  subtasks: typeof subtasks;
   todos: typeof todos;
 }>;
 declare const fullApiWithMounts: typeof fullApi;

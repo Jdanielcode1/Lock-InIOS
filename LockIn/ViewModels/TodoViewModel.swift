@@ -11,6 +11,7 @@ import Combine
 @MainActor
 class TodoViewModel: ObservableObject {
     @Published var todos: [TodoItem] = []
+    @Published var goalTodos: [GoalTodo] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
 
@@ -19,6 +20,7 @@ class TodoViewModel: ObservableObject {
 
     init() {
         subscribeToTodos()
+        subscribeToGoalTodos()
     }
 
     private func subscribeToTodos() {
@@ -31,6 +33,33 @@ class TodoViewModel: ObservableObject {
                 self?.isLoading = false
             }
             .store(in: &cancellables)
+    }
+
+    private func subscribeToGoalTodos() {
+        convexService.listAllGoalTodos()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] goalTodos in
+                self?.goalTodos = goalTodos
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Goal Todo Actions
+
+    func toggleGoalTodo(_ todo: GoalTodo) async {
+        do {
+            try await convexService.toggleGoalTodo(id: todo.id, isCompleted: !todo.isCompleted)
+        } catch {
+            errorMessage = "Failed to update todo: \(error.localizedDescription)"
+        }
+    }
+
+    func deleteGoalTodo(_ todo: GoalTodo) async {
+        do {
+            try await convexService.deleteGoalTodo(id: todo.id)
+        } catch {
+            errorMessage = "Failed to delete todo: \(error.localizedDescription)"
+        }
     }
 
     func createTodo(title: String, description: String?) async {

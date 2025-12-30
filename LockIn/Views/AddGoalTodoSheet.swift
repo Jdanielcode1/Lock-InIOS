@@ -1,19 +1,21 @@
 //
-//  AddSubtaskSheet.swift
+//  AddGoalTodoSheet.swift
 //  LockIn
 //
-//  Created by D Cantu on 20/10/25.
+//  Created by Claude on 29/12/25.
 //
 
 import SwiftUI
 
-struct AddSubtaskSheet: View {
+struct AddGoalTodoSheet: View {
     let goalId: String
     @Environment(\.dismiss) var dismiss
 
     @State private var title = ""
     @State private var description = ""
+    @State private var todoType: GoalTodoType = .simple
     @State private var estimatedHours: Double = 5
+    @State private var frequency: TodoFrequency = .none
     @State private var isCreating = false
     @State private var errorMessage: String?
     @FocusState private var titleFocused: Bool
@@ -21,8 +23,7 @@ struct AddSubtaskSheet: View {
     private let convexService = ConvexService.shared
 
     var isValid: Bool {
-        !title.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !description.trimmingCharacters(in: .whitespaces).isEmpty
+        !title.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     var body: some View {
@@ -36,10 +37,10 @@ struct AddSubtaskSheet: View {
                                 .font(.system(size: 48, weight: .light))
                                 .foregroundStyle(Color.accentColor)
 
-                            Text("New Subtask")
+                            Text("New Task")
                                 .font(.title2.bold())
 
-                            Text("Break down your goal into manageable pieces")
+                            Text("Add a task to track within this goal")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
@@ -51,7 +52,7 @@ struct AddSubtaskSheet: View {
 
                     // Title Section
                     Section {
-                        TextField("e.g., Learn SwiftUI basics", text: $title)
+                        TextField("e.g., Review lecture notes", text: $title)
                             .focused($titleFocused)
                     } header: {
                         Text("Title")
@@ -59,37 +60,75 @@ struct AddSubtaskSheet: View {
 
                     // Description Section
                     Section {
-                        TextField("What will you accomplish?", text: $description, axis: .vertical)
-                            .lineLimit(3...6)
+                        TextField("Optional details...", text: $description, axis: .vertical)
+                            .lineLimit(2...4)
                     } header: {
                         Text("Description")
                     }
 
-                    // Hours Section
+                    // Type Section
                     Section {
-                        VStack(spacing: 12) {
-                            HStack {
-                                Text("Hours")
-                                Spacer()
-                                Text("\(Int(estimatedHours)) hours")
-                                    .font(.headline)
-                                    .foregroundStyle(Color.accentColor)
+                        Picker("Type", selection: $todoType) {
+                            ForEach(GoalTodoType.allCases, id: \.self) { type in
+                                Label(type.displayName, systemImage: type.icon)
+                                    .tag(type)
                             }
+                        }
+                        .pickerStyle(.segmented)
+                    } header: {
+                        Text("Task Type")
+                    } footer: {
+                        Text(todoType == .simple ? "Simple checkbox - mark as done when complete" : "Track hours spent on this task")
+                    }
 
-                            Slider(value: $estimatedHours, in: 1...50, step: 1)
+                    // Hours Section (only for hours-based)
+                    if todoType == .hours {
+                        Section {
+                            VStack(spacing: 12) {
+                                HStack {
+                                    Text("Hours")
+                                    Spacer()
+                                    Text("\(Int(estimatedHours)) hours")
+                                        .font(.headline)
+                                        .foregroundStyle(Color.accentColor)
+                                }
 
-                            HStack {
-                                Text("1 hr")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                                Text("50 hrs")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                Slider(value: $estimatedHours, in: 1...50, step: 1)
+
+                                HStack {
+                                    Text("1 hr")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                    Text("50 hrs")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        } header: {
+                            Text("Estimated Time")
+                        }
+                    }
+
+                    // Frequency Section
+                    Section {
+                        Picker("Repeat", selection: $frequency) {
+                            ForEach(TodoFrequency.allCases, id: \.self) { freq in
+                                Label(freq.displayName, systemImage: freq.icon)
+                                    .tag(freq)
                             }
                         }
                     } header: {
-                        Text("Estimated Time")
+                        Text("Frequency")
+                    } footer: {
+                        switch frequency {
+                        case .none:
+                            Text("One-time task")
+                        case .daily:
+                            Text("Resets automatically at the start of each day")
+                        case .weekly:
+                            Text("Resets automatically at the start of each week")
+                        }
                     }
                 }
                 .listStyle(.insetGrouped)
@@ -100,7 +139,7 @@ struct AddSubtaskSheet: View {
 
                     Button {
                         Task {
-                            await createSubtask()
+                            await createGoalTodo()
                         }
                     } label: {
                         HStack(spacing: 8) {
@@ -109,7 +148,7 @@ struct AddSubtaskSheet: View {
                                     .tint(.white)
                             } else {
                                 Image(systemName: "plus.circle.fill")
-                                Text("Create Subtask")
+                                Text("Create Task")
                             }
                         }
                         .font(.headline)
@@ -151,26 +190,28 @@ struct AddSubtaskSheet: View {
         }
     }
 
-    private func createSubtask() async {
+    private func createGoalTodo() async {
         isCreating = true
         errorMessage = nil
 
         do {
-            _ = try await convexService.createSubtask(
+            _ = try await convexService.createGoalTodo(
                 goalId: goalId,
                 title: title.trimmingCharacters(in: .whitespaces),
-                description: description.trimmingCharacters(in: .whitespaces),
-                estimatedHours: estimatedHours
+                description: description.trimmingCharacters(in: .whitespaces).isEmpty ? nil : description.trimmingCharacters(in: .whitespaces),
+                todoType: todoType,
+                estimatedHours: todoType == .hours ? estimatedHours : nil,
+                frequency: frequency
             )
 
             dismiss()
         } catch {
-            errorMessage = "Failed to create subtask: \(error.localizedDescription)"
+            errorMessage = "Failed to create task: \(error.localizedDescription)"
             isCreating = false
         }
     }
 }
 
 #Preview {
-    AddSubtaskSheet(goalId: "123")
+    AddGoalTodoSheet(goalId: "123")
 }

@@ -5,7 +5,7 @@ import { userMutation, userQuery } from "./auth";
 export const create = userMutation({
   args: {
     goalId: v.id("goals"),
-    subtaskId: v.optional(v.id("subtasks")),
+    goalTodoId: v.optional(v.id("goalTodos")),
     localVideoPath: v.string(),
     localThumbnailPath: v.optional(v.string()),
     durationMinutes: v.float64(),
@@ -22,7 +22,7 @@ export const create = userMutation({
     const sessionId = await ctx.db.insert("studySessions", {
       userId,
       goalId: args.goalId,
-      subtaskId: args.subtaskId,
+      goalTodoId: args.goalTodoId,
       localVideoPath: args.localVideoPath,
       localThumbnailPath: args.localThumbnailPath,
       durationMinutes: args.durationMinutes,
@@ -39,12 +39,15 @@ export const create = userMutation({
       status,
     });
 
-    // Update subtask progress if applicable
-    if (args.subtaskId) {
-      const subtask = await ctx.db.get(args.subtaskId);
-      if (subtask && subtask.userId === userId) {
-        await ctx.db.patch(args.subtaskId, {
-          completedHours: subtask.completedHours + hoursToAdd,
+    // Update goal todo progress if applicable (for hours-based todos)
+    if (args.goalTodoId) {
+      const goalTodo = await ctx.db.get(args.goalTodoId);
+      if (goalTodo && goalTodo.userId === userId && goalTodo.todoType === "hours") {
+        const newCompletedHours = (goalTodo.completedHours || 0) + hoursToAdd;
+        const isCompleted = goalTodo.estimatedHours ? newCompletedHours >= goalTodo.estimatedHours : false;
+        await ctx.db.patch(args.goalTodoId, {
+          completedHours: newCompletedHours,
+          isCompleted,
         });
       }
     }
@@ -73,20 +76,20 @@ export const listByGoal = userQuery({
   },
 });
 
-// Query: List study sessions for a subtask
-export const listBySubtask = userQuery({
-  args: { subtaskId: v.id("subtasks") },
+// Query: List study sessions for a goal todo
+export const listByGoalTodo = userQuery({
+  args: { goalTodoId: v.id("goalTodos") },
   handler: async (ctx, args) => {
     const userId = ctx.identity.tokenIdentifier;
 
-    // Verify subtask ownership
-    const subtask = await ctx.db.get(args.subtaskId);
-    if (!subtask) throw new Error("Subtask not found");
-    if (subtask.userId !== userId) throw new Error("Not authorized");
+    // Verify goal todo ownership
+    const goalTodo = await ctx.db.get(args.goalTodoId);
+    if (!goalTodo) throw new Error("Goal todo not found");
+    if (goalTodo.userId !== userId) throw new Error("Not authorized");
 
     const sessions = await ctx.db
       .query("studySessions")
-      .withIndex("by_subtask", (q) => q.eq("subtaskId", args.subtaskId))
+      .withIndex("by_goal_todo", (q) => q.eq("goalTodoId", args.goalTodoId))
       .order("desc")
       .collect();
     return sessions;
@@ -129,12 +132,12 @@ export const remove = userMutation({
       });
     }
 
-    // Update subtask progress if applicable
-    if (session.subtaskId) {
-      const subtask = await ctx.db.get(session.subtaskId);
-      if (subtask && subtask.userId === userId) {
-        await ctx.db.patch(session.subtaskId, {
-          completedHours: Math.max(0, subtask.completedHours - hoursToSubtract),
+    // Update goal todo progress if applicable (for hours-based todos)
+    if (session.goalTodoId) {
+      const goalTodo = await ctx.db.get(session.goalTodoId);
+      if (goalTodo && goalTodo.userId === userId && goalTodo.todoType === "hours") {
+        await ctx.db.patch(session.goalTodoId, {
+          completedHours: Math.max(0, (goalTodo.completedHours || 0) - hoursToSubtract),
         });
       }
     }

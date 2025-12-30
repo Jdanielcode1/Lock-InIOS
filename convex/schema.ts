@@ -25,13 +25,25 @@ export default defineSchema({
     .index("by_user_status", ["userId", "status"])
     .index("by_user_archived", ["userId", "isArchived"]),
 
-  subtasks: defineTable({
+  // Goal Todos - tasks within goals (replacing subtasks)
+  goalTodos: defineTable({
     userId: v.string(), // Auth0 user ID
     goalId: v.id("goals"),
     title: v.string(),
-    description: v.string(),
-    estimatedHours: v.float64(),
-    completedHours: v.float64(),
+    description: v.optional(v.string()),
+    // Todo type: "simple" = checkbox only, "hours" = tracks hours
+    todoType: v.union(v.literal("simple"), v.literal("hours")),
+    // For hours-based todos only
+    estimatedHours: v.optional(v.float64()),
+    completedHours: v.optional(v.float64()),
+    // Completion status
+    isCompleted: v.boolean(),
+    // Recurring configuration
+    frequency: v.union(v.literal("none"), v.literal("daily"), v.literal("weekly")),
+    lastResetAt: v.optional(v.float64()), // Timestamp of last auto-reset
+    // Video attachment
+    localVideoPath: v.optional(v.string()),
+    localThumbnailPath: v.optional(v.string()),
     createdAt: v.float64(),
   })
     .index("by_goal", ["goalId"])
@@ -40,14 +52,14 @@ export default defineSchema({
   studySessions: defineTable({
     userId: v.string(), // Auth0 user ID
     goalId: v.id("goals"),
-    subtaskId: v.optional(v.id("subtasks")),
+    goalTodoId: v.optional(v.id("goalTodos")),
     localVideoPath: v.string(),
     localThumbnailPath: v.optional(v.string()),
     durationMinutes: v.float64(),
     createdAt: v.float64(),
   })
     .index("by_goal", ["goalId"])
-    .index("by_subtask", ["subtaskId"])
+    .index("by_goal_todo", ["goalTodoId"])
     .index("by_user", ["userId"]),
 
   todos: defineTable({

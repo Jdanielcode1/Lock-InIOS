@@ -67,42 +67,111 @@ class ConvexService: ObservableObject {
             .eraseToAnyPublisher()
     }
 
-    // MARK: - Subtasks
+    // MARK: - Goal Todos
 
-    func listSubtasks(goalId: String) -> AnyPublisher<[Subtask], Never> {
-        return convexClient.subscribe(to: "subtasks:listByGoal", with: ["goalId": goalId], yielding: [Subtask].self)
+    func listGoalTodos(goalId: String) -> AnyPublisher<[GoalTodo], Never> {
+        return convexClient.subscribe(to: "goalTodos:listByGoal", with: ["goalId": goalId], yielding: [GoalTodo].self)
             .replaceError(with: [])
             .eraseToAnyPublisher()
     }
 
-    func createSubtask(goalId: String, title: String, description: String, estimatedHours: Double) async throws -> String {
-        return try await convexClient.mutation("subtasks:create", with: [
-            "goalId": goalId,
-            "title": title,
-            "description": description,
-            "estimatedHours": estimatedHours
+    func listAllGoalTodos() -> AnyPublisher<[GoalTodo], Never> {
+        return convexClient.subscribe(to: "goalTodos:listAll", yielding: [GoalTodo].self)
+            .replaceError(with: [])
+            .eraseToAnyPublisher()
+    }
+
+    func createGoalTodo(
+        goalId: String,
+        title: String,
+        description: String?,
+        todoType: GoalTodoType,
+        estimatedHours: Double?,
+        frequency: TodoFrequency
+    ) async throws -> String {
+        // Handle all combinations of optional parameters
+        if let desc = description, let hours = estimatedHours, todoType == .hours {
+            return try await convexClient.mutation("goalTodos:create", with: [
+                "goalId": goalId,
+                "title": title,
+                "description": desc,
+                "todoType": todoType.rawValue,
+                "estimatedHours": hours,
+                "frequency": frequency.rawValue
+            ])
+        } else if let desc = description {
+            return try await convexClient.mutation("goalTodos:create", with: [
+                "goalId": goalId,
+                "title": title,
+                "description": desc,
+                "todoType": todoType.rawValue,
+                "frequency": frequency.rawValue
+            ])
+        } else if let hours = estimatedHours, todoType == .hours {
+            return try await convexClient.mutation("goalTodos:create", with: [
+                "goalId": goalId,
+                "title": title,
+                "todoType": todoType.rawValue,
+                "estimatedHours": hours,
+                "frequency": frequency.rawValue
+            ])
+        } else {
+            return try await convexClient.mutation("goalTodos:create", with: [
+                "goalId": goalId,
+                "title": title,
+                "todoType": todoType.rawValue,
+                "frequency": frequency.rawValue
+            ])
+        }
+    }
+
+    func toggleGoalTodo(id: String, isCompleted: Bool) async throws {
+        let _: String? = try await convexClient.mutation("goalTodos:toggle", with: [
+            "id": id,
+            "isCompleted": isCompleted
         ])
     }
 
-    func deleteSubtask(id: String) async throws {
-        let _: String? = try await convexClient.mutation("subtasks:remove", with: ["id": id])
+    func deleteGoalTodo(id: String) async throws {
+        let _: String? = try await convexClient.mutation("goalTodos:remove", with: ["id": id])
+    }
+
+    func attachVideoToGoalTodo(id: String, localVideoPath: String, localThumbnailPath: String?) async throws {
+        if let thumbnailPath = localThumbnailPath {
+            let _: String? = try await convexClient.mutation("goalTodos:attachVideo", with: [
+                "id": id,
+                "localVideoPath": localVideoPath,
+                "localThumbnailPath": thumbnailPath
+            ])
+        } else {
+            let _: String? = try await convexClient.mutation("goalTodos:attachVideo", with: [
+                "id": id,
+                "localVideoPath": localVideoPath
+            ])
+        }
+    }
+
+    func checkAndResetRecurringTodos(goalId: String) async throws {
+        let _: String? = try await convexClient.mutation("goalTodos:checkAndResetRecurring", with: [
+            "goalId": goalId
+        ])
     }
 
     // MARK: - Study Sessions
 
-    func createStudySession(goalId: String, subtaskId: String?, localVideoPath: String, localThumbnailPath: String?, durationMinutes: Double) async throws -> String {
-        if let subtaskId = subtaskId, let thumbnailPath = localThumbnailPath {
+    func createStudySession(goalId: String, goalTodoId: String?, localVideoPath: String, localThumbnailPath: String?, durationMinutes: Double) async throws -> String {
+        if let todoId = goalTodoId, let thumbnailPath = localThumbnailPath {
             return try await convexClient.mutation("studySessions:create", with: [
                 "goalId": goalId,
-                "subtaskId": subtaskId,
+                "goalTodoId": todoId,
                 "localVideoPath": localVideoPath,
                 "localThumbnailPath": thumbnailPath,
                 "durationMinutes": durationMinutes
             ])
-        } else if let subtaskId = subtaskId {
+        } else if let todoId = goalTodoId {
             return try await convexClient.mutation("studySessions:create", with: [
                 "goalId": goalId,
-                "subtaskId": subtaskId,
+                "goalTodoId": todoId,
                 "localVideoPath": localVideoPath,
                 "durationMinutes": durationMinutes
             ])

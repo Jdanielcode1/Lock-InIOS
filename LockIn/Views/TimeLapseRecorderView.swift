@@ -35,7 +35,7 @@ enum TimelapseSpeed: String, CaseIterable {
 
 struct TimeLapseRecorderView: View {
     let goalId: String
-    let subtaskId: String?
+    let goalTodoId: String?
 
     @Environment(\.dismiss) var dismiss
     @Environment(\.horizontalSizeClass) var sizeClass
@@ -98,9 +98,9 @@ struct TimeLapseRecorderView: View {
         selectedTodoIds.count
     }
 
-    init(goalId: String, subtaskId: String?) {
+    init(goalId: String, goalTodoId: String?) {
         self.goalId = goalId
-        self.subtaskId = subtaskId
+        self.goalTodoId = goalTodoId
         _recorder = StateObject(wrappedValue: TimeLapseRecorder())
     }
 
@@ -1349,7 +1349,7 @@ struct TimeLapseRecorderView: View {
             // Create study session with local path
             _ = try await ConvexService.shared.createStudySession(
                 goalId: goalId,
-                subtaskId: subtaskId,
+                goalTodoId: goalTodoId,
                 localVideoPath: localVideoPath,
                 localThumbnailPath: localThumbnailPath,
                 durationMinutes: studyTimeMinutes
@@ -1360,6 +1360,11 @@ struct TimeLapseRecorderView: View {
             // Mark checked todos as completed
             for todoId in checkedTodoIds {
                 try? await ConvexService.shared.toggleTodo(id: todoId, isCompleted: true)
+            }
+
+            // Mark goal todo as completed if provided
+            if let goalTodoId = goalTodoId {
+                try? await ConvexService.shared.toggleGoalTodo(id: goalTodoId, isCompleted: true)
             }
 
             uploadProgress = 1.0
@@ -1379,5 +1384,5 @@ struct TimeLapseRecorderView: View {
 }
 
 #Preview {
-    TimeLapseRecorderView(goalId: "123", subtaskId: nil)
+    TimeLapseRecorderView(goalId: "123", goalTodoId: nil)
 }

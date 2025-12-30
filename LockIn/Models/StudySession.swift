@@ -10,7 +10,7 @@ import Foundation
 struct StudySession: Identifiable, Codable {
     let _id: String
     let goalId: String
-    let subtaskId: String?
+    let goalTodoId: String?
     let localVideoPath: String
     let localThumbnailPath: String?
     let durationMinutes: Double
@@ -52,7 +52,7 @@ struct StudySession: Identifiable, Codable {
 // For creating new study sessions (without ID)
 struct CreateStudySessionRequest: Codable {
     let goalId: String
-    let subtaskId: String?
+    let goalTodoId: String?
     let localVideoPath: String
     let localThumbnailPath: String?
     let durationMinutes: Double

@@ -635,7 +635,7 @@ struct VideoPlayerRepresentable: UIViewControllerRepresentable {
         VideoPlayerView(session: StudySession(
             _id: "1",
             goalId: "123",
-            subtaskId: nil,
+            goalTodoId: nil,
             localVideoPath: "LockInVideos/test.mp4",
             localThumbnailPath: nil,
             durationMinutes: 30,

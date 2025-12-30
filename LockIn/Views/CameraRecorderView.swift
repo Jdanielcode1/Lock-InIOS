@@ -12,7 +12,7 @@ import UIKit
 
 struct CameraRecorderView: View {
     let goalId: String
-    let subtaskId: String?
+    let goalTodoId: String?
 
     @Environment(\.dismiss) var dismiss
     @StateObject private var viewModel: CameraRecorderViewModel
@@ -21,10 +21,10 @@ struct CameraRecorderView: View {
 
     private let videoService = VideoService.shared
 
-    init(goalId: String, subtaskId: String?) {
+    init(goalId: String, goalTodoId: String?) {
         self.goalId = goalId
-        self.subtaskId = subtaskId
-        _viewModel = StateObject(wrappedValue: CameraRecorderViewModel(goalId: goalId, subtaskId: subtaskId))
+        self.goalTodoId = goalTodoId
+        _viewModel = StateObject(wrappedValue: CameraRecorderViewModel(goalId: goalId, goalTodoId: goalTodoId))
     }
 
     var body: some View {
@@ -407,7 +407,7 @@ class CameraRecorderViewModel: NSObject, ObservableObject {
     private var videoOutput: AVCaptureMovieFileOutput?
     private var currentVideoInput: AVCaptureDeviceInput?
     private let goalId: String
-    private let subtaskId: String?
+    private let goalTodoId: String?
     private let videoService = VideoService.shared
     private var recordingTimer: Timer?
     private var pulseTimer: Timer?
@@ -418,9 +418,9 @@ class CameraRecorderViewModel: NSObject, ObservableObject {
         return String(format: "%02d:%02d", minutes, seconds)
     }
 
-    init(goalId: String, subtaskId: String?) {
+    init(goalId: String, goalTodoId: String?) {
         self.goalId = goalId
-        self.subtaskId = subtaskId
+        self.goalTodoId = goalTodoId
         super.init()
     }
 
@@ -550,11 +550,16 @@ class CameraRecorderViewModel: NSObject, ObservableObject {
             // Create study session with local path
             _ = try await ConvexService.shared.createStudySession(
                 goalId: goalId,
-                subtaskId: subtaskId,
+                goalTodoId: goalTodoId,
                 localVideoPath: localVideoPath,
                 localThumbnailPath: localThumbnailPath,
                 durationMinutes: durationMinutes
             )
+
+            // Mark goal todo as completed if provided
+            if let goalTodoId = goalTodoId {
+                try? await ConvexService.shared.toggleGoalTodo(id: goalTodoId, isCompleted: true)
+            }
 
             uploadProgress = 1.0
             uploadSuccess = true
@@ -642,5 +647,5 @@ extension CameraRecorderViewModel: AVCaptureFileOutputRecordingDelegate {
 }
 
 #Preview {
-    CameraRecorderView(goalId: "123", subtaskId: nil)
+    CameraRecorderView(goalId: "123", goalTodoId: nil)
 }
