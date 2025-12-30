@@ -17,6 +17,8 @@ struct GoalDetailView: View {
     @State private var showingAddGoalTodo = false
     @State private var selectedGoalTodo: GoalTodo?
     @State private var showingVideoPlayer = false
+    @State private var recentlyArchivedTodo: GoalTodo?
+    @State private var showUndoToast = false
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tabBarVisibility: TabBarVisibility
 
@@ -184,6 +186,40 @@ struct GoalDetailView: View {
             // Check and reset recurring todos on view appear
             try? await ConvexService.shared.checkAndResetRecurringTodos(goalId: goal.id)
         }
+        .overlay(alignment: .bottom) {
+            if showUndoToast, let archivedTodo = recentlyArchivedTodo {
+                HStack(spacing: 12) {
+                    Text("\"\(archivedTodo.title)\" archived")
+                        .font(.subheadline)
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+
+                    Button {
+                        Task {
+                            try? await ConvexService.shared.unarchiveGoalTodo(id: archivedTodo.id)
+                            await MainActor.run {
+                                withAnimation(.spring(response: 0.3)) {
+                                    showUndoToast = false
+                                }
+                            }
+                        }
+                    } label: {
+                        Text("Undo")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(Color.accentColor)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Color(UIColor.systemGray6).opacity(0.95))
+                .background(.ultraThinMaterial)
+                .cornerRadius(12)
+                .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
     }
 
     // MARK: - Motivational Header
@@ -281,8 +317,8 @@ struct GoalDetailView: View {
                     .cornerRadius(12)
                     .padding(.horizontal, sizing.isIPad ? 0 : 16)
                 } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(viewModel.goalTodos.enumerated()), id: \.element.id) { index, todo in
+                    List {
+                        ForEach(viewModel.goalTodos) { todo in
                             GoalTodoCard(
                                 todo: todo,
                                 onToggle: {
@@ -306,15 +342,47 @@ struct GoalDetailView: View {
                                     }
                                 }
                             )
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color(UIColor.secondarySystemGroupedBackground))
+                            .listRowSeparator(.visible)
+                            .listRowSeparatorTint(Color(UIColor.separator))
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    Task {
+                                        try? await ConvexService.shared.deleteGoalTodo(id: todo.id)
+                                    }
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
 
-                            if index < viewModel.goalTodos.count - 1 {
-                                Divider()
-                                    .padding(.leading, 16)
+                                Button {
+                                    recentlyArchivedTodo = todo
+                                    Task {
+                                        try? await ConvexService.shared.archiveGoalTodo(id: todo.id)
+                                        await MainActor.run {
+                                            withAnimation(.spring(response: 0.3)) {
+                                                showUndoToast = true
+                                            }
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                                                withAnimation(.spring(response: 0.3)) {
+                                                    showUndoToast = false
+                                                }
+                                            }
+                                        }
+                                    }
+                                } label: {
+                                    Label("Archive", systemImage: "archivebox")
+                                }
+                                .tint(.orange)
                             }
                         }
                     }
+                    .listStyle(.plain)
+                    .scrollDisabled(true)
+                    .scrollContentBackground(.hidden)
+                    .frame(height: CGFloat(viewModel.goalTodos.count) * 70)
                     .background(Color(UIColor.secondarySystemGroupedBackground))
-                    .cornerRadius(12)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                     .padding(.horizontal, sizing.isIPad ? 0 : 16)
                 }
             }

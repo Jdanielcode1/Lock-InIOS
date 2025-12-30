@@ -427,11 +427,12 @@ struct GoalTodoVideoPlayerView: View {
             // Get old video path to delete later
             let oldVideoPath = goalTodo.localVideoPath
 
-            // Update goal todo in database with new video path
+            // Update goal todo in database with new video path (preserve existing duration)
             try await ConvexService.shared.attachVideoToGoalTodo(
                 id: goalTodo.id,
                 localVideoPath: newVideoPath,
-                localThumbnailPath: goalTodo.localThumbnailPath
+                localThumbnailPath: goalTodo.localThumbnailPath,
+                videoDurationMinutes: goalTodo.videoDurationMinutes
             )
 
             // Delete old video file

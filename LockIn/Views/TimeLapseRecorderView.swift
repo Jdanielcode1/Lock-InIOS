@@ -1232,10 +1232,17 @@ struct TimeLapseRecorderView: View {
                 durationMinutes: studyTimeMinutes
             )
 
-            uploadProgress = 0.9
+            uploadProgress = 0.85
 
-            // Mark goal todo as completed if provided
+            // Attach video and mark goal todo as completed if provided
             if let goalTodoId = goalTodoId {
+                try? await ConvexService.shared.attachVideoToGoalTodo(
+                    id: goalTodoId,
+                    localVideoPath: localVideoPath,
+                    localThumbnailPath: localThumbnailPath,
+                    videoDurationMinutes: studyTimeMinutes
+                )
+                uploadProgress = 0.95
                 try? await ConvexService.shared.toggleGoalTodo(id: goalTodoId, isCompleted: true)
             }
 

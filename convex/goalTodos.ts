@@ -18,7 +18,8 @@ export const listByGoal = userQuery({
       .withIndex("by_goal", (q) => q.eq("goalId", args.goalId))
       .order("desc")
       .collect();
-    return todos;
+    // Filter out archived todos
+    return todos.filter((todo) => !todo.isArchived);
   },
 });
 
@@ -34,9 +35,10 @@ export const listAll = userQuery({
       .order("desc")
       .collect();
 
-    // Get goal names for each todo
+    // Filter out archived todos and get goal names
+    const activeTodos = todos.filter((todo) => !todo.isArchived);
     const todosWithGoalNames = await Promise.all(
-      todos.map(async (todo) => {
+      activeTodos.map(async (todo) => {
         const goal = await ctx.db.get(todo.goalId);
         return {
           ...todo,
@@ -132,6 +134,7 @@ export const attachVideo = userMutation({
     id: v.id("goalTodos"),
     localVideoPath: v.string(),
     localThumbnailPath: v.optional(v.string()),
+    videoDurationMinutes: v.optional(v.float64()),
   },
   handler: async (ctx, args) => {
     const userId = ctx.identity.tokenIdentifier;
@@ -142,6 +145,7 @@ export const attachVideo = userMutation({
     await ctx.db.patch(args.id, {
       localVideoPath: args.localVideoPath,
       localThumbnailPath: args.localThumbnailPath,
+      videoDurationMinutes: args.videoDurationMinutes,
     });
   },
 });
@@ -156,6 +160,36 @@ export const remove = userMutation({
     if (todo.userId !== userId) throw new Error("Not authorized");
 
     await ctx.db.delete(args.id);
+  },
+});
+
+// Mutation: Archive a goal todo
+export const archive = userMutation({
+  args: { id: v.id("goalTodos") },
+  handler: async (ctx, args) => {
+    const userId = ctx.identity.tokenIdentifier;
+    const todo = await ctx.db.get(args.id);
+    if (!todo) throw new Error("Goal todo not found");
+    if (todo.userId !== userId) throw new Error("Not authorized");
+
+    await ctx.db.patch(args.id, {
+      isArchived: true,
+    });
+  },
+});
+
+// Mutation: Unarchive a goal todo
+export const unarchive = userMutation({
+  args: { id: v.id("goalTodos") },
+  handler: async (ctx, args) => {
+    const userId = ctx.identity.tokenIdentifier;
+    const todo = await ctx.db.get(args.id);
+    if (!todo) throw new Error("Goal todo not found");
+    if (todo.userId !== userId) throw new Error("Not authorized");
+
+    await ctx.db.patch(args.id, {
+      isArchived: false,
+    });
   },
 });
 

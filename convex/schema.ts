@@ -38,12 +38,14 @@ export default defineSchema({
     completedHours: v.optional(v.float64()),
     // Completion status
     isCompleted: v.boolean(),
+    isArchived: v.optional(v.boolean()),
     // Recurring configuration
     frequency: v.union(v.literal("none"), v.literal("daily"), v.literal("weekly")),
     lastResetAt: v.optional(v.float64()), // Timestamp of last auto-reset
     // Video attachment
     localVideoPath: v.optional(v.string()),
     localThumbnailPath: v.optional(v.string()),
+    videoDurationMinutes: v.optional(v.float64()),
     createdAt: v.float64(),
   })
     .index("by_goal", ["goalId"])

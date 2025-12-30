@@ -61,6 +61,8 @@ struct GoalTodo: Identifiable, Codable {
     var lastResetAt: Double?
     var localVideoPath: String?
     var localThumbnailPath: String?
+    var videoDurationMinutes: Double?
+    var isArchived: Bool?
     let createdAt: Double
     // Goal title - included when fetching all todos for the user
     var goalTitle: String?
@@ -106,6 +108,21 @@ struct GoalTodo: Identifiable, Codable {
 
     var createdDate: Date {
         Date(timeIntervalSince1970: createdAt / 1000)
+    }
+
+    var formattedDuration: String? {
+        guard let minutes = videoDurationMinutes, minutes > 0 else { return nil }
+        if minutes < 1 {
+            return "\(Int(minutes * 60))s"
+        } else if minutes < 60 {
+            let mins = Int(minutes)
+            let secs = Int((minutes - Double(mins)) * 60)
+            return secs > 0 ? "\(mins)m \(secs)s" : "\(mins)m"
+        } else {
+            let hours = Int(minutes / 60)
+            let mins = Int(minutes.truncatingRemainder(dividingBy: 60))
+            return mins > 0 ? "\(hours)h \(mins)m" : "\(hours)h"
+        }
     }
 }
 

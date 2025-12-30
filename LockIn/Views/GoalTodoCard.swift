@@ -79,25 +79,34 @@ struct GoalTodoCard: View {
                     onRecord?()
                 } label: {
                     if todo.hasVideo {
-                        // Video thumbnail with play overlay
-                        ZStack {
-                            if let thumbnail = thumbnail {
-                                Image(uiImage: thumbnail)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: 50, height: 38)
-                                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                            } else {
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(Color(UIColor.systemGray5))
-                                    .frame(width: 50, height: 38)
+                        // Video thumbnail with play overlay and duration
+                        VStack(spacing: 2) {
+                            ZStack {
+                                if let thumbnail = thumbnail {
+                                    Image(uiImage: thumbnail)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 50, height: 38)
+                                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                                } else {
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(Color(UIColor.systemGray5))
+                                        .frame(width: 50, height: 38)
+                                }
+
+                                // Play icon overlay
+                                Image(systemName: "play.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.white)
+                                    .shadow(color: .black.opacity(0.5), radius: 2)
                             }
 
-                            // Play icon overlay
-                            Image(systemName: "play.fill")
-                                .font(.caption)
-                                .foregroundStyle(.white)
-                                .shadow(color: .black.opacity(0.5), radius: 2)
+                            // Duration label
+                            if let duration = todo.formattedDuration {
+                                Text(duration)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     } else {
                         // Record button if no video

@@ -142,12 +142,25 @@ class ConvexService: ObservableObject {
         let _: String? = try await convexClient.mutation("goalTodos:remove", with: ["id": id])
     }
 
-    func attachVideoToGoalTodo(id: String, localVideoPath: String, localThumbnailPath: String?) async throws {
-        if let thumbnailPath = localThumbnailPath {
+    func attachVideoToGoalTodo(id: String, localVideoPath: String, localThumbnailPath: String?, videoDurationMinutes: Double?) async throws {
+        if let thumbnailPath = localThumbnailPath, let duration = videoDurationMinutes {
+            let _: String? = try await convexClient.mutation("goalTodos:attachVideo", with: [
+                "id": id,
+                "localVideoPath": localVideoPath,
+                "localThumbnailPath": thumbnailPath,
+                "videoDurationMinutes": duration
+            ])
+        } else if let thumbnailPath = localThumbnailPath {
             let _: String? = try await convexClient.mutation("goalTodos:attachVideo", with: [
                 "id": id,
                 "localVideoPath": localVideoPath,
                 "localThumbnailPath": thumbnailPath
+            ])
+        } else if let duration = videoDurationMinutes {
+            let _: String? = try await convexClient.mutation("goalTodos:attachVideo", with: [
+                "id": id,
+                "localVideoPath": localVideoPath,
+                "videoDurationMinutes": duration
             ])
         } else {
             let _: String? = try await convexClient.mutation("goalTodos:attachVideo", with: [
@@ -155,6 +168,14 @@ class ConvexService: ObservableObject {
                 "localVideoPath": localVideoPath
             ])
         }
+    }
+
+    func archiveGoalTodo(id: String) async throws {
+        let _: String? = try await convexClient.mutation("goalTodos:archive", with: ["id": id])
+    }
+
+    func unarchiveGoalTodo(id: String) async throws {
+        let _: String? = try await convexClient.mutation("goalTodos:unarchive", with: ["id": id])
     }
 
     func checkAndResetRecurringTodos(goalId: String) async throws {
