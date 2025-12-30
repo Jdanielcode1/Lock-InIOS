@@ -36,8 +36,8 @@ enum Tab: String, CaseIterable {
     var icon: String {
         switch self {
         case .goals: return "tray.fill"
-        case .timeline: return "slider.horizontal.3"
-        case .stats: return "sparkles"
+        case .timeline: return "list.bullet.rectangle"
+        case .stats: return "chart.bar.fill"
         case .settings: return "gearshape.fill"
         }
     }
