@@ -12,6 +12,8 @@ struct SettingsView: View {
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
     @AppStorage("hapticFeedback") private var hapticFeedback = true
     @State private var showingLogoutAlert = false
+    @EnvironmentObject private var tabBarVisibility: TabBarVisibility
+    @Binding var selectedTab: Tab
 
     var body: some View {
         NavigationView {
@@ -143,6 +145,21 @@ struct SettingsView: View {
             .listStyle(.insetGrouped)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        selectedTab = .goals
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.left")
+                                .fontWeight(.semibold)
+                            Text("Back")
+                        }
+                    }
+                }
+            }
+            .onAppear { tabBarVisibility.hide() }
+            .onDisappear { tabBarVisibility.show() }
             .alert("Sign Out", isPresented: $showingLogoutAlert) {
                 Button("Cancel", role: .cancel) { }
                 Button("Sign Out", role: .destructive) {
@@ -208,5 +225,6 @@ enum AppearanceMode: String, CaseIterable {
 }
 
 #Preview {
-    SettingsView()
+    SettingsView(selectedTab: .constant(.settings))
+        .environmentObject(TabBarVisibility())
 }

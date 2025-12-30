@@ -13,6 +13,7 @@ struct ContentView: View {
     @State private var showingCreateTodo = false
     @State private var showingActionSheet = false
     @StateObject private var todoViewModel = TodoViewModel()
+    @StateObject private var tabBarVisibility = TabBarVisibility()
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -26,15 +27,20 @@ struct ContentView: View {
                 case .stats:
                     StatsView()
                 case .settings:
-                    SettingsView()
+                    SettingsView(selectedTab: $selectedTab)
                 }
             }
+            .environmentObject(tabBarVisibility)
 
             // Floating tab bar
-            FloatingTabBar(selectedTab: $selectedTab) {
-                showingActionSheet = true
+            if tabBarVisibility.isVisible {
+                FloatingTabBar(selectedTab: $selectedTab) {
+                    showingActionSheet = true
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: tabBarVisibility.isVisible)
         .confirmationDialog("Create New", isPresented: $showingActionSheet) {
             Button("New Goal") {
                 showingCreateGoal = true

@@ -11,6 +11,7 @@ import Combine
 struct ArchivedItemsView: View {
     @StateObject private var viewModel = ArchivedItemsViewModel()
     @State private var selectedTab = 0
+    @EnvironmentObject private var tabBarVisibility: TabBarVisibility
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,6 +33,8 @@ struct ArchivedItemsView: View {
         .background(Color(UIColor.systemGroupedBackground))
         .navigationTitle("Archived")
         .navigationBarTitleDisplayMode(.large)
+        .onAppear { tabBarVisibility.hide() }
+        .onDisappear { tabBarVisibility.show() }
     }
 
     // MARK: - Archived Goals

@@ -13,6 +13,7 @@ import Photos
 struct VideoPlayerView: View {
     let session: StudySession
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject private var tabBarVisibility: TabBarVisibility
     @StateObject private var viewModel: VideoPlayerViewModel
     @State private var showingSaveAlert = false
     @State private var saveAlertMessage = ""
@@ -113,6 +114,8 @@ struct VideoPlayerView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarHidden(isRecordingVoiceover || showVoiceoverCountdown || isCompilingVoiceover)
+        .onAppear { tabBarVisibility.hide() }
+        .onDisappear { tabBarVisibility.show() }
         .toolbar {
             if !isRecordingVoiceover && !showVoiceoverCountdown && !isCompilingVoiceover {
                 ToolbarItem(placement: .navigationBarLeading) {

@@ -17,6 +17,7 @@ struct GoalDetailView: View {
     @State private var showingAddGoalTodo = false
     @State private var selectedGoalTodo: GoalTodo?
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var tabBarVisibility: TabBarVisibility
 
     // iPad adaptation
     @Environment(\.horizontalSizeClass) var sizeClass
@@ -110,6 +111,8 @@ struct GoalDetailView: View {
         .background(Color(UIColor.systemGroupedBackground))
         .navigationTitle(goal.title)
         .navigationBarTitleDisplayMode(.large)
+        .onAppear { tabBarVisibility.hide() }
+        .onDisappear { tabBarVisibility.show() }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
