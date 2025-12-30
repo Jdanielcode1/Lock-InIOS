@@ -285,11 +285,11 @@ struct GoalsListView: View {
                         }
                         .padding(.horizontal, sizing.horizontalPadding)
                         .padding(.top, 8)
-                        .padding(.bottom, hasIncompleteTasks ? 180 : 100)
+                        .padding(.bottom, !selectedTodoIdsForSession.isEmpty ? 180 : 100)
                     }
 
                     // Sticky Start Session button (iPad - centered and constrained)
-                    if !incompleteTodos.isEmpty {
+                    if !selectedTodoIdsForSession.isEmpty {
                         startSessionButton
                             .frame(maxWidth: 500)
                     }
@@ -417,7 +417,7 @@ struct GoalsListView: View {
                         }
 
                         // Bottom spacer for sticky button
-                        if !incompleteTodos.isEmpty {
+                        if !selectedTodoIdsForSession.isEmpty {
                             Color.clear
                                 .frame(height: 100)
                                 .listRowBackground(Color.clear)
@@ -426,7 +426,7 @@ struct GoalsListView: View {
                     .listStyle(.insetGrouped)
 
                     // Sticky Start Session button (iPhone)
-                    if !incompleteTodos.isEmpty {
+                    if !selectedTodoIdsForSession.isEmpty {
                         startSessionButton
                     }
                 }

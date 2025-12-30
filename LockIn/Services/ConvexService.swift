@@ -30,8 +30,14 @@ class ConvexService: ObservableObject {
             .eraseToAnyPublisher()
     }
 
+    func subscribeToGoal(id: String) -> AnyPublisher<Goal?, Never> {
+        convexClient.subscribe(to: "goals:get", with: ["id": id], yielding: Goal?.self)
+            .replaceError(with: nil)
+            .eraseToAnyPublisher()
+    }
+
     func getGoal(id: String) async throws -> Goal? {
-        return try await convexClient.mutation("goals:get", with: ["id": id])
+        return try await convexClient.action("goals:get", with: ["id": id])
     }
 
     func createGoal(title: String, description: String, targetHours: Double) async throws -> String {

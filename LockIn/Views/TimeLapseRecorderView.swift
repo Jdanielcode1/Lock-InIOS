@@ -671,17 +671,38 @@ struct TimeLapseRecorderView: View {
                 .disabled(!recorder.isAudioAllowed && !recorder.isAudioEnabled)
                 .opacity(recorder.isAudioAllowed || recorder.isAudioEnabled ? 1.0 : 0.5)
 
-                // Camera flip button (when not recording)
+                // Right side buttons (camera flip + set timer)
                 if !recorder.isRecording {
-                    Button {
-                        recorder.switchCamera()
-                    } label: {
-                        Image(systemName: "arrow.triangle.2.circlepath.camera")
-                            .font(.title2)
-                            .foregroundColor(.white)
-                            .padding(12)
-                            .background(Color.black.opacity(0.5))
-                            .clipShape(Circle())
+                    VStack(spacing: 12) {
+                        // Camera flip button
+                        Button {
+                            recorder.switchCamera()
+                        } label: {
+                            Image(systemName: "arrow.triangle.2.circlepath.camera")
+                                .font(.title2)
+                                .foregroundColor(.white)
+                                .padding(12)
+                                .background(Color.black.opacity(0.5))
+                                .clipShape(Circle())
+                        }
+
+                        // Set Timer button
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                countdownEnabled.toggle()
+                                if !countdownEnabled {
+                                    countdownDuration = 0
+                                    countdownReachedZero = false
+                                }
+                            }
+                        } label: {
+                            Image(systemName: countdownEnabled ? "timer.circle.fill" : "timer")
+                                .font(.title2)
+                                .foregroundColor(countdownEnabled ? Color.accentColor : .white)
+                                .padding(12)
+                                .background(countdownEnabled ? Color.accentColor.opacity(0.2) : Color.black.opacity(0.5))
+                                .clipShape(Circle())
+                        }
                     }
                 }
 
@@ -1060,32 +1081,10 @@ struct TimeLapseRecorderView: View {
 
     var countdownTimerSettings: some View {
         VStack(spacing: 10) {
-            // Timer toggle button with alarm toggle
-            HStack(spacing: 8) {
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        countdownEnabled.toggle()
-                        if !countdownEnabled {
-                            countdownDuration = 0
-                            countdownReachedZero = false
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: countdownEnabled ? "timer.circle.fill" : "timer")
-                            .font(.system(size: 16))
-                        Text(countdownEnabled && countdownDuration > 0 ? formattedCountdownSetting : "Set Timer")
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .foregroundColor(countdownEnabled ? Color.accentColor : .white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(countdownEnabled ? Color.accentColor.opacity(0.2) : Color.black.opacity(0.5))
-                    .cornerRadius(20)
-                }
-
-                // Alarm toggle (only show when countdown is enabled)
-                if countdownEnabled {
+            // Alarm toggle and preset buttons (only show when countdown is enabled)
+            if countdownEnabled {
+                HStack(spacing: 8) {
+                    // Alarm toggle
                     Button {
                         alarmEnabled.toggle()
                     } label: {
@@ -1096,12 +1095,20 @@ struct TimeLapseRecorderView: View {
                             .background(alarmEnabled ? Color.orange.opacity(0.2) : Color.black.opacity(0.5))
                             .clipShape(Circle())
                     }
-                    .transition(.scale.combined(with: .opacity))
-                }
-            }
 
-            // Preset buttons (when enabled)
-            if countdownEnabled {
+                    // Current timer display
+                    if countdownDuration > 0 {
+                        Text(formattedCountdownSetting)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Color.accentColor)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.accentColor.opacity(0.2))
+                            .cornerRadius(16)
+                    }
+                }
+
+                // Preset buttons
                 HStack(spacing: 8) {
                     ForEach([5, 10, 15, 30, 60], id: \.self) { minutes in
                         Button {

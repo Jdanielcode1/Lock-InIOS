@@ -17,16 +17,12 @@ class OrientationManager: ObservableObject {
     func lockToPortrait() {
         allowedOrientations = .portrait
 
-        // Force rotation back to portrait
+        // Force rotation back to portrait using modern API
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
             windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait)) { error in
                 print("Orientation update error: \(error.localizedDescription)")
             }
         }
-
-        // Also set device orientation directly as fallback
-        UIDevice.current.setValue(UIInterfaceOrientation.portrait.rawValue, forKey: "orientation")
-        UIViewController.attemptRotationToDeviceOrientation()
     }
 
     func allowAllOrientations() {

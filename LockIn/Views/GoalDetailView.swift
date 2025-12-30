@@ -9,7 +9,7 @@ import SwiftUI
 import Combine
 
 struct GoalDetailView: View {
-    let goal: Goal
+    private let initialGoal: Goal
 
     @StateObject private var viewModel: GoalDetailViewModel
     @State private var showingVideoPicker = false
@@ -25,41 +25,44 @@ struct GoalDetailView: View {
         AdaptiveSizing(horizontalSizeClass: sizeClass)
     }
 
+    // Use reactive goal from viewModel, falling back to initial goal
+    private var goal: Goal {
+        viewModel.goal ?? initialGoal
+    }
+
     init(goal: Goal) {
-        self.goal = goal
-        _viewModel = StateObject(wrappedValue: GoalDetailViewModel(goalId: goal.id))
+        self.initialGoal = goal
+        _viewModel = StateObject(wrappedValue: GoalDetailViewModel(goalId: goal.id, initialGoal: goal))
     }
 
     // Dynamic motivational message based on progress
     private var motivationalMessage: String {
         let progress = goal.progressPercentage
-        switch progress {
-        case 0:
-            return "Ready to lock in?"
-        case 1..<25:
-            return "Great start! Keep going!"
-        case 25..<50:
-            return "You're making progress!"
-        case 50..<75:
-            return "Halfway there!"
-        case 75..<100:
-            return "Almost there!"
-        default:
+        if goal.isCompleted {
             return "Goal completed!"
+        } else if progress == 0 {
+            return "Ready to lock in?"
+        } else if progress < 25 {
+            return "Great start! Keep going!"
+        } else if progress < 50 {
+            return "You're making progress!"
+        } else if progress < 75 {
+            return "Halfway there!"
+        } else {
+            return "Almost there!"
         }
     }
 
     private var motivationalIcon: String {
         let progress = goal.progressPercentage
-        switch progress {
-        case 0:
-            return "target"
-        case 1..<50:
-            return "flame.fill"
-        case 50..<100:
-            return "bolt.fill"
-        default:
+        if goal.isCompleted {
             return "checkmark.circle.fill"
+        } else if progress == 0 {
+            return "target"
+        } else if progress < 50 {
+            return "flame.fill"
+        } else {
+            return "bolt.fill"
         }
     }
 
@@ -491,6 +494,7 @@ struct StudySessionCard: View {
 // ViewModel for GoalDetailView
 @MainActor
 class GoalDetailViewModel: ObservableObject {
+    @Published var goal: Goal?
     @Published var studySessions: [StudySession] = []
     @Published var goalTodos: [GoalTodo] = []
 
@@ -498,12 +502,23 @@ class GoalDetailViewModel: ObservableObject {
     private let convexService = ConvexService.shared
     private let goalId: String
 
-    init(goalId: String) {
+    init(goalId: String, initialGoal: Goal) {
         self.goalId = goalId
+        self.goal = initialGoal
         subscribeToData()
     }
 
     private func subscribeToData() {
+        // Subscribe to goal updates
+        convexService.subscribeToGoal(id: goalId)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] goal in
+                if let goal = goal {
+                    self?.goal = goal
+                }
+            }
+            .store(in: &cancellables)
+
         // Subscribe to study sessions
         convexService.listStudySessions(goalId: goalId)
             .receive(on: DispatchQueue.main)
