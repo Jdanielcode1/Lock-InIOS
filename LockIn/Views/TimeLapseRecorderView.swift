@@ -258,124 +258,128 @@ struct TimeLapseRecorderView: View {
 
     // MARK: - Todo Checklist Overlay
 
-    var todoChecklistOverlay: some View {
-        VStack {
-            Spacer()
+    private var completedCount: Int {
+        checkedTodoIds.count
+    }
 
-            VStack(spacing: 0) {
-                // Collapsed badge (tap to expand)
-                if !showTodoList {
-                    Button {
-                        withAnimation(.spring(response: 0.3)) {
-                            showTodoList = true
-                        }
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "checklist")
-                                .font(.system(size: 14, weight: .semibold))
-                            Text("Tasks")
-                                .font(.system(size: 14, weight: .semibold))
-                            Text("\(checkedTodoIds.count)/\(availableTodos.count)")
-                                .font(.system(size: 12, weight: .medium))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 2)
-                                .background(checkedTodoIds.isEmpty ? Color.white.opacity(0.2) : Color.green.opacity(0.3))
-                                .cornerRadius(10)
-                            Image(systemName: "chevron.up")
-                                .font(.system(size: 12, weight: .semibold))
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(Color.black.opacity(0.7))
-                        .background(.ultraThinMaterial)
-                        .cornerRadius(24)
+    private var totalCount: Int {
+        availableTodos.count
+    }
+
+    var todoFloatingBadge: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showTodoList.toggle()
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: completedCount == totalCount && totalCount > 0 ? "checkmark.circle.fill" : "checklist")
+                    .font(.system(size: 14, weight: .semibold))
+                Text("\(completedCount)/\(totalCount)")
+                    .font(.system(size: 14, weight: .bold))
+            }
+            .foregroundColor(completedCount == totalCount && totalCount > 0 ? .green : .white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.black.opacity(0.5))
+            .cornerRadius(16)
+        }
+    }
+
+    var todoListOverlay: some View {
+        VStack(spacing: 0) {
+            // Compact header
+            HStack {
+                Text("\(completedCount)/\(totalCount)")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(completedCount == totalCount && totalCount > 0 ? .green : .white)
+
+                Text("Tasks")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white.opacity(0.7))
+
+                Spacer()
+
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showTodoList = false
                     }
-                    .buttonStyle(.plain)
-                } else {
-                    // Expanded checklist
-                    VStack(alignment: .leading, spacing: 8) {
-                        // Header with collapse button
-                        HStack {
-                            Image(systemName: "checklist")
-                                .font(.system(size: 14, weight: .semibold))
-                            Text("Tasks")
-                                .font(.system(size: 14, weight: .semibold))
-                            Spacer()
-                            Text("\(checkedTodoIds.count)/\(availableTodos.count)")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.secondary)
-
-                            Button {
-                                withAnimation(.spring(response: 0.3)) {
-                                    showTodoList = false
-                                }
-                            } label: {
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.6))
-                                    .padding(6)
-                            }
-                        }
-                        .foregroundStyle(.white)
-
-                        Divider()
-                            .background(Color.white.opacity(0.3))
-
-                        // Scrollable todo list
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 4) {
-                                ForEach(availableTodos) { todo in
-                                    Button {
-                                        withAnimation(.spring(response: 0.2)) {
-                                            if checkedTodoIds.contains(todo.id) {
-                                                checkedTodoIds.remove(todo.id)
-                                            } else {
-                                                checkedTodoIds.insert(todo.id)
-                                                // Haptic feedback
-                                                let generator = UIImpactFeedbackGenerator(style: .light)
-                                                generator.impactOccurred()
-                                            }
-                                        }
-                                    } label: {
-                                        HStack(spacing: 10) {
-                                            Image(systemName: checkedTodoIds.contains(todo.id) ? "checkmark.circle.fill" : "circle")
-                                                .font(.system(size: 20))
-                                                .foregroundStyle(checkedTodoIds.contains(todo.id) ? .green : .white.opacity(0.6))
-
-                                            Text(todo.title)
-                                                .font(.system(size: 14))
-                                                .foregroundStyle(checkedTodoIds.contains(todo.id) ? .white.opacity(0.6) : .white)
-                                                .strikethrough(checkedTodoIds.contains(todo.id))
-                                                .lineLimit(1)
-
-                                            Spacer()
-
-                                            if todo.isRecurring {
-                                                Image(systemName: todo.frequency.icon)
-                                                    .font(.caption2)
-                                                    .foregroundStyle(.blue.opacity(0.8))
-                                            }
-                                        }
-                                        .padding(.vertical, 8)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
-                        .frame(maxHeight: 200)
-                    }
-                    .padding(16)
-                    .background(Color.black.opacity(0.8))
-                    .background(.ultraThinMaterial)
-                    .cornerRadius(16)
-                    .frame(maxWidth: 300)
+                } label: {
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.6))
+                        .padding(6)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 140)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            // Todo list - max 4 visible, scrollable
+            ScrollView {
+                VStack(spacing: 2) {
+                    ForEach(availableTodos) { todo in
+                        Button {
+                            toggleTodoCheck(todo)
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: checkedTodoIds.contains(todo.id) ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(checkedTodoIds.contains(todo.id) ? .green : .white.opacity(0.5))
+
+                                Text(todo.title)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.white)
+                                    .strikethrough(checkedTodoIds.contains(todo.id))
+                                    .opacity(checkedTodoIds.contains(todo.id) ? 0.5 : 1.0)
+                                    .lineLimit(1)
+
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+            }
+            .frame(maxHeight: 4 * 36) // ~4 items visible
         }
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .frame(width: 220)
+        .background(.ultraThinMaterial)
+        .background(Color.black.opacity(0.4))
+        .cornerRadius(12)
+    }
+
+    private func toggleTodoCheck(_ todo: GoalTodo) {
+        if checkedTodoIds.contains(todo.id) {
+            checkedTodoIds.remove(todo.id)
+        } else {
+            checkedTodoIds.insert(todo.id)
+            // Haptic feedback
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.impactOccurred()
+        }
+    }
+
+    var todoChecklistOverlay: some View {
+        VStack {
+            HStack {
+                VStack(alignment: .leading, spacing: 8) {
+                    todoFloatingBadge
+
+                    if showTodoList {
+                        todoListOverlay
+                            .transition(.scale(scale: 0.9, anchor: .topLeading).combined(with: .opacity))
+                    }
+                }
+                .padding(.leading, 20)
+                .padding(.top, 110)
+
+                Spacer()
+            }
+
+            Spacer()
+        }
     }
 
     // MARK: - Alarm Overlay
