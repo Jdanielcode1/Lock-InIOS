@@ -609,7 +609,7 @@ struct GoalCardHorizontal: View {
                     .foregroundStyle(.primary)
                     .lineLimit(2)
 
-                Text("\(Int(goal.completedHours))/\(Int(goal.targetHours)) hrs")
+                Text(goal.completedHours.formattedProgressCompact(of: goal.targetHours))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
@@ -652,7 +652,7 @@ struct GoalCard: View {
             Spacer()
 
             HStack {
-                Text("\(Int(goal.completedHours))/\(Int(goal.targetHours)) hrs")
+                Text(goal.completedHours.formattedProgressCompact(of: goal.targetHours))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
@@ -727,7 +727,7 @@ struct GoalTodoListRow: View {
                         // Hours progress for hours-based todos
                         if goalTodo.todoType == .hours, let estimated = goalTodo.estimatedHours {
                             let completed = goalTodo.completedHours ?? 0
-                            Text("\(String(format: "%.1f", completed))/\(String(format: "%.1f", estimated))h")
+                            Text(completed.formattedProgressCompact(of: estimated))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

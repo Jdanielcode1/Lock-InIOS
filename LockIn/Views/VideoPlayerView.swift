@@ -134,7 +134,7 @@ struct VideoPlayerView: View {
                             .font(.headline)
                             .foregroundStyle(.white)
 
-                        Text("\(String(format: "%.1f", session.durationHours))h study time")
+                        Text("\(session.durationHours.formattedDuration) study time")
                             .font(.caption)
                             .foregroundStyle(.white.opacity(0.8))
                     }

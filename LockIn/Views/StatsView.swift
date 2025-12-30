@@ -270,7 +270,7 @@ struct GoalProgressRow: View {
 
                 Spacer()
 
-                Text("\(Int(goal.completedHours))/\(Int(goal.targetHours))h")
+                Text(goal.completedHours.formattedProgressCompact(of: goal.targetHours))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

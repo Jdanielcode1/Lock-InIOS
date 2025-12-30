@@ -35,6 +35,7 @@ struct RootView: View {
                 LoginView(authModel: authModel)
             case .authenticated(_):
                 ContentView()
+                    .environmentObject(authModel)
             }
         }
         .preferredColorScheme(appearanceMode.colorScheme)

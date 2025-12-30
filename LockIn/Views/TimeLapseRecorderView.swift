@@ -866,7 +866,7 @@ struct TimeLapseRecorderView: View {
                 }
 
                 HStack {
-                    Text(String(format: "%.1f hours of study time", recorder.recordingDuration / 3600))
+                    Text("\((recorder.recordingDuration / 3600).formattedDuration) of study time")
                         .font(.system(size: 14))
                         .foregroundColor(.white.opacity(0.7))
                     Spacer()

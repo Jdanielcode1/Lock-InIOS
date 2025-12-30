@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { query } from "./_generated/server";
 import { userMutation, userQuery } from "./auth";
 
 // Query: List all non-archived goals for the current user
@@ -30,13 +31,18 @@ export const listArchived = userQuery({
 });
 
 // Query: Get a specific goal by ID (with ownership check)
-export const get = userQuery({
+// Uses regular query to allow graceful handling when unauthenticated
+export const get = query({
   args: { id: v.id("goals") },
   handler: async (ctx, args) => {
-    const userId = ctx.identity.tokenIdentifier;
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return null;
+    }
+    const userId = identity.tokenIdentifier;
     const goal = await ctx.db.get(args.id);
     if (goal && goal.userId !== userId) {
-      throw new Error("Not authorized");
+      return null; // Not authorized, return null instead of throwing
     }
     return goal;
   },

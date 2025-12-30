@@ -6,13 +6,18 @@
 //
 
 import SwiftUI
+import Auth0
+import ConvexMobile
 
 struct SettingsView: View {
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
     @AppStorage("hapticFeedback") private var hapticFeedback = true
     @State private var showingLogoutAlert = false
+    @State private var userEmail: String?
+    @State private var authStatus: String = "Checking..."
     @EnvironmentObject private var tabBarVisibility: TabBarVisibility
+    @EnvironmentObject private var authModel: AuthModel
     @Binding var selectedTab: Tab
 
     var body: some View {
@@ -39,6 +44,55 @@ struct SettingsView: View {
 
                 // Account
                 Section {
+                    // User info row
+                    HStack(spacing: 12) {
+                        Image(systemName: "person.circle.fill")
+                            .font(.system(size: 40))
+                            .foregroundStyle(userEmail != nil ? .green : .secondary)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            if let email = userEmail {
+                                Text(email)
+                                    .font(.subheadline)
+
+                                HStack(spacing: 4) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.caption2)
+                                        .foregroundStyle(.green)
+                                    Text("Signed in")
+                                        .font(.caption)
+                                        .foregroundStyle(.green)
+                                }
+                            } else {
+                                Text("Not signed in")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+
+                                Text(authStatus)
+                                    .font(.caption)
+                                    .foregroundStyle(.orange)
+                            }
+                        }
+
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+
+                    // Refresh session button - shows when there might be auth issues
+                    Button {
+                        authModel.refreshSession()
+                    } label: {
+                        HStack {
+                            Label("Refresh Session", systemImage: "arrow.clockwise")
+                            Spacer()
+                            if authModel.isRefreshing {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                            }
+                        }
+                    }
+                    .disabled(authModel.isRefreshing)
+
                     Button(role: .destructive) {
                         showingLogoutAlert = true
                     } label: {
@@ -160,6 +214,9 @@ struct SettingsView: View {
             }
             .onAppear { tabBarVisibility.hide() }
             .onDisappear { tabBarVisibility.show() }
+            .task {
+                await checkAuthStatus()
+            }
             .alert("Sign Out", isPresented: $showingLogoutAlert) {
                 Button("Cancel", role: .cancel) { }
                 Button("Sign Out", role: .destructive) {
@@ -198,6 +255,52 @@ struct SettingsView: View {
         formatter.countStyle = .file
         return formatter.string(fromByteCount: totalSize)
     }
+
+    func checkAuthStatus() async {
+        // Subscribe to auth state changes
+        for await state in convexClient.authState.values {
+            await MainActor.run {
+                switch state {
+                case .authenticated(let credentials):
+                    // Extract email from the ID token (JWT)
+                    if let email = extractEmailFromJWT(credentials.idToken) {
+                        userEmail = email
+                    } else {
+                        userEmail = "Authenticated"
+                    }
+                    authStatus = "Connected"
+                case .unauthenticated:
+                    userEmail = nil
+                    authStatus = "Session expired"
+                case .loading:
+                    userEmail = nil
+                    authStatus = "Loading..."
+                }
+            }
+        }
+    }
+
+    func extractEmailFromJWT(_ jwt: String) -> String? {
+        // JWT format: header.payload.signature
+        let parts = jwt.split(separator: ".")
+        guard parts.count >= 2 else { return nil }
+
+        // Decode the payload (second part)
+        var base64 = String(parts[1])
+        // Add padding if needed
+        let remainder = base64.count % 4
+        if remainder > 0 {
+            base64 += String(repeating: "=", count: 4 - remainder)
+        }
+
+        guard let data = Data(base64Encoded: base64),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let email = json["email"] as? String else {
+            return nil
+        }
+
+        return email
+    }
 }
 
 // MARK: - Appearance Mode
@@ -227,4 +330,5 @@ enum AppearanceMode: String, CaseIterable {
 #Preview {
     SettingsView(selectedTab: .constant(.settings))
         .environmentObject(TabBarVisibility())
+        .environmentObject(AuthModel())
 }

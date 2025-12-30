@@ -274,7 +274,7 @@ struct TimelineCard: View {
             Spacer()
 
             // Duration
-            Text(String(format: "%.1fh", item.session.durationHours))
+            Text(item.session.durationHours.formattedDurationCompact)
                 .font(.caption.bold())
                 .foregroundStyle(.secondary)
 

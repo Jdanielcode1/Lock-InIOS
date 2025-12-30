@@ -52,7 +52,7 @@ struct GoalTodoCard: View {
                     if todo.todoType == .hours {
                         HStack(spacing: 12) {
                             Label(
-                                "\(String(format: "%.1f", todo.completedHours ?? 0))/\(String(format: "%.1f", todo.estimatedHours ?? 0)) hrs",
+                                (todo.completedHours ?? 0).formattedProgressCompact(of: todo.estimatedHours ?? 0),
                                 systemImage: "clock"
                             )
                             .font(.caption)

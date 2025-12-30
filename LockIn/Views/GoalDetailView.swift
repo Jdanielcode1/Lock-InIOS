@@ -198,7 +198,7 @@ struct GoalDetailView: View {
             VStack(spacing: 8) {
                 // Hours text
                 HStack {
-                    Text("\(Int(goal.completedHours)) of \(Int(goal.targetHours)) hours")
+                    Text(goal.completedHours.formattedProgress(of: goal.targetHours))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
@@ -451,7 +451,7 @@ struct StudySessionCard: View {
             Spacer()
 
             // Duration badge
-            Text(String(format: "%.1fh", session.durationHours))
+            Text(session.durationHours.formattedDurationCompact)
                 .font(.caption.bold())
                 .foregroundStyle(.secondary)
 

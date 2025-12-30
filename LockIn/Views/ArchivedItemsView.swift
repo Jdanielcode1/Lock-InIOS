@@ -142,7 +142,7 @@ struct ArchivedGoalRow: View {
                 Text(goal.title)
                     .font(.subheadline.bold())
 
-                Text("\(Int(goal.completedHours)) of \(Int(goal.targetHours)) hours")
+                Text(goal.completedHours.formattedProgress(of: goal.targetHours))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
