@@ -82,6 +82,16 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     private let estimatedFrameSizeKB: Int64 = 100 // ~100 KB per JPEG frame
     private let lowDiskSpaceThresholdMB: Int64 = 1000 // Warn at 1 GB remaining
 
+    // iPhone Mode - auto-adjusting interval thresholds (recording duration -> capture interval)
+    private static let iphoneModeIntervals: [(maxMinutes: Double, interval: TimeInterval, rateLabel: String)] = [
+        (10, 0.5, "2 fps"),      // 0-10 min: 0.5s interval (2 fps), 15x speedup
+        (20, 1.0, "1 fps"),      // 10-20 min: 1s interval (1 fps), 30x speedup
+        (40, 2.0, "0.5 fps"),    // 20-40 min: 2s interval (0.5 fps), 60x speedup
+        (80, 4.0, "0.25 fps"),   // 40-80 min: 4s interval (0.25 fps), 120x speedup
+        (Double.infinity, 8.0, "0.125 fps")  // 80+ min: 8s interval (0.125 fps), 240x speedup
+    ]
+    private var isIphoneMode: Bool = false
+
     // Background task for compilation
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
@@ -226,9 +236,12 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     }
 
     // Allow external control of capture interval
-    func setCaptureInterval(_ interval: TimeInterval, rateName: String) {
+    func setCaptureInterval(_ interval: TimeInterval, rateName: String, iphoneMode: Bool = false) {
         let isNormalMode = interval <= 0
         let wasNormalMode = frameInterval <= 0
+
+        // Track if iPhone Mode is active (for auto-adjusting intervals)
+        self.isIphoneMode = iphoneMode
 
         // If recording, close current speed segment and start new one
         if isRecording {
@@ -261,8 +274,8 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
         frameInterval = interval
         currentCaptureRate = rateName
-        manualSpeedOverride = true
-        print("📸 User changed capture rate to \(rateName) (interval: \(interval)s)")
+        manualSpeedOverride = !iphoneMode  // Only set override for manual selections
+        print("📸 Capture rate set to \(rateName) (interval: \(interval)s, iphoneMode: \(iphoneMode))")
     }
 
     /// Check if audio recording is allowed (only in Normal mode)
@@ -555,8 +568,38 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     }
 
     private func updateFrameInterval() {
-        // User controls the speed manually via speed selector
-        // No automatic adjustment
+        // Only auto-adjust for iPhone Mode
+        guard isIphoneMode else { return }
+
+        let recordingMinutes = recordingDuration / 60.0
+
+        // Find the appropriate interval based on recording duration
+        for tier in Self.iphoneModeIntervals {
+            if recordingMinutes < tier.maxMinutes {
+                // Check if we need to change the interval
+                if abs(frameInterval - tier.interval) > 0.001 {
+                    // Interval needs to change - create new speed segment
+                    let actualTime = calculateActualRealTime()
+                    closeCurrentSpeedSegment(at: actualTime)
+
+                    frameInterval = tier.interval
+                    currentCaptureRate = tier.rateLabel
+
+                    // Start new speed segment with new interval
+                    let newSegment = SpeedSegment(
+                        startFrameIndex: frameCount,
+                        endFrameIndex: frameCount,
+                        startRealTime: actualTime,
+                        endRealTime: actualTime,
+                        frameInterval: tier.interval
+                    )
+                    speedSegments.append(newSegment)
+
+                    print("📱 iPhone Mode: Auto-adjusted to \(tier.rateLabel) at \(String(format: "%.1f", recordingMinutes)) min")
+                }
+                break
+            }
+        }
     }
 
     func stopRecording() {
@@ -565,6 +608,7 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
         isRecording = false
         isPaused = false
+        isIphoneMode = false  // Reset iPhone Mode state
         recordingTimer?.invalidate()
         recordingTimer = nil
 
@@ -1124,6 +1168,7 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         speedSegments.removeAll()
         frameCount = 0
         recordedVideoURL = nil
+        isIphoneMode = false  // Reset iPhone Mode state
 
         // Clean up temporary frame storage
         if let storageDir = frameStorageDirectory {

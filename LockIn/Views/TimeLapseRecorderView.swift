@@ -15,12 +15,14 @@ enum TimelapseSpeed: String, CaseIterable {
     case normal = "Normal"
     case timelapse = "Timelapse"
     case ultraFast = "Ultra Fast"
+    case iphoneMode = "iPhone"
 
     var captureInterval: TimeInterval {
         switch self {
         case .normal: return 0.0         // Capture every camera frame (true real-time ~30fps)
         case .timelapse: return 0.5      // 2 fps - 15x speedup
         case .ultraFast: return 2.0      // 0.5 fps - 60x speedup
+        case .iphoneMode: return 0.5     // Initial interval (auto-adjusts over time)
         }
     }
 
@@ -29,7 +31,12 @@ enum TimelapseSpeed: String, CaseIterable {
         case .normal: return "30 fps"
         case .timelapse: return "2 fps"
         case .ultraFast: return "0.5 fps"
+        case .iphoneMode: return "Auto"
         }
+    }
+
+    var isDynamicInterval: Bool {
+        return self == .iphoneMode
     }
 }
 
@@ -152,7 +159,11 @@ struct TimeLapseRecorderView: View {
             Task {
                 await recorder.setupCamera()
                 // Set initial capture interval
-                recorder.setCaptureInterval(selectedSpeed.captureInterval, rateName: selectedSpeed.rateLabel)
+                recorder.setCaptureInterval(
+                    selectedSpeed.captureInterval,
+                    rateName: selectedSpeed.rateLabel,
+                    iphoneMode: selectedSpeed.isDynamicInterval
+                )
             }
         }
         .onDisappear {
@@ -1151,15 +1162,27 @@ struct TimeLapseRecorderView: View {
             ForEach(TimelapseSpeed.allCases, id: \.self) { speed in
                 Button {
                     selectedSpeed = speed
-                    recorder.setCaptureInterval(speed.captureInterval, rateName: speed.rateLabel)
+                    recorder.setCaptureInterval(
+                        speed.captureInterval,
+                        rateName: speed.rateLabel,
+                        iphoneMode: speed.isDynamicInterval
+                    )
                 } label: {
-                    Text(speed.rawValue)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(selectedSpeed == speed ? .black : .white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(selectedSpeed == speed ? Color.white : Color.black.opacity(0.5))
-                        .cornerRadius(20)
+                    VStack(spacing: 2) {
+                        Text(speed.rawValue)
+                            .font(.system(size: 14, weight: .semibold))
+                        // Show dynamic rate for iPhone Mode when recording
+                        if speed == .iphoneMode && selectedSpeed == .iphoneMode && recorder.isRecording {
+                            Text(recorder.currentCaptureRate)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(selectedSpeed == speed ? .black.opacity(0.7) : .white.opacity(0.7))
+                        }
+                    }
+                    .foregroundColor(selectedSpeed == speed ? .black : .white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(selectedSpeed == speed ? Color.white : Color.black.opacity(0.5))
+                    .cornerRadius(20)
                 }
             }
         }
