@@ -817,7 +817,10 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             let audioDurationSeconds = CMTimeGetSeconds(audioDuration)
 
             // Calculate video position from frame index
-            let videoPositionSeconds = Double(segment.startFrameIndex) / fps
+            // Add latency compensation (AVAudioRecorder startup delay)
+            // Audio timestamp is captured before recorder actually starts, so audio plays slightly early without compensation
+            let audioStartupLatency: Double = 0.15 // 150ms compensation
+            let videoPositionSeconds = max(0, (Double(segment.startFrameIndex) / fps) + audioStartupLatency)
             let videoPosition = CMTime(seconds: videoPositionSeconds, preferredTimescale: 600)
 
             print("🔊 Audio segment \(index):")
