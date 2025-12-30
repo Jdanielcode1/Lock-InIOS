@@ -159,7 +159,11 @@ struct GoalDetailView: View {
             }
         }
         .fullScreenCover(isPresented: $showingTimeLapseRecorder) {
-            TimeLapseRecorderView(goalId: goal.id, goalTodoId: selectedGoalTodo?.id)
+            TimeLapseRecorderView(
+                goalId: goal.id,
+                goalTodoId: selectedGoalTodo?.id,
+                availableTodos: viewModel.goalTodos.filter { !$0.isCompleted }
+            )
         }
         .fullScreenCover(isPresented: $showingVideoPicker) {
             VideoRecorderView(goalId: goal.id, goalTodoId: selectedGoalTodo?.id)

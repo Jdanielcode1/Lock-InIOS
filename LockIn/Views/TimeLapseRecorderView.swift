@@ -36,6 +36,7 @@ enum TimelapseSpeed: String, CaseIterable {
 struct TimeLapseRecorderView: View {
     let goalId: String
     let goalTodoId: String?
+    let availableTodos: [GoalTodo]
 
     @Environment(\.dismiss) var dismiss
     @Environment(\.horizontalSizeClass) var sizeClass
@@ -77,11 +78,16 @@ struct TimeLapseRecorderView: View {
     @State private var hasVoiceoverAdded = false
     @State private var showShareSheet = false
 
+    // Todo tracking during session
+    @State private var checkedTodoIds: Set<String> = []
+    @State private var showTodoList = false
+
     private let videoService = VideoService.shared
 
-    init(goalId: String, goalTodoId: String?) {
+    init(goalId: String, goalTodoId: String?, availableTodos: [GoalTodo] = []) {
         self.goalId = goalId
         self.goalTodoId = goalTodoId
+        self.availableTodos = availableTodos
         _recorder = StateObject(wrappedValue: TimeLapseRecorder())
     }
 
@@ -103,6 +109,11 @@ struct TimeLapseRecorderView: View {
 
                 // Camera overlay controls
                 cameraOverlayControls
+
+                // Floating todo checklist (when recording with available todos)
+                if !availableTodos.isEmpty && recorder.isRecording {
+                    todoChecklistOverlay
+                }
 
                 // Alarm overlay
                 if showAlarmOverlay {
@@ -243,6 +254,128 @@ struct TimeLapseRecorderView: View {
         showAlarmOverlay = false
         alarmPlayer?.stop()
         alarmPlayer = nil
+    }
+
+    // MARK: - Todo Checklist Overlay
+
+    var todoChecklistOverlay: some View {
+        VStack {
+            Spacer()
+
+            VStack(spacing: 0) {
+                // Collapsed badge (tap to expand)
+                if !showTodoList {
+                    Button {
+                        withAnimation(.spring(response: 0.3)) {
+                            showTodoList = true
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checklist")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text("Tasks")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text("\(checkedTodoIds.count)/\(availableTodos.count)")
+                                .font(.system(size: 12, weight: .medium))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                                .background(checkedTodoIds.isEmpty ? Color.white.opacity(0.2) : Color.green.opacity(0.3))
+                                .cornerRadius(10)
+                            Image(systemName: "chevron.up")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(Color.black.opacity(0.7))
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(24)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    // Expanded checklist
+                    VStack(alignment: .leading, spacing: 8) {
+                        // Header with collapse button
+                        HStack {
+                            Image(systemName: "checklist")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text("Tasks")
+                                .font(.system(size: 14, weight: .semibold))
+                            Spacer()
+                            Text("\(checkedTodoIds.count)/\(availableTodos.count)")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.secondary)
+
+                            Button {
+                                withAnimation(.spring(response: 0.3)) {
+                                    showTodoList = false
+                                }
+                            } label: {
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.6))
+                                    .padding(6)
+                            }
+                        }
+                        .foregroundStyle(.white)
+
+                        Divider()
+                            .background(Color.white.opacity(0.3))
+
+                        // Scrollable todo list
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 4) {
+                                ForEach(availableTodos) { todo in
+                                    Button {
+                                        withAnimation(.spring(response: 0.2)) {
+                                            if checkedTodoIds.contains(todo.id) {
+                                                checkedTodoIds.remove(todo.id)
+                                            } else {
+                                                checkedTodoIds.insert(todo.id)
+                                                // Haptic feedback
+                                                let generator = UIImpactFeedbackGenerator(style: .light)
+                                                generator.impactOccurred()
+                                            }
+                                        }
+                                    } label: {
+                                        HStack(spacing: 10) {
+                                            Image(systemName: checkedTodoIds.contains(todo.id) ? "checkmark.circle.fill" : "circle")
+                                                .font(.system(size: 20))
+                                                .foregroundStyle(checkedTodoIds.contains(todo.id) ? .green : .white.opacity(0.6))
+
+                                            Text(todo.title)
+                                                .font(.system(size: 14))
+                                                .foregroundStyle(checkedTodoIds.contains(todo.id) ? .white.opacity(0.6) : .white)
+                                                .strikethrough(checkedTodoIds.contains(todo.id))
+                                                .lineLimit(1)
+
+                                            Spacer()
+
+                                            if todo.isRecurring {
+                                                Image(systemName: todo.frequency.icon)
+                                                    .font(.caption2)
+                                                    .foregroundStyle(.blue.opacity(0.8))
+                                            }
+                                        }
+                                        .padding(.vertical, 8)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                        .frame(maxHeight: 200)
+                    }
+                    .padding(16)
+                    .background(Color.black.opacity(0.8))
+                    .background(.ultraThinMaterial)
+                    .cornerRadius(16)
+                    .frame(maxWidth: 300)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 140)
+        }
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     // MARK: - Alarm Overlay
@@ -1234,7 +1367,7 @@ struct TimeLapseRecorderView: View {
 
             uploadProgress = 0.85
 
-            // Attach video and mark goal todo as completed if provided
+            // Attach video and mark goal todo as completed if provided (single todo mode)
             if let goalTodoId = goalTodoId {
                 try? await ConvexService.shared.attachVideoToGoalTodo(
                     id: goalTodoId,
@@ -1242,8 +1375,22 @@ struct TimeLapseRecorderView: View {
                     localThumbnailPath: localThumbnailPath,
                     videoDurationMinutes: studyTimeMinutes
                 )
-                uploadProgress = 0.95
                 try? await ConvexService.shared.toggleGoalTodo(id: goalTodoId, isCompleted: true)
+            }
+
+            uploadProgress = 0.9
+
+            // Attach video to all checked todos from session (multi-todo mode)
+            if !checkedTodoIds.isEmpty {
+                for todoId in checkedTodoIds {
+                    try? await ConvexService.shared.attachVideoToGoalTodo(
+                        id: todoId,
+                        localVideoPath: localVideoPath,
+                        localThumbnailPath: localThumbnailPath,
+                        videoDurationMinutes: studyTimeMinutes
+                    )
+                    try? await ConvexService.shared.toggleGoalTodo(id: todoId, isCompleted: true)
+                }
             }
 
             uploadProgress = 1.0
