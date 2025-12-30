@@ -43,7 +43,6 @@ struct TimeLapseRecorderView: View {
         AdaptiveSizing(horizontalSizeClass: sizeClass)
     }
     @StateObject private var recorder: TimeLapseRecorder
-    @StateObject private var todoViewModel = TodoViewModel()
     @State private var isUploading = false
     @State private var uploadProgress: Double = 0
     @State private var uploadSuccess = false
@@ -51,12 +50,7 @@ struct TimeLapseRecorderView: View {
     @State private var previewThumbnail: UIImage?
     @State private var player: AVPlayer?
     @State private var selectedSpeed: TimelapseSpeed = .timelapse
-
-    // Todo tracking state
-    @State private var showTodoSelection = true
-    @State private var selectedTodoIds: Set<String> = []
-    @State private var checkedTodoIds: Set<String> = []
-    @State private var showTodoOverlay = false
+    @State private var showMicUnavailableMessage = false
 
     // Countdown timer state
     @State private var countdownEnabled = false
@@ -85,19 +79,6 @@ struct TimeLapseRecorderView: View {
 
     private let videoService = VideoService.shared
 
-    // Computed properties for todos
-    private var selectedTodos: [TodoItem] {
-        todoViewModel.todos.filter { selectedTodoIds.contains($0.id) }
-    }
-
-    private var completedTodoCount: Int {
-        checkedTodoIds.count
-    }
-
-    private var totalTodoCount: Int {
-        selectedTodoIds.count
-    }
-
     init(goalId: String, goalTodoId: String?) {
         self.goalId = goalId
         self.goalTodoId = goalTodoId
@@ -123,39 +104,32 @@ struct TimeLapseRecorderView: View {
                 // Camera overlay controls
                 cameraOverlayControls
 
-                // Todo list overlay (when expanded)
-                if showTodoOverlay && totalTodoCount > 0 {
-                    Color.black.opacity(0.3)
-                        .ignoresSafeArea()
-                        .onTapGesture {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                showTodoOverlay = false
-                            }
-                        }
-
-                    todoListOverlay
-                        .transition(.scale(scale: 0.9).combined(with: .opacity))
-                }
-
                 // Alarm overlay
                 if showAlarmOverlay {
                     alarmOverlay
                 }
-            }
-        }
-        .sheet(isPresented: $showTodoSelection) {
-            TodoSelectionSheet(
-                selectedTodoIds: $selectedTodoIds,
-                onStart: {
-                    showTodoSelection = false
-                },
-                onSkip: {
-                    selectedTodoIds.removeAll()
-                    showTodoSelection = false
+
+                // Mic unavailable toast message
+                if showMicUnavailableMessage {
+                    VStack {
+                        HStack(spacing: 8) {
+                            Image(systemName: "mic.slash.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text("Audio only available in Normal mode")
+                                .font(.system(size: 14, weight: .medium))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(Color.black.opacity(0.8))
+                        .cornerRadius(20)
+                        .padding(.top, 140)
+
+                        Spacer()
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
-            )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
+            }
         }
         .onAppear {
             // Prevent screen from turning off during recording
@@ -650,122 +624,110 @@ struct TimeLapseRecorderView: View {
                         .cornerRadius(20)
                 }
 
-                // Todo badge (only show if todos selected)
-                if totalTodoCount > 0 {
-                    todoFloatingBadge
-                }
-
                 Spacer()
 
-                // Audio toggle button (only enabled in Normal mode)
+                // Audio toggle button
                 Button {
-                    recorder.toggleAudio()
+                    if recorder.isAudioAllowed {
+                        recorder.toggleAudio()
+                    } else {
+                        // Haptic feedback
+                        let generator = UINotificationFeedbackGenerator()
+                        generator.notificationOccurred(.warning)
+
+                        // Show message that mic is only available in Normal mode
+                        withAnimation(.spring(response: 0.3)) {
+                            showMicUnavailableMessage = true
+                        }
+                        // Auto-hide after 2 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            withAnimation(.spring(response: 0.3)) {
+                                showMicUnavailableMessage = false
+                            }
+                        }
+                    }
                 } label: {
                     Image(systemName: recorder.isAudioEnabled ? "mic.fill" : "mic.slash.fill")
                         .font(.title2)
-                        .foregroundColor(audioButtonColor)
+                        .foregroundColor(recorder.isAudioEnabled ? .white : (recorder.isAudioAllowed ? .red : .gray))
                         .padding(12)
-                        .background(Color.black.opacity(recorder.isAudioAllowed ? 0.5 : 0.2))
+                        .background(Color.black.opacity(recorder.isAudioAllowed ? 0.5 : 0.3))
                         .clipShape(Circle())
                 }
-                .disabled(!recorder.isAudioAllowed && !recorder.isAudioEnabled)
-                .opacity(recorder.isAudioAllowed || recorder.isAudioEnabled ? 1.0 : 0.5)
 
-                // Right side buttons (camera flip + set timer)
+                // Camera flip button (when not recording)
                 if !recorder.isRecording {
-                    VStack(spacing: 12) {
-                        // Camera flip button
-                        Button {
-                            recorder.switchCamera()
-                        } label: {
-                            Image(systemName: "arrow.triangle.2.circlepath.camera")
-                                .font(.title2)
-                                .foregroundColor(.white)
-                                .padding(12)
-                                .background(Color.black.opacity(0.5))
-                                .clipShape(Circle())
-                        }
-
-                        // Set Timer button
-                        Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                countdownEnabled.toggle()
-                                if !countdownEnabled {
-                                    countdownDuration = 0
-                                    countdownReachedZero = false
-                                }
-                            }
-                        } label: {
-                            Image(systemName: countdownEnabled ? "timer.circle.fill" : "timer")
-                                .font(.title2)
-                                .foregroundColor(countdownEnabled ? Color.accentColor : .white)
-                                .padding(12)
-                                .background(countdownEnabled ? Color.accentColor.opacity(0.2) : Color.black.opacity(0.5))
-                                .clipShape(Circle())
-                        }
+                    Button {
+                        recorder.switchCamera()
+                    } label: {
+                        Image(systemName: "arrow.triangle.2.circlepath.camera")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                            .padding(12)
+                            .background(Color.black.opacity(0.5))
+                            .clipShape(Circle())
                     }
                 }
 
                 // Recording info
                 if recorder.isRecording {
-                    VStack(spacing: 8) {
-                        HStack(spacing: 8) {
-                            if recorder.isPaused {
-                                Image(systemName: "pause.fill")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.orange)
-                            } else if isOvertime {
-                                Image(systemName: "exclamationmark.circle.fill")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.red)
-                            } else if countdownEnabled && countdownDuration > 0 {
-                                Image(systemName: "timer")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.orange)
-                            } else {
-                                Circle()
-                                    .fill(Color.red)
-                                    .frame(width: 10, height: 10)
-                            }
-
-                            Text(timerDisplayText)
-                                .font(.system(size: 17, weight: .bold))
-                                .foregroundColor(isOvertime ? .red : .white)
-
-                            if recorder.isPaused {
-                                Text("PAUSED")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundColor(.orange)
-                            } else {
-                                Text("• \(recorder.frameCount) frames")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.8))
-                            }
+                    HStack(spacing: 8) {
+                        if recorder.isPaused {
+                            Image(systemName: "pause.fill")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.orange)
+                        } else if isOvertime {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.red)
+                        } else if countdownEnabled && countdownDuration > 0 {
+                            Image(systemName: "timer")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.orange)
+                        } else {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 10, height: 10)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(Color.black.opacity(0.5))
-                        .cornerRadius(20)
 
-                        // Low disk space warning
-                        if recorder.lowDiskSpaceWarning {
-                            HStack(spacing: 6) {
-                                Image(systemName: "externaldrive.badge.exclamationmark")
-                                    .font(.system(size: 12))
-                                Text("Low Storage")
-                                    .font(.system(size: 12, weight: .semibold))
-                            }
-                            .foregroundColor(.orange)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.orange.opacity(0.2))
-                            .cornerRadius(12)
+                        Text(timerDisplayText)
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundColor(isOvertime ? .red : .white)
+
+                        if recorder.isPaused {
+                            Text("PAUSED")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.orange)
+                        } else {
+                            Text("• \(recorder.frameCount) frames")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.white.opacity(0.8))
                         }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.black.opacity(0.5))
+                    .cornerRadius(20)
                 }
             }
             .padding(.horizontal)
             .padding(.top, 60)
+
+            // Low disk space warning (below top bar when recording)
+            if recorder.isRecording && recorder.lowDiskSpaceWarning {
+                HStack(spacing: 6) {
+                    Image(systemName: "externaldrive.badge.exclamationmark")
+                        .font(.system(size: 12))
+                    Text("Low Storage")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundColor(.orange)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.orange.opacity(0.2))
+                .cornerRadius(12)
+                .padding(.top, 8)
+            }
 
             // Countdown timer settings (below top bar, when not recording)
             if !recorder.isRecording {
@@ -898,7 +860,6 @@ struct TimeLapseRecorderView: View {
                             player?.pause()
                             player = nil
                             previewThumbnail = nil
-                            checkedTodoIds.removeAll()
                             voiceoverURL = nil
                             hasVoiceoverAdded = false
                             recorder.clearFrames()
@@ -1048,16 +1009,6 @@ struct TimeLapseRecorderView: View {
         recorder.recordingDuration >= 3.5 * 60 * 60 // 3.5 hours
     }
 
-    var audioButtonColor: Color {
-        if recorder.isAudioEnabled {
-            return .white
-        } else if recorder.isAudioAllowed {
-            return .red
-        } else {
-            return .gray // Disabled state for timelapse modes
-        }
-    }
-
     var speedSelector: some View {
         HStack(spacing: 12) {
             ForEach(TimelapseSpeed.allCases, id: \.self) { speed in
@@ -1081,10 +1032,32 @@ struct TimeLapseRecorderView: View {
 
     var countdownTimerSettings: some View {
         VStack(spacing: 10) {
-            // Alarm toggle and preset buttons (only show when countdown is enabled)
-            if countdownEnabled {
-                HStack(spacing: 8) {
-                    // Alarm toggle
+            // Timer toggle button with alarm toggle
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        countdownEnabled.toggle()
+                        if !countdownEnabled {
+                            countdownDuration = 0
+                            countdownReachedZero = false
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: countdownEnabled ? "timer.circle.fill" : "timer")
+                            .font(.system(size: 16))
+                        Text(countdownEnabled && countdownDuration > 0 ? formattedCountdownSetting : "Set Timer")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(countdownEnabled ? Color.accentColor : .white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(countdownEnabled ? Color.accentColor.opacity(0.2) : Color.black.opacity(0.5))
+                    .cornerRadius(20)
+                }
+
+                // Alarm toggle (only show when countdown is enabled)
+                if countdownEnabled {
                     Button {
                         alarmEnabled.toggle()
                     } label: {
@@ -1095,20 +1068,12 @@ struct TimeLapseRecorderView: View {
                             .background(alarmEnabled ? Color.orange.opacity(0.2) : Color.black.opacity(0.5))
                             .clipShape(Circle())
                     }
-
-                    // Current timer display
-                    if countdownDuration > 0 {
-                        Text(formattedCountdownSetting)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(Color.accentColor)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color.accentColor.opacity(0.2))
-                            .cornerRadius(16)
-                    }
+                    .transition(.scale.combined(with: .opacity))
                 }
+            }
 
-                // Preset buttons
+            // Preset buttons (when enabled)
+            if countdownEnabled {
                 HStack(spacing: 8) {
                     ForEach([5, 10, 15, 30, 60], id: \.self) { minutes in
                         Button {
@@ -1143,101 +1108,6 @@ struct TimeLapseRecorderView: View {
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
-        }
-    }
-
-    // MARK: - Todo Badge and Overlay
-
-    var todoFloatingBadge: some View {
-        Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                showTodoOverlay.toggle()
-            }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: completedTodoCount == totalTodoCount ? "checkmark.circle.fill" : "checklist")
-                    .font(.system(size: 14, weight: .semibold))
-                Text("\(completedTodoCount)/\(totalTodoCount)")
-                    .font(.system(size: 14, weight: .bold))
-            }
-            .foregroundColor(completedTodoCount == totalTodoCount ? .green : .white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.black.opacity(0.5))
-            .cornerRadius(16)
-        }
-    }
-
-    var todoListOverlay: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("Session Tasks")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(.white)
-
-                Spacer()
-
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showTodoOverlay = false
-                    }
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(.white.opacity(0.6))
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-
-            Divider()
-                .background(Color.white.opacity(0.2))
-
-            // Todo list
-            ScrollView {
-                VStack(spacing: 8) {
-                    ForEach(selectedTodos) { todo in
-                        Button {
-                            toggleTodoCheck(todo)
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: checkedTodoIds.contains(todo.id) ? "checkmark.circle.fill" : "circle")
-                                    .font(.system(size: 22))
-                                    .foregroundColor(checkedTodoIds.contains(todo.id) ? .green : .white.opacity(0.6))
-
-                                Text(todo.title)
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundColor(.white)
-                                    .strikethrough(checkedTodoIds.contains(todo.id))
-                                    .opacity(checkedTodoIds.contains(todo.id) ? 0.6 : 1.0)
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.leading)
-
-                                Spacer()
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
-                .padding(.vertical, 8)
-            }
-            .frame(maxHeight: 250)
-        }
-        .frame(width: 280)
-        .background(.ultraThinMaterial.opacity(0.95))
-        .background(Color.black.opacity(0.3))
-        .cornerRadius(16)
-        .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
-    }
-
-    private func toggleTodoCheck(_ todo: TodoItem) {
-        if checkedTodoIds.contains(todo.id) {
-            checkedTodoIds.remove(todo.id)
-        } else {
-            checkedTodoIds.insert(todo.id)
         }
     }
 
@@ -1363,11 +1233,6 @@ struct TimeLapseRecorderView: View {
             )
 
             uploadProgress = 0.9
-
-            // Mark checked todos as completed
-            for todoId in checkedTodoIds {
-                try? await ConvexService.shared.toggleTodo(id: todoId, isCompleted: true)
-            }
 
             // Mark goal todo as completed if provided
             if let goalTodoId = goalTodoId {

@@ -11,21 +11,24 @@ struct GoalTodoCard: View {
     let todo: GoalTodo
     let onToggle: () -> Void
     let onTap: () -> Void
+    var onRecord: (() -> Void)? = nil
+
+    @State private var thumbnail: UIImage?
 
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
-                // Checkbox for simple todos
-                if todo.todoType == .simple {
-                    Button(action: onToggle) {
-                        Image(systemName: todo.isCompleted ? "checkmark.circle.fill" : "circle")
-                            .font(.title2)
-                            .foregroundStyle(todo.isCompleted ? .green : .secondary)
-                    }
-                    .buttonStyle(.plain)
+        HStack(spacing: 12) {
+            // Checkbox for simple todos
+            if todo.todoType == .simple {
+                Button(action: onToggle) {
+                    Image(systemName: todo.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .font(.title2)
+                        .foregroundStyle(todo.isCompleted ? .green : .secondary)
                 }
+                .buttonStyle(.plain)
+            }
 
-                // Content
+            // Content - tappable for hours-based todos
+            Button(action: onTap) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         Text(todo.title)
@@ -65,31 +68,75 @@ struct GoalTodoCard: View {
                             }
                         }
                     }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
 
-                    // Video indicator
+            // Record/Play button for simple todos
+            if todo.todoType == .simple {
+                Button {
+                    onRecord?()
+                } label: {
                     if todo.hasVideo {
-                        Label("Video attached", systemImage: "video.fill")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        // Video thumbnail with play overlay
+                        ZStack {
+                            if let thumbnail = thumbnail {
+                                Image(uiImage: thumbnail)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 50, height: 38)
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                            } else {
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color(UIColor.systemGray5))
+                                    .frame(width: 50, height: 38)
+                            }
+
+                            // Play icon overlay
+                            Image(systemName: "play.fill")
+                                .font(.caption)
+                                .foregroundStyle(.white)
+                                .shadow(color: .black.opacity(0.5), radius: 2)
+                        }
+                    } else {
+                        // Record button if no video
+                        Image(systemName: "video.badge.plus")
+                            .font(.title3)
+                            .foregroundStyle(Color.accentColor)
                     }
                 }
-
-                Spacer()
-
-                // Progress for hours-based todos
-                if todo.todoType == .hours {
+                .buttonStyle(.plain)
+            } else {
+                // Progress for hours-based todos + chevron
+                HStack(spacing: 8) {
                     Text("\(Int(todo.progressPercentage))%")
                         .font(.subheadline.bold())
                         .foregroundStyle(todo.isHoursCompleted ? .green : .secondary)
-                }
 
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
             }
-            .padding(12)
         }
-        .buttonStyle(.plain)
+        .padding(12)
+        .onAppear {
+            loadThumbnail()
+        }
+        .onChange(of: todo.localThumbnailPath) { _, _ in
+            loadThumbnail()
+        }
+    }
+
+    private func loadThumbnail() {
+        guard let thumbnailURL = todo.thumbnailURL,
+              FileManager.default.fileExists(atPath: thumbnailURL.path),
+              let data = try? Data(contentsOf: thumbnailURL),
+              let image = UIImage(data: data) else {
+            return
+        }
+        thumbnail = image
     }
 }
 

@@ -25,6 +25,7 @@ struct TodoRecorderView: View {
     @State private var errorMessage: String?
     @State private var player: AVPlayer?
     @State private var selectedSpeed: TimelapseSpeed = .timelapse
+    @State private var showMicUnavailableMessage = false
 
     // Countdown timer state
     @State private var countdownEnabled = false
@@ -75,6 +76,27 @@ struct TodoRecorderView: View {
                 // Alarm overlay
                 if showAlarmOverlay {
                     alarmOverlay
+                }
+
+                // Mic unavailable toast message
+                if showMicUnavailableMessage {
+                    VStack {
+                        HStack(spacing: 8) {
+                            Image(systemName: "mic.slash.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text("Audio only available in Normal mode")
+                                .font(.system(size: 14, weight: .medium))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(Color.black.opacity(0.8))
+                        .cornerRadius(20)
+                        .padding(.top, 140)
+
+                        Spacer()
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
         }
@@ -544,13 +566,30 @@ struct TodoRecorderView: View {
 
                 // Audio toggle button
                 Button {
-                    recorder.toggleAudio()
+                    if recorder.isAudioAllowed {
+                        recorder.toggleAudio()
+                    } else {
+                        // Haptic feedback
+                        let generator = UINotificationFeedbackGenerator()
+                        generator.notificationOccurred(.warning)
+
+                        // Show message that mic is only available in Normal mode
+                        withAnimation(.spring(response: 0.3)) {
+                            showMicUnavailableMessage = true
+                        }
+                        // Auto-hide after 2 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            withAnimation(.spring(response: 0.3)) {
+                                showMicUnavailableMessage = false
+                            }
+                        }
+                    }
                 } label: {
                     Image(systemName: recorder.isAudioEnabled ? "mic.fill" : "mic.slash.fill")
                         .font(.title2)
-                        .foregroundColor(recorder.isAudioEnabled ? .white : .red)
+                        .foregroundColor(recorder.isAudioEnabled ? .white : (recorder.isAudioAllowed ? .red : .gray))
                         .padding(12)
-                        .background(Color.black.opacity(0.5))
+                        .background(Color.black.opacity(recorder.isAudioAllowed ? 0.5 : 0.3))
                         .clipShape(Circle())
                 }
 

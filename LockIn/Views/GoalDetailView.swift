@@ -16,6 +16,7 @@ struct GoalDetailView: View {
     @State private var showingTimeLapseRecorder = false
     @State private var showingAddGoalTodo = false
     @State private var selectedGoalTodo: GoalTodo?
+    @State private var showingVideoPlayer = false
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tabBarVisibility: TabBarVisibility
 
@@ -161,6 +162,11 @@ struct GoalDetailView: View {
         .fullScreenCover(isPresented: $showingVideoPicker) {
             VideoRecorderView(goalId: goal.id, goalTodoId: selectedGoalTodo?.id)
         }
+        .fullScreenCover(isPresented: $showingVideoPlayer) {
+            if let goalTodo = selectedGoalTodo, let videoURL = goalTodo.videoURL {
+                GoalTodoVideoPlayerView(videoURL: videoURL, goalTodo: goalTodo)
+            }
+        }
         .sheet(isPresented: $showingAddGoalTodo) {
             AddGoalTodoSheet(goalId: goal.id)
         }
@@ -290,6 +296,14 @@ struct GoalDetailView: View {
                                 onTap: {
                                     selectedGoalTodo = todo
                                     showingTimeLapseRecorder = true
+                                },
+                                onRecord: {
+                                    selectedGoalTodo = todo
+                                    if todo.hasVideo {
+                                        showingVideoPlayer = true
+                                    } else {
+                                        showingTimeLapseRecorder = true
+                                    }
                                 }
                             )
 
