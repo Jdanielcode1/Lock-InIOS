@@ -13,7 +13,6 @@ struct GoalDetailView: View {
 
     @StateObject private var viewModel: GoalDetailViewModel
     @State private var showingVideoPicker = false
-    @State private var showingTimeLapseRecorder = false
     @State private var showingAddGoalTodo = false
     @State private var selectedGoalTodo: GoalTodo?
     @State private var showingVideoPlayer = false
@@ -21,6 +20,7 @@ struct GoalDetailView: View {
     @State private var showUndoToast = false
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tabBarVisibility: TabBarVisibility
+    @EnvironmentObject private var goalSessionPresenter: GoalSessionPresenter
 
     // iPad adaptation
     @Environment(\.horizontalSizeClass) var sizeClass
@@ -158,13 +158,6 @@ struct GoalDetailView: View {
                 }
             }
         }
-        .fullScreenCover(isPresented: $showingTimeLapseRecorder) {
-            TimeLapseRecorderView(
-                goalId: goal.id,
-                goalTodoId: selectedGoalTodo?.id,
-                availableTodos: viewModel.goalTodos.filter { !$0.isCompleted }
-            )
-        }
         .fullScreenCover(isPresented: $showingVideoPicker) {
             VideoRecorderView(goalId: goal.id, goalTodoId: selectedGoalTodo?.id)
         }
@@ -175,11 +168,6 @@ struct GoalDetailView: View {
         }
         .sheet(isPresented: $showingAddGoalTodo) {
             AddGoalTodoSheet(goalId: goal.id)
-        }
-        .onChange(of: showingTimeLapseRecorder) { _, isShowing in
-            if !isShowing {
-                selectedGoalTodo = nil
-            }
         }
         .onChange(of: showingVideoPicker) { _, isShowing in
             if !isShowing {
@@ -269,7 +257,10 @@ struct GoalDetailView: View {
     // MARK: - Start Session Button
     private var startSessionButton: some View {
         Button {
-            showingTimeLapseRecorder = true
+            goalSessionPresenter.presentSession(
+                goalId: goal.id,
+                availableTodos: viewModel.goalTodos.filter { !$0.isCompleted }
+            )
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "play.fill")
@@ -334,15 +325,22 @@ struct GoalDetailView: View {
                                     }
                                 },
                                 onTap: {
-                                    selectedGoalTodo = todo
-                                    showingTimeLapseRecorder = true
+                                    goalSessionPresenter.presentSession(
+                                        goalId: goal.id,
+                                        goalTodoId: todo.id,
+                                        availableTodos: viewModel.goalTodos.filter { !$0.isCompleted }
+                                    )
                                 },
                                 onRecord: {
-                                    selectedGoalTodo = todo
                                     if todo.hasVideo {
+                                        selectedGoalTodo = todo
                                         showingVideoPlayer = true
                                     } else {
-                                        showingTimeLapseRecorder = true
+                                        goalSessionPresenter.presentSession(
+                                            goalId: goal.id,
+                                            goalTodoId: todo.id,
+                                            availableTodos: viewModel.goalTodos.filter { !$0.isCompleted }
+                                        )
                                     }
                                 }
                             )
@@ -660,5 +658,7 @@ class GoalDetailViewModel: ObservableObject {
             status: .active,
             createdAt: Date().timeIntervalSince1970 * 1000
         ))
+        .environmentObject(GoalSessionPresenter())
+        .environmentObject(TabBarVisibility())
     }
 }

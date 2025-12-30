@@ -15,6 +15,7 @@ enum ListMode: String, CaseIterable {
 struct GoalsListView: View {
     @StateObject private var goalsViewModel = GoalsViewModel()
     @StateObject private var todoViewModel = TodoViewModel()
+    @StateObject private var goalSessionPresenter = GoalSessionPresenter()
     @State private var showingCreateGoal = false
     @State private var showingCreateTodo = false
     @State private var listMode: ListMode = .goals
@@ -91,6 +92,15 @@ struct GoalsListView: View {
                     TimeLapseRecorderView(goalId: goalTodo.goalId, goalTodoId: goalTodo.id)
                 }
             }
+            .fullScreenCover(isPresented: $goalSessionPresenter.isPresented) {
+                if let goalId = goalSessionPresenter.goalId {
+                    TimeLapseRecorderView(
+                        goalId: goalId,
+                        goalTodoId: goalSessionPresenter.goalTodoId,
+                        availableTodos: goalSessionPresenter.availableTodos
+                    )
+                }
+            }
             .fullScreenCover(item: $selectedGoalTodoForPlayback) { goalTodo in
                 if let videoURL = goalTodo.videoURL {
                     GoalTodoVideoPlayerView(videoURL: videoURL, goalTodo: goalTodo)
@@ -125,7 +135,8 @@ struct GoalsListView: View {
                 ScrollView {
                     LazyVGrid(columns: sizing.gridItems(count: sizing.gridColumns, spacing: sizing.cardSpacing), spacing: sizing.cardSpacing) {
                         ForEach(goalsViewModel.goals) { goal in
-                            NavigationLink(destination: GoalDetailView(goal: goal)) {
+                            NavigationLink(destination: GoalDetailView(goal: goal)
+                                .environmentObject(goalSessionPresenter)) {
                                 GoalCard(goal: goal)
                             }
                             .buttonStyle(PlainButtonStyle())
@@ -151,7 +162,8 @@ struct GoalsListView: View {
                 // iPhone: Native insetGrouped list
                 List {
                     ForEach(goalsViewModel.goals) { goal in
-                        NavigationLink(destination: GoalDetailView(goal: goal)) {
+                        NavigationLink(destination: GoalDetailView(goal: goal)
+                            .environmentObject(goalSessionPresenter)) {
                             GoalCardHorizontal(goal: goal)
                         }
                         .swipeActions(edge: .leading) {
