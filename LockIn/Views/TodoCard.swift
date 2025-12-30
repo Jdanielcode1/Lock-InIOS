@@ -44,13 +44,6 @@ struct TodoCard: View {
                             .lineLimit(1)
                             .multilineTextAlignment(.leading)
                     }
-
-                    // Video indicator
-                    if todo.hasVideo {
-                        Label("Video attached", systemImage: "video.fill")
-                            .font(.caption)
-                            .foregroundStyle(.green)
-                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -61,10 +54,26 @@ struct TodoCard: View {
                 onRecord?()
             } label: {
                 if todo.hasVideo {
-                    // Play button if video exists
-                    Image(systemName: "play.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(.green)
+                    // Video thumbnail with play overlay
+                    ZStack {
+                        if let thumbnail = thumbnail {
+                            Image(uiImage: thumbnail)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 50, height: 38)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                        } else {
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color(UIColor.systemGray5))
+                                .frame(width: 50, height: 38)
+                        }
+
+                        // Play icon overlay
+                        Image(systemName: "play.fill")
+                            .font(.caption)
+                            .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.5), radius: 2)
+                    }
                 } else {
                     // Record button if no video
                     Image(systemName: "video.badge.plus")
@@ -73,9 +82,11 @@ struct TodoCard: View {
                 }
             }
             .buttonStyle(.plain)
-            .padding(.leading, 4)
         }
         .onAppear {
+            loadThumbnail()
+        }
+        .onChange(of: todo.localThumbnailPath) { _, _ in
             loadThumbnail()
         }
     }
