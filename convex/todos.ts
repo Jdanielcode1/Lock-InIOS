@@ -79,6 +79,26 @@ export const toggle = userMutation({
   },
 });
 
+// Mutation: Update todo title and description
+export const update = userMutation({
+  args: {
+    id: v.id("todos"),
+    title: v.string(),
+    description: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = ctx.identity.tokenIdentifier;
+    const todo = await ctx.db.get(args.id);
+    if (!todo) throw new Error("Todo not found");
+    if (todo.userId !== userId) throw new Error("Not authorized");
+
+    await ctx.db.patch(args.id, {
+      title: args.title,
+      description: args.description,
+    });
+  },
+});
+
 // Mutation: Attach video to todo (and mark as completed)
 export const attachVideo = userMutation({
   args: {

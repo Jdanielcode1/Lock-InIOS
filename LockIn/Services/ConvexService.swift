@@ -263,6 +263,21 @@ class ConvexService: ObservableObject {
         ])
     }
 
+    func updateTodo(id: String, title: String, description: String?) async throws {
+        if let desc = description {
+            let _: String? = try await convexClient.mutation("todos:update", with: [
+                "id": id,
+                "title": title,
+                "description": desc
+            ])
+        } else {
+            let _: String? = try await convexClient.mutation("todos:update", with: [
+                "id": id,
+                "title": title
+            ])
+        }
+    }
+
     func attachVideoToTodo(id: String, localVideoPath: String, localThumbnailPath: String?) async throws {
         if let thumbnailPath = localThumbnailPath {
             let _: String? = try await convexClient.mutation("todos:attachVideo", with: [

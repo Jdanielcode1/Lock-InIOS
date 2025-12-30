@@ -27,6 +27,9 @@ struct GoalsListView: View {
     @State private var selectedGoalTodoForPlayback: GoalTodo?
     @State private var showingGoalTodoRecorder = false
 
+    // Todo editing
+    @State private var selectedTodoForEditing: TodoItem?
+
     // Multi-select for todo sessions
     @State private var selectedTodoIdsForSession: Set<String> = []
     @State private var showTodoSessionRecorder = false
@@ -92,6 +95,9 @@ struct GoalsListView: View {
                 if let videoURL = goalTodo.videoURL {
                     GoalTodoVideoPlayerView(videoURL: videoURL, goalTodo: goalTodo)
                 }
+            }
+            .sheet(item: $selectedTodoForEditing) { todo in
+                TodoDetailView(todo: todo)
             }
             .onChange(of: showingGoalTodoRecorder) { _, isShowing in
                 if !isShowing {
@@ -325,12 +331,15 @@ struct GoalsListView: View {
                                                     await todoViewModel.toggleTodo(todo)
                                                 }
                                             },
-                                            onTap: {
+                                            onRecord: {
                                                 if todo.hasVideo {
                                                     selectedTodoForPlayback = todo
                                                 } else {
                                                     selectedTodoForRecording = todo
                                                 }
+                                            },
+                                            onDetail: {
+                                                selectedTodoForEditing = todo
                                             }
                                         )
                                     }
@@ -455,30 +464,29 @@ struct GoalsListView: View {
                 }
             }
 
-            Button {
-                if todo.hasVideo {
-                    selectedTodoForPlayback = todo
-                } else {
-                    selectedTodoForRecording = todo
-                }
-            } label: {
-                TodoCard(
-                    todo: todo,
-                    onToggle: {
-                        Task { await todoViewModel.toggleTodo(todo) }
-                    },
-                    onTap: {
-                        if todo.hasVideo {
-                            selectedTodoForPlayback = todo
-                        } else {
-                            selectedTodoForRecording = todo
-                        }
+            TodoCard(
+                todo: todo,
+                onToggle: {
+                    Task { await todoViewModel.toggleTodo(todo) }
+                },
+                onRecord: {
+                    if todo.hasVideo {
+                        selectedTodoForPlayback = todo
+                    } else {
+                        selectedTodoForRecording = todo
                     }
-                )
-            }
-            .buttonStyle(PlainButtonStyle())
+                },
+                onDetail: {
+                    selectedTodoForEditing = todo
+                }
+            )
         }
         .contextMenu {
+            Button {
+                selectedTodoForEditing = todo
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
             Button {
                 Task { await todoViewModel.toggleTodo(todo) }
             } label: {

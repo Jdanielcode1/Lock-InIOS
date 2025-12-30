@@ -10,7 +10,8 @@ import SwiftUI
 struct TodoCard: View {
     let todo: TodoItem
     let onToggle: () -> Void
-    let onTap: () -> Void
+    var onRecord: (() -> Void)? = nil
+    var onDetail: (() -> Void)? = nil
 
     @State private var thumbnail: UIImage?
 
@@ -24,39 +25,56 @@ struct TodoCard: View {
             }
             .buttonStyle(.plain)
 
-            // Content
-            VStack(alignment: .leading, spacing: 4) {
-                Text(todo.title)
-                    .font(.body)
-                    .foregroundStyle(todo.isCompleted ? .secondary : .primary)
-                    .strikethrough(todo.isCompleted)
-                    .lineLimit(2)
+            // Content - tappable area for detail view
+            Button {
+                onDetail?()
+            } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(todo.title)
+                        .font(.body)
+                        .foregroundStyle(todo.isCompleted ? .secondary : .primary)
+                        .strikethrough(todo.isCompleted)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
 
-                if let description = todo.description, !description.isEmpty {
-                    Text(description)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    if let description = todo.description, !description.isEmpty {
+                        Text(description)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .multilineTextAlignment(.leading)
+                    }
+
+                    // Video indicator
+                    if todo.hasVideo {
+                        Label("Video attached", systemImage: "video.fill")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
 
-                // Video indicator
+            // Record/Play button on right side
+            Button {
+                onRecord?()
+            } label: {
                 if todo.hasVideo {
-                    Label("Video attached", systemImage: "video.fill")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    // Play button if video exists
+                    Image(systemName: "play.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.green)
+                } else {
+                    // Record button if no video
+                    Image(systemName: "video.badge.plus")
+                        .font(.title3)
+                        .foregroundStyle(Color.accentColor)
                 }
             }
-
-            Spacer()
-
-            // Arrow to record/view
-            if !todo.hasVideo && !todo.isCompleted {
-                Image(systemName: "video.badge.plus")
-                    .foregroundStyle(.tertiary)
-            }
+            .buttonStyle(.plain)
+            .padding(.leading, 4)
         }
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onTap)
         .onAppear {
             loadThumbnail()
         }
@@ -86,7 +104,8 @@ struct TodoCard: View {
                 createdAt: Date().timeIntervalSince1970 * 1000
             ),
             onToggle: {},
-            onTap: {}
+            onRecord: {},
+            onDetail: {}
         )
 
         TodoCard(
@@ -100,7 +119,8 @@ struct TodoCard: View {
                 createdAt: Date().timeIntervalSince1970 * 1000
             ),
             onToggle: {},
-            onTap: {}
+            onRecord: {},
+            onDetail: {}
         )
     }
     .padding()
