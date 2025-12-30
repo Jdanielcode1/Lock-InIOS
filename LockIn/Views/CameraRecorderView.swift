@@ -368,24 +368,54 @@ class CameraPreviewView: UIView {
         updateOrientation()
     }
 
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        // Update orientation when view is added to window hierarchy
+        // Use async dispatch to ensure preview layer connection is ready
+        if window != nil {
+            DispatchQueue.main.async { [weak self] in
+                self?.updateOrientation()
+            }
+        }
+    }
+
     func updateOrientation() {
         guard let connection = previewLayer.connection,
               connection.isVideoOrientationSupported else { return }
 
-        let orientation = UIDevice.current.orientation
+        let deviceOrientation = UIDevice.current.orientation
 
-        switch orientation {
-        case .portrait:
-            connection.videoOrientation = .portrait
-        case .landscapeLeft:
-            connection.videoOrientation = .landscapeRight
-        case .landscapeRight:
-            connection.videoOrientation = .landscapeLeft
-        case .portraitUpsideDown:
-            connection.videoOrientation = .portraitUpsideDown
-        default:
-            // Keep current orientation for .faceUp, .faceDown, .unknown
-            break
+        // Check if device orientation is valid for video
+        if deviceOrientation == .portrait || deviceOrientation == .landscapeLeft ||
+           deviceOrientation == .landscapeRight || deviceOrientation == .portraitUpsideDown {
+            switch deviceOrientation {
+            case .portrait:
+                connection.videoOrientation = .portrait
+            case .landscapeLeft:
+                connection.videoOrientation = .landscapeRight
+            case .landscapeRight:
+                connection.videoOrientation = .landscapeLeft
+            case .portraitUpsideDown:
+                connection.videoOrientation = .portraitUpsideDown
+            default:
+                break
+            }
+        } else {
+            // Fallback: when device orientation is unknown/faceUp/faceDown,
+            // use the interface orientation from the window scene
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                let interfaceOrientation = windowScene.interfaceOrientation
+                switch interfaceOrientation {
+                case .portrait, .portraitUpsideDown:
+                    connection.videoOrientation = .portrait
+                case .landscapeLeft:
+                    connection.videoOrientation = .landscapeLeft
+                case .landscapeRight:
+                    connection.videoOrientation = .landscapeRight
+                default:
+                    break
+                }
+            }
         }
     }
 }

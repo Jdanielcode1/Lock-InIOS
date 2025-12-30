@@ -406,6 +406,24 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         // Only update for valid video orientations
         if orientation == .portrait || orientation == .landscapeLeft || orientation == .landscapeRight {
             deviceOrientation = orientation
+        } else {
+            // Fallback: when device orientation is unknown/faceUp/faceDown,
+            // use the interface orientation from the window scene
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                let interfaceOrientation = windowScene.interfaceOrientation
+                switch interfaceOrientation {
+                case .portrait, .portraitUpsideDown:
+                    deviceOrientation = .portrait
+                case .landscapeLeft:
+                    // Interface landscapeLeft = device landscapeRight
+                    deviceOrientation = .landscapeRight
+                case .landscapeRight:
+                    // Interface landscapeRight = device landscapeLeft
+                    deviceOrientation = .landscapeLeft
+                default:
+                    break // Keep existing orientation
+                }
+            }
         }
     }
 
@@ -476,6 +494,9 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             frameInterval: frameInterval
         )
         speedSegments.append(initialSegment)
+
+        // Force update orientation before capturing (handles initial landscape case)
+        updateOrientation()
 
         // Capture the current orientation at the start of recording
         recordingOrientation = deviceOrientation
@@ -993,20 +1014,38 @@ class TimeLapseRecorder: NSObject, ObservableObject {
                 }
             }
         } else {
-            // iPhone behavior (unchanged)
+            // iPhone behavior
             switch orientation {
             case .portrait:
-                // Portrait: 90-degree clockwise rotation
-                return CGAffineTransform(rotationAngle: .pi / 2)
+                if isFrontCamera {
+                    // Front camera portrait: 90-degree counter-clockwise rotation + mirror
+                    return CGAffineTransform(rotationAngle: -.pi / 2).scaledBy(x: -1, y: 1)
+                } else {
+                    // Back camera portrait: 90-degree clockwise rotation
+                    return CGAffineTransform(rotationAngle: .pi / 2)
+                }
             case .landscapeLeft:
-                // Landscape left: No rotation needed
-                return CGAffineTransform.identity
+                if isFrontCamera {
+                    // Front camera landscape left: 180-degree rotation + mirror
+                    return CGAffineTransform(rotationAngle: .pi).scaledBy(x: -1, y: 1)
+                } else {
+                    // Back camera landscape left: No rotation needed
+                    return CGAffineTransform.identity
+                }
             case .landscapeRight:
-                // Landscape right: 180-degree rotation
-                return CGAffineTransform(rotationAngle: .pi)
+                if isFrontCamera {
+                    // Front camera landscape right: mirror horizontally only
+                    return CGAffineTransform(scaleX: -1, y: 1)
+                } else {
+                    // Back camera landscape right: 180-degree rotation
+                    return CGAffineTransform(rotationAngle: .pi)
+                }
             default:
-                // Default to portrait
-                return CGAffineTransform(rotationAngle: .pi / 2)
+                if isFrontCamera {
+                    return CGAffineTransform(rotationAngle: -.pi / 2).scaledBy(x: -1, y: 1)
+                } else {
+                    return CGAffineTransform(rotationAngle: .pi / 2)
+                }
             }
         }
     }
