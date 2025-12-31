@@ -13,6 +13,11 @@ async function userCheck(ctx: QueryCtx) {
   return { identity };
 }
 
+// For queries that should return empty instead of throwing when unauthenticated
+export async function getUserIdentityOrNull(ctx: QueryCtx) {
+  return await ctx.auth.getUserIdentity();
+}
+
 // Use `userQuery` instead of `query` to require authentication
 export const userQuery = customQuery(
   query,

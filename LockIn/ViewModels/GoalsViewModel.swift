@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import ConvexMobile
 
 @MainActor
 class GoalsViewModel: ObservableObject {
@@ -18,12 +19,33 @@ class GoalsViewModel: ObservableObject {
     private let convexService = ConvexService.shared
 
     init() {
-        subscribeToGoals()
+        waitForAuthThenSubscribe()
+    }
+
+    /// Wait for authenticated state before subscribing to avoid "Unauthenticated call" errors
+    private func waitForAuthThenSubscribe() {
+        isLoading = true
+
+        convexClient.authState
+            .compactMap { state -> Bool? in
+                switch state {
+                case .authenticated:
+                    return true
+                case .unauthenticated:
+                    return nil // Keep waiting
+                case .loading:
+                    return nil // Keep waiting
+                }
+            }
+            .first()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.subscribeToGoals()
+            }
+            .store(in: &cancellables)
     }
 
     private func subscribeToGoals() {
-        isLoading = true
-
         convexService.listGoals()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] goals in

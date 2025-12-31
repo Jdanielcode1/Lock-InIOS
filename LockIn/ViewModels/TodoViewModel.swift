@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import ConvexMobile
 
 @MainActor
 class TodoViewModel: ObservableObject {
@@ -19,13 +20,34 @@ class TodoViewModel: ObservableObject {
     private let convexService = ConvexService.shared
 
     init() {
-        subscribeToTodos()
-        subscribeToGoalTodos()
+        waitForAuthThenSubscribe()
+    }
+
+    /// Wait for authenticated state before subscribing to avoid "Unauthenticated call" errors
+    private func waitForAuthThenSubscribe() {
+        isLoading = true
+
+        convexClient.authState
+            .compactMap { state -> Bool? in
+                switch state {
+                case .authenticated:
+                    return true
+                case .unauthenticated:
+                    return nil // Keep waiting
+                case .loading:
+                    return nil // Keep waiting
+                }
+            }
+            .first()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.subscribeToTodos()
+                self?.subscribeToGoalTodos()
+            }
+            .store(in: &cancellables)
     }
 
     private func subscribeToTodos() {
-        isLoading = true
-
         convexService.listTodos()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] todos in
