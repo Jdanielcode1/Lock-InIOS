@@ -251,17 +251,18 @@ class DailyRecapService: ObservableObject {
 
         print("   Render size: \(renderSize)")
 
-        // Pre-render overlay images
+        // Pre-render badge images (must be done before closure)
         let overlayDisplayDuration = 3.0
-        var overlayImages: [(image: CIImage, startTime: Double, endTime: Double)] = []
+        var overlayBadges: [(badge: CIImage, title: String, startTime: Double, endTime: Double)] = []
 
         for data in overlayData {
             let endTime = data.startTime + min(data.duration, overlayDisplayDuration)
-            if let textImage = createTextOverlayImage(title: data.title, renderSize: renderSize) {
-                overlayImages.append((image: textImage, startTime: data.startTime, endTime: endTime))
-                print("   Overlay: \(data.title) @ \(data.startTime)s-\(endTime)s, extent: \(textImage.extent)")
+            // Pre-render badge at full opacity - we'll apply opacity in the filter
+            if let badge = createPremiumBadge(title: data.title, opacity: 1.0, videoSize: renderSize) {
+                overlayBadges.append((badge: badge, title: data.title, startTime: data.startTime, endTime: endTime))
+                print("   Badge: \(data.title) @ \(data.startTime)s-\(endTime)s, size: \(badge.extent.size)")
             } else {
-                print("   ❌ Failed to create overlay image for: \(data.title)")
+                print("   ❌ Failed to create badge for: \(data.title)")
             }
         }
 
@@ -277,18 +278,19 @@ class DailyRecapService: ObservableObject {
             }
 
             // Check if any overlay should be visible
-            for overlay in overlayImages {
-                if currentTime >= overlay.startTime && currentTime <= overlay.endTime {
+            for badge in overlayBadges {
+                if currentTime >= badge.startTime && currentTime <= badge.endTime {
                     if frameCount % 30 == 1 {
-                        print("   ✨ Applying overlay at \(String(format: "%.2f", currentTime))s")
+                        print("   ✨ Applying badge '\(badge.title)' at \(String(format: "%.2f", currentTime))s")
                     }
+
                     // Calculate fade opacity
                     let fadeInDuration = 0.3
                     let fadeOutDuration = 0.4
                     var opacity: CGFloat = 1.0
 
-                    let timeIntoOverlay = currentTime - overlay.startTime
-                    let timeUntilEnd = overlay.endTime - currentTime
+                    let timeIntoOverlay = currentTime - badge.startTime
+                    let timeUntilEnd = badge.endTime - currentTime
 
                     if timeIntoOverlay < fadeInDuration {
                         opacity = CGFloat(timeIntoOverlay / fadeInDuration)
@@ -296,35 +298,19 @@ class DailyRecapService: ObservableObject {
                         opacity = CGFloat(timeUntilEnd / fadeOutDuration)
                     }
 
-                    // Use CIFilter text generator directly
-                    let textFilter = CIFilter.attributedTextImageGenerator()
-                    let attrs: [NSAttributedString.Key: Any] = [
-                        .font: UIFont.boldSystemFont(ofSize: 28),
-                        .foregroundColor: UIColor.white
-                    ]
-                    // Get the title from overlayData using the timing match
-                    let matchingTitle = overlayData.first { $0.startTime == overlay.startTime }?.title ?? "Task"
-                    textFilter.text = NSAttributedString(string: "✓ " + matchingTitle, attributes: attrs)
-                    textFilter.scaleFactor = 2.0
+                    // Position badge in top-left (CIImage origin is bottom-left)
+                    let scale = min(request.renderSize.width, request.renderSize.height) / 1280.0
+                    let padding: CGFloat = 20 * scale
+                    let yPos = request.renderSize.height - padding - badge.badge.extent.height - (70 * scale)
 
-                    if let textImage = textFilter.outputImage {
-                        // Position text in bottom-left with padding (CIImage origin is bottom-left)
-                        let yPos = request.renderSize.height - 100  // Near top in video
-                        let positioned = textImage.transformed(by: CGAffineTransform(translationX: 30, y: yPos))
-
-                        // Add background pill
-                        let bgRect = CGRect(x: 20, y: yPos - 10, width: textImage.extent.width + 40, height: textImage.extent.height + 20)
-                        let background = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0.7 * opacity))
-                            .cropped(to: bgRect)
-
-                        outputImage = background.composited(over: outputImage)
-
-                        // Apply opacity to text
-                        let textWithOpacity = positioned.applyingFilter("CIColorMatrix", parameters: [
+                    // Apply opacity and position
+                    let positioned = badge.badge
+                        .transformed(by: CGAffineTransform(translationX: padding, y: yPos))
+                        .applyingFilter("CIColorMatrix", parameters: [
                             "inputAVector": CIVector(x: 0, y: 0, z: 0, w: opacity)
                         ])
-                        outputImage = textWithOpacity.composited(over: outputImage)
-                    }
+
+                    outputImage = positioned.composited(over: outputImage)
                     break
                 }
             }
@@ -529,6 +515,104 @@ class DailyRecapService: ObservableObject {
         default:
             throw DailyRecapError.exportFailed
         }
+    }
+
+    /// Creates a premium rounded badge with checkmark and title
+    private func createPremiumBadge(title: String, opacity: CGFloat, videoSize: CGSize) -> CIImage? {
+        let scale = min(videoSize.width, videoSize.height) / 1280.0
+
+        // === DESIGN TOKENS (YC Startup Aesthetic) ===
+        let badgeHeight: CGFloat = 56 * scale
+        let cornerRadius: CGFloat = badgeHeight / 2  // Full pill shape
+        let horizontalPadding: CGFloat = 18 * scale
+        let checkmarkSize: CGFloat = 32 * scale
+        let spacing: CGFloat = 12 * scale
+        let fontSize: CGFloat = 20 * scale
+
+        // Calculate text width
+        let font = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
+        let textAttributes: [NSAttributedString.Key: Any] = [.font: font]
+        let textSize = (title as NSString).size(withAttributes: textAttributes)
+        let maxTextWidth = videoSize.width * 0.5
+        let actualTextWidth = min(textSize.width, maxTextWidth)
+
+        // Total badge width
+        let badgeWidth = horizontalPadding + checkmarkSize + spacing + actualTextWidth + horizontalPadding
+
+        // Create image with enough space for shadow
+        let shadowPadding: CGFloat = 16 * scale
+        let canvasWidth = badgeWidth + shadowPadding * 2
+        let canvasHeight = badgeHeight + shadowPadding * 2
+
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: canvasWidth, height: canvasHeight))
+        let image = renderer.image { context in
+            let ctx = context.cgContext
+
+            // Badge rect (centered in canvas for shadow room)
+            let badgeRect = CGRect(x: shadowPadding, y: shadowPadding, width: badgeWidth, height: badgeHeight)
+            let pillPath = UIBezierPath(roundedRect: badgeRect, cornerRadius: cornerRadius)
+
+            // === SHADOW ===
+            ctx.saveGState()
+            ctx.setShadow(offset: CGSize(width: 0, height: 4 * scale), blur: 12 * scale, color: UIColor.black.withAlphaComponent(0.4 * opacity).cgColor)
+            UIColor.black.setFill()
+            pillPath.fill()
+            ctx.restoreGState()
+
+            // === MAIN BACKGROUND (Dark glass) ===
+            UIColor(red: 0.1, green: 0.1, blue: 0.12, alpha: 0.92 * opacity).setFill()
+            pillPath.fill()
+
+            // === SUBTLE BORDER ===
+            UIColor.white.withAlphaComponent(0.1 * opacity).setStroke()
+            pillPath.lineWidth = 1
+            pillPath.stroke()
+
+            // === GREEN CHECKMARK CIRCLE ===
+            let circleX = badgeRect.minX + horizontalPadding
+            let circleY = badgeRect.midY - checkmarkSize / 2
+            let circleRect = CGRect(x: circleX, y: circleY, width: checkmarkSize, height: checkmarkSize)
+
+            // Circle with gradient feel
+            let circlePath = UIBezierPath(ovalIn: circleRect)
+            UIColor(red: 0.22, green: 0.8, blue: 0.42, alpha: opacity).setFill()
+            circlePath.fill()
+
+            // === CHECKMARK ===
+            ctx.setStrokeColor(UIColor.white.withAlphaComponent(opacity).cgColor)
+            ctx.setLineWidth(2.5 * scale)
+            ctx.setLineCap(.round)
+            ctx.setLineJoin(.round)
+
+            let checkPath = UIBezierPath()
+            let cx = circleRect.midX
+            let cy = circleRect.midY
+            let cs = checkmarkSize * 0.28
+
+            checkPath.move(to: CGPoint(x: cx - cs, y: cy))
+            checkPath.addLine(to: CGPoint(x: cx - cs * 0.3, y: cy + cs * 0.7))
+            checkPath.addLine(to: CGPoint(x: cx + cs, y: cy - cs * 0.6))
+            ctx.addPath(checkPath.cgPath)
+            ctx.strokePath()
+
+            // === TITLE TEXT ===
+            let textX = circleX + checkmarkSize + spacing
+            let textY = badgeRect.midY - fontSize * 0.6
+
+            let paragraphStyle = NSMutableParagraphStyle()
+            paragraphStyle.lineBreakMode = .byTruncatingTail
+
+            let textAttrs: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: UIColor.white.withAlphaComponent(opacity),
+                .paragraphStyle: paragraphStyle
+            ]
+
+            let textRect = CGRect(x: textX, y: textY, width: actualTextWidth, height: fontSize * 1.4)
+            (title as NSString).draw(in: textRect, withAttributes: textAttrs)
+        }
+
+        return CIImage(image: image)
     }
 
     /// Creates a text overlay image using Core Graphics
