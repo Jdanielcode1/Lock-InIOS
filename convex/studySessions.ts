@@ -9,6 +9,7 @@ export const create = userMutation({
     localVideoPath: v.string(),
     localThumbnailPath: v.optional(v.string()),
     durationMinutes: v.float64(),
+    notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = ctx.identity.tokenIdentifier;
@@ -26,6 +27,7 @@ export const create = userMutation({
       localVideoPath: args.localVideoPath,
       localThumbnailPath: args.localThumbnailPath,
       durationMinutes: args.durationMinutes,
+      notes: args.notes,
       createdAt: Date.now(),
     });
 
@@ -171,5 +173,22 @@ export const updateVideo = userMutation({
     }
 
     await ctx.db.patch(args.id, updateFields);
+  },
+});
+
+// Mutation: Update notes for a study session
+export const updateNotes = userMutation({
+  args: {
+    id: v.id("studySessions"),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = ctx.identity.tokenIdentifier;
+
+    const session = await ctx.db.get(args.id);
+    if (!session) throw new Error("Study session not found");
+    if (session.userId !== userId) throw new Error("Not authorized");
+
+    await ctx.db.patch(args.id, { notes: args.notes });
   },
 });

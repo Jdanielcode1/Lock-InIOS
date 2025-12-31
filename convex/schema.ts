@@ -46,6 +46,7 @@ export default defineSchema({
     localVideoPath: v.optional(v.string()),
     localThumbnailPath: v.optional(v.string()),
     videoDurationMinutes: v.optional(v.float64()),
+    videoNotes: v.optional(v.string()), // Notes/description for the attached video
     createdAt: v.float64(),
   })
     .index("by_goal", ["goalId"])
@@ -58,6 +59,7 @@ export default defineSchema({
     localVideoPath: v.string(),
     localThumbnailPath: v.optional(v.string()),
     durationMinutes: v.float64(),
+    notes: v.optional(v.string()), // Notes/description for the session
     createdAt: v.float64(),
   })
     .index("by_goal", ["goalId"])

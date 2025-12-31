@@ -62,6 +62,7 @@ struct GoalTodo: Identifiable, Codable {
     var localVideoPath: String?
     var localThumbnailPath: String?
     var videoDurationMinutes: Double?
+    var videoNotes: String?
     var isArchived: Bool?
     let createdAt: Double
     // Goal title - included when fetching all todos for the user

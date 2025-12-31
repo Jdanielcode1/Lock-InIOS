@@ -35,6 +35,12 @@ struct GoalTodoVideoPlayerView: View {
     @State private var hasVoiceoverAdded = false
     @State private var showShareSheet = false
 
+    // Notes state
+    @State private var editingNotes: String = ""
+    @State private var showNotesEditor = false
+    @State private var isNotesExpanded = false
+    @State private var isSavingNotes = false
+
     private let recorder = TimeLapseRecorder()
 
     init(videoURL: URL, goalTodo: GoalTodo) {
@@ -93,6 +99,21 @@ struct GoalTodoVideoPlayerView: View {
         }
         .shareSheet(isPresented: $showShareSheet, videoURL: currentVideoURL) {
             saveVideoToCameraRoll()
+        }
+        .sheet(isPresented: $showNotesEditor) {
+            VideoNotesSheet(
+                notes: $editingNotes,
+                onSave: {
+                    showNotesEditor = false
+                    saveNotes()
+                },
+                onSkip: {
+                    showNotesEditor = false
+                },
+                isEditing: true
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
         }
     }
 
@@ -181,27 +202,128 @@ struct GoalTodoVideoPlayerView: View {
 
             Spacer()
 
-            // Voiceover button at bottom
-            Button {
-                startVoiceoverCountdown()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: hasVoiceoverAdded ? "arrow.counterclockwise" : "mic.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                    Text(hasVoiceoverAdded ? "Re-record Voiceover" : "Add Voiceover")
-                        .font(.system(size: 17, weight: .semibold))
-                    if hasVoiceoverAdded {
-                        Image(systemName: "checkmark.circle.fill")
+            // Notes section (above action buttons)
+            notesSection
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
+
+            // Action buttons at bottom
+            VStack(spacing: 12) {
+                // Notes button
+                Button {
+                    editingNotes = goalTodo.videoNotes ?? ""
+                    showNotesEditor = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "note.text")
+                            .font(.system(size: 18, weight: .semibold))
+                        Text(goalTodo.videoNotes?.isEmpty == false ? "Edit Notes" : "Add Notes")
+                            .font(.system(size: 17, weight: .semibold))
+                        if isSavingNotes {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                                .tint(.white)
+                        }
+                    }
+                    .foregroundColor(.white)
+                    .frame(width: 280, height: 50)
+                    .background(Color.accentColor)
+                    .cornerRadius(25)
+                }
+                .disabled(isSavingNotes)
+
+                // Voiceover button
+                Button {
+                    startVoiceoverCountdown()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: hasVoiceoverAdded ? "arrow.counterclockwise" : "mic.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                        Text(hasVoiceoverAdded ? "Re-record Voiceover" : "Add Voiceover")
+                            .font(.system(size: 17, weight: .semibold))
+                        if hasVoiceoverAdded {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                    }
+                    .foregroundColor(.white)
+                    .frame(width: 280, height: 50)
+                    .background(hasVoiceoverAdded ? Color.orange.opacity(0.8) : Color.orange)
+                    .cornerRadius(25)
+                }
+            }
+            .padding(.bottom, 50)
+        }
+    }
+
+    // MARK: - Notes Section
+
+    var notesSection: some View {
+        Group {
+            if let notes = goalTodo.videoNotes, !notes.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            isNotesExpanded.toggle()
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "note.text")
+                                .font(.system(size: 14))
+                            Text("Notes")
+                                .font(.system(size: 14, weight: .semibold))
+                            Spacer()
+                            Image(systemName: isNotesExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                    }
+
+                    if isNotesExpanded {
+                        Text(notes)
                             .font(.system(size: 14))
-                            .foregroundColor(.white.opacity(0.8))
+                            .foregroundColor(.white.opacity(0.9))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    } else {
+                        Text(notes)
+                            .font(.system(size: 14))
+                            .foregroundColor(.white.opacity(0.9))
+                            .lineLimit(2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                .foregroundColor(.white)
-                .frame(width: 280, height: 56)
-                .background(hasVoiceoverAdded ? Color.orange.opacity(0.8) : Color.orange)
-                .cornerRadius(28)
+                .padding(16)
+                .background(Color.black.opacity(0.6))
+                .cornerRadius(12)
             }
-            .padding(.bottom, 60)
+        }
+    }
+
+    // MARK: - Notes Functions
+
+    private func saveNotes() {
+        guard !isSavingNotes else { return }
+        isSavingNotes = true
+
+        Task {
+            do {
+                let notesToSave = editingNotes.isEmpty ? nil : editingNotes
+                try await ConvexService.shared.updateGoalTodoVideoNotes(
+                    todoId: goalTodo.id,
+                    videoNotes: notesToSave
+                )
+                print("Notes saved successfully")
+            } catch {
+                print("Failed to save notes: \(error)")
+                await MainActor.run {
+                    errorMessage = "Failed to save notes: \(error.localizedDescription)"
+                }
+            }
+            await MainActor.run {
+                isSavingNotes = false
+            }
         }
     }
 

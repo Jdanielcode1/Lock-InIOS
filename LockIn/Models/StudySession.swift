@@ -14,6 +14,7 @@ struct StudySession: Identifiable, Codable {
     let localVideoPath: String
     let localThumbnailPath: String?
     let durationMinutes: Double
+    let notes: String?
     let createdAt: Double
 
     var id: String { _id }
@@ -56,4 +57,5 @@ struct CreateStudySessionRequest: Codable {
     let localVideoPath: String
     let localThumbnailPath: String?
     let durationMinutes: Double
+    let notes: String?
 }

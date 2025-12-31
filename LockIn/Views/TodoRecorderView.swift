@@ -52,6 +52,10 @@ struct TodoRecorderView: View {
     @State private var hasVoiceoverAdded = false
     @State private var showShareSheet = false
 
+    // Video notes state
+    @State private var pendingNotes: String = ""
+    @State private var showNotesSheet: Bool = false
+
     private let videoService = VideoService.shared
 
     var body: some View {
@@ -161,6 +165,20 @@ struct TodoRecorderView: View {
             }
         }
         .shareSheet(isPresented: $showShareSheet, videoURL: recorder.recordedVideoURL ?? URL(fileURLWithPath: ""))
+        .sheet(isPresented: $showNotesSheet) {
+            VideoNotesSheet(
+                notes: $pendingNotes,
+                onSave: {
+                    showNotesSheet = false
+                },
+                onSkip: {
+                    pendingNotes = ""
+                    showNotesSheet = false
+                }
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+        }
     }
 
     private func triggerCountdownAlert() {
@@ -785,6 +803,7 @@ struct TodoRecorderView: View {
                             player = nil
                             voiceoverURL = nil
                             hasVoiceoverAdded = false
+                            pendingNotes = ""
                             recorder.clearFrames()
                         } label: {
                             HStack(spacing: 8) {
@@ -818,6 +837,28 @@ struct TodoRecorderView: View {
                             .background(.green)
                             .cornerRadius(16)
                         }
+                    }
+
+                    // Middle row: Notes button
+                    Button {
+                        showNotesSheet = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: pendingNotes.isEmpty ? "note.text.badge.plus" : "note.text")
+                                .font(.system(size: 18, weight: .semibold))
+                            Text(pendingNotes.isEmpty ? "Add Notes" : "Edit Notes")
+                                .font(.system(size: 17, weight: .semibold))
+                            if !pendingNotes.isEmpty {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                        .background(pendingNotes.isEmpty ? Color.white.opacity(0.15) : Color.accentColor.opacity(0.8))
+                        .cornerRadius(16)
                     }
 
                     // Bottom row: Voiceover and Share

@@ -142,30 +142,77 @@ class ConvexService: ObservableObject {
         let _: String? = try await convexClient.mutation("goalTodos:remove", with: ["id": id])
     }
 
-    func attachVideoToGoalTodo(id: String, localVideoPath: String, localThumbnailPath: String?, videoDurationMinutes: Double?) async throws {
-        if let thumbnailPath = localThumbnailPath, let duration = videoDurationMinutes {
+    func attachVideoToGoalTodo(id: String, localVideoPath: String, localThumbnailPath: String?, videoDurationMinutes: Double?, videoNotes: String? = nil) async throws {
+        // Handle all combinations of optional parameters explicitly
+        let hasThumb = localThumbnailPath != nil
+        let hasDuration = videoDurationMinutes != nil
+        let hasNotes = videoNotes != nil && !videoNotes!.isEmpty
+
+        switch (hasThumb, hasDuration, hasNotes) {
+        case (true, true, true):
             let _: String? = try await convexClient.mutation("goalTodos:attachVideo", with: [
                 "id": id,
                 "localVideoPath": localVideoPath,
-                "localThumbnailPath": thumbnailPath,
-                "videoDurationMinutes": duration
+                "localThumbnailPath": localThumbnailPath!,
+                "videoDurationMinutes": videoDurationMinutes!,
+                "videoNotes": videoNotes!
             ])
-        } else if let thumbnailPath = localThumbnailPath {
+        case (true, true, false):
             let _: String? = try await convexClient.mutation("goalTodos:attachVideo", with: [
                 "id": id,
                 "localVideoPath": localVideoPath,
-                "localThumbnailPath": thumbnailPath
+                "localThumbnailPath": localThumbnailPath!,
+                "videoDurationMinutes": videoDurationMinutes!
             ])
-        } else if let duration = videoDurationMinutes {
+        case (true, false, true):
             let _: String? = try await convexClient.mutation("goalTodos:attachVideo", with: [
                 "id": id,
                 "localVideoPath": localVideoPath,
-                "videoDurationMinutes": duration
+                "localThumbnailPath": localThumbnailPath!,
+                "videoNotes": videoNotes!
             ])
-        } else {
+        case (true, false, false):
+            let _: String? = try await convexClient.mutation("goalTodos:attachVideo", with: [
+                "id": id,
+                "localVideoPath": localVideoPath,
+                "localThumbnailPath": localThumbnailPath!
+            ])
+        case (false, true, true):
+            let _: String? = try await convexClient.mutation("goalTodos:attachVideo", with: [
+                "id": id,
+                "localVideoPath": localVideoPath,
+                "videoDurationMinutes": videoDurationMinutes!,
+                "videoNotes": videoNotes!
+            ])
+        case (false, true, false):
+            let _: String? = try await convexClient.mutation("goalTodos:attachVideo", with: [
+                "id": id,
+                "localVideoPath": localVideoPath,
+                "videoDurationMinutes": videoDurationMinutes!
+            ])
+        case (false, false, true):
+            let _: String? = try await convexClient.mutation("goalTodos:attachVideo", with: [
+                "id": id,
+                "localVideoPath": localVideoPath,
+                "videoNotes": videoNotes!
+            ])
+        case (false, false, false):
             let _: String? = try await convexClient.mutation("goalTodos:attachVideo", with: [
                 "id": id,
                 "localVideoPath": localVideoPath
+            ])
+        }
+    }
+
+    func updateGoalTodoVideoNotes(todoId: String, videoNotes: String?) async throws {
+        if let notes = videoNotes {
+            let _: String? = try await convexClient.mutation("goalTodos:updateVideoNotes", with: [
+                "id": todoId,
+                "videoNotes": notes
+            ])
+        } else {
+            let _: String? = try await convexClient.mutation("goalTodos:updateVideoNotes", with: [
+                "id": todoId
             ])
         }
     }
@@ -186,34 +233,85 @@ class ConvexService: ObservableObject {
 
     // MARK: - Study Sessions
 
-    func createStudySession(goalId: String, goalTodoId: String?, localVideoPath: String, localThumbnailPath: String?, durationMinutes: Double) async throws -> String {
-        if let todoId = goalTodoId, let thumbnailPath = localThumbnailPath {
+    func createStudySession(goalId: String, goalTodoId: String?, localVideoPath: String, localThumbnailPath: String?, durationMinutes: Double, notes: String? = nil) async throws -> String {
+        // Handle all combinations of optional parameters explicitly
+        let hasTodo = goalTodoId != nil
+        let hasThumb = localThumbnailPath != nil
+        let hasNotes = notes != nil && !notes!.isEmpty
+
+        switch (hasTodo, hasThumb, hasNotes) {
+        case (true, true, true):
             return try await convexClient.mutation("studySessions:create", with: [
                 "goalId": goalId,
-                "goalTodoId": todoId,
+                "goalTodoId": goalTodoId!,
                 "localVideoPath": localVideoPath,
-                "localThumbnailPath": thumbnailPath,
+                "localThumbnailPath": localThumbnailPath!,
+                "durationMinutes": durationMinutes,
+                "notes": notes!
+            ])
+        case (true, true, false):
+            return try await convexClient.mutation("studySessions:create", with: [
+                "goalId": goalId,
+                "goalTodoId": goalTodoId!,
+                "localVideoPath": localVideoPath,
+                "localThumbnailPath": localThumbnailPath!,
                 "durationMinutes": durationMinutes
             ])
-        } else if let todoId = goalTodoId {
+        case (true, false, true):
             return try await convexClient.mutation("studySessions:create", with: [
                 "goalId": goalId,
-                "goalTodoId": todoId,
+                "goalTodoId": goalTodoId!,
+                "localVideoPath": localVideoPath,
+                "durationMinutes": durationMinutes,
+                "notes": notes!
+            ])
+        case (true, false, false):
+            return try await convexClient.mutation("studySessions:create", with: [
+                "goalId": goalId,
+                "goalTodoId": goalTodoId!,
                 "localVideoPath": localVideoPath,
                 "durationMinutes": durationMinutes
             ])
-        } else if let thumbnailPath = localThumbnailPath {
+        case (false, true, true):
             return try await convexClient.mutation("studySessions:create", with: [
                 "goalId": goalId,
                 "localVideoPath": localVideoPath,
-                "localThumbnailPath": thumbnailPath,
+                "localThumbnailPath": localThumbnailPath!,
+                "durationMinutes": durationMinutes,
+                "notes": notes!
+            ])
+        case (false, true, false):
+            return try await convexClient.mutation("studySessions:create", with: [
+                "goalId": goalId,
+                "localVideoPath": localVideoPath,
+                "localThumbnailPath": localThumbnailPath!,
                 "durationMinutes": durationMinutes
+            ])
+        case (false, false, true):
+            return try await convexClient.mutation("studySessions:create", with: [
+                "goalId": goalId,
+                "localVideoPath": localVideoPath,
+                "durationMinutes": durationMinutes,
+                "notes": notes!
+            ])
+        case (false, false, false):
+            return try await convexClient.mutation("studySessions:create", with: [
+                "goalId": goalId,
+                "localVideoPath": localVideoPath,
+                "durationMinutes": durationMinutes
+            ])
+        }
+    }
+
+    func updateStudySessionNotes(sessionId: String, notes: String?) async throws {
+        if let notes = notes {
+            let _: String? = try await convexClient.mutation("studySessions:updateNotes", with: [
+                "id": sessionId,
+                "notes": notes
             ])
         } else {
-            return try await convexClient.mutation("studySessions:create", with: [
-                "goalId": goalId,
-                "localVideoPath": localVideoPath,
-                "durationMinutes": durationMinutes
+            let _: String? = try await convexClient.mutation("studySessions:updateNotes", with: [
+                "id": sessionId
             ])
         }
     }

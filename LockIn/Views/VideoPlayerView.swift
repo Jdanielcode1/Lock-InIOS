@@ -34,6 +34,12 @@ struct VideoPlayerView: View {
     @State private var voiceoverError: String?
     @State private var showShareSheet = false
 
+    // Notes state
+    @State private var editingNotes: String = ""
+    @State private var showNotesEditor = false
+    @State private var isNotesExpanded = false
+    @State private var isSavingNotes = false
+
     private let recorder = TimeLapseRecorder()
 
     init(session: StudySession) {
@@ -62,12 +68,45 @@ struct VideoPlayerView: View {
                     VideoPlayerRepresentable(player: player)
                         .ignoresSafeArea()
 
-                    // Voiceover button overlay (hidden during recording/countdown)
+                    // Bottom overlay (hidden during recording/countdown)
                     if !isRecordingVoiceover && !showVoiceoverCountdown {
                         VStack {
                             Spacer()
-                            voiceoverButton
-                                .padding(.bottom, 100)
+
+                            // Notes section (if notes exist)
+                            notesSection
+                                .padding(.horizontal, 20)
+                                .padding(.bottom, 16)
+
+                            // Action buttons
+                            VStack(spacing: 12) {
+                                // Notes button
+                                Button {
+                                    editingNotes = session.notes ?? ""
+                                    showNotesEditor = true
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "note.text")
+                                            .font(.system(size: 18, weight: .semibold))
+                                        Text(session.notes?.isEmpty == false ? "Edit Notes" : "Add Notes")
+                                            .font(.system(size: 17, weight: .semibold))
+                                        if isSavingNotes {
+                                            ProgressView()
+                                                .scaleEffect(0.8)
+                                                .tint(.white)
+                                        }
+                                    }
+                                    .foregroundColor(.white)
+                                    .frame(width: 280, height: 50)
+                                    .background(session.notes?.isEmpty == false ? Color.accentColor : Color.white.opacity(0.2))
+                                    .cornerRadius(25)
+                                }
+                                .disabled(isSavingNotes)
+
+                                // Voiceover button
+                                voiceoverButton
+                            }
+                            .padding(.bottom, 100)
                         }
                     }
                 }
@@ -184,6 +223,91 @@ struct VideoPlayerView: View {
         .shareSheet(isPresented: $showShareSheet, videoURL: viewModel.currentVideoURL ?? URL(fileURLWithPath: "")) {
             saveVideoToCameraRoll()
         }
+        .sheet(isPresented: $showNotesEditor) {
+            VideoNotesSheet(
+                notes: $editingNotes,
+                onSave: {
+                    showNotesEditor = false
+                    saveNotes()
+                },
+                onSkip: {
+                    showNotesEditor = false
+                },
+                isEditing: true
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    // MARK: - Notes Section
+
+    var notesSection: some View {
+        Group {
+            if let notes = session.notes, !notes.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            isNotesExpanded.toggle()
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "note.text")
+                                .font(.system(size: 14))
+                            Text("Notes")
+                                .font(.system(size: 14, weight: .semibold))
+                            Spacer()
+                            Image(systemName: isNotesExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                    }
+
+                    if isNotesExpanded {
+                        Text(notes)
+                            .font(.system(size: 14))
+                            .foregroundColor(.white.opacity(0.9))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    } else {
+                        Text(notes)
+                            .font(.system(size: 14))
+                            .foregroundColor(.white.opacity(0.9))
+                            .lineLimit(2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(16)
+                .background(Color.black.opacity(0.6))
+                .cornerRadius(12)
+            }
+        }
+    }
+
+    // MARK: - Notes Functions
+
+    private func saveNotes() {
+        guard !isSavingNotes else { return }
+        isSavingNotes = true
+
+        Task {
+            do {
+                let notesToSave = editingNotes.isEmpty ? nil : editingNotes
+                try await ConvexService.shared.updateStudySessionNotes(
+                    sessionId: session.id,
+                    notes: notesToSave
+                )
+                print("Notes saved successfully")
+            } catch {
+                print("Failed to save notes: \(error)")
+                await MainActor.run {
+                    voiceoverError = "Failed to save notes: \(error.localizedDescription)"
+                }
+            }
+            await MainActor.run {
+                isSavingNotes = false
+            }
+        }
     }
 
     // MARK: - Voiceover UI Components
@@ -204,9 +328,9 @@ struct VideoPlayerView: View {
                 }
             }
             .foregroundColor(.white)
-            .frame(width: 280, height: 56)
+            .frame(width: 280, height: 50)
             .background(hasVoiceoverAdded ? Color.orange.opacity(0.8) : Color.orange)
-            .cornerRadius(28)
+            .cornerRadius(25)
         }
     }
 
@@ -642,6 +766,7 @@ struct VideoPlayerRepresentable: UIViewControllerRepresentable {
             localVideoPath: "LockInVideos/test.mp4",
             localThumbnailPath: nil,
             durationMinutes: 30,
+            notes: nil,
             createdAt: Date().timeIntervalSince1970 * 1000
         ))
     }

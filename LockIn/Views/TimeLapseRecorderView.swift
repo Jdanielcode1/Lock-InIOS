@@ -89,6 +89,10 @@ struct TimeLapseRecorderView: View {
     @State private var checkedTodoIds: Set<String> = []
     @State private var showTodoList = false
 
+    // Video notes state
+    @State private var pendingNotes: String = ""
+    @State private var showNotesSheet: Bool = false
+
     private let videoService = VideoService.shared
 
     init(goalId: String, goalTodoId: String?, availableTodos: [GoalTodo] = []) {
@@ -217,6 +221,20 @@ struct TimeLapseRecorderView: View {
             }
         }
         .shareSheet(isPresented: $showShareSheet, videoURL: recorder.recordedVideoURL ?? URL(fileURLWithPath: ""))
+        .sheet(isPresented: $showNotesSheet) {
+            VideoNotesSheet(
+                notes: $pendingNotes,
+                onSave: {
+                    showNotesSheet = false
+                },
+                onSkip: {
+                    pendingNotes = ""
+                    showNotesSheet = false
+                }
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+        }
     }
 
     private func triggerCountdownAlert() {
@@ -1010,6 +1028,7 @@ struct TimeLapseRecorderView: View {
                             previewThumbnail = nil
                             voiceoverURL = nil
                             hasVoiceoverAdded = false
+                            pendingNotes = ""
                             recorder.clearFrames()
                         } label: {
                             HStack(spacing: 8) {
@@ -1043,6 +1062,28 @@ struct TimeLapseRecorderView: View {
                             .background(Color.accentColor)
                             .cornerRadius(16)
                         }
+                    }
+
+                    // Middle row: Notes button
+                    Button {
+                        showNotesSheet = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: pendingNotes.isEmpty ? "note.text.badge.plus" : "note.text")
+                                .font(.system(size: 18, weight: .semibold))
+                            Text(pendingNotes.isEmpty ? "Add Notes" : "Edit Notes")
+                                .font(.system(size: 17, weight: .semibold))
+                            if !pendingNotes.isEmpty {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                        .background(pendingNotes.isEmpty ? Color.white.opacity(0.15) : Color.accentColor.opacity(0.8))
+                        .cornerRadius(16)
                     }
 
                     // Bottom row: Voiceover and Share
@@ -1383,13 +1424,15 @@ struct TimeLapseRecorderView: View {
             }
             uploadProgress = 0.7
 
-            // Create study session with local path
+            // Create study session with local path and notes
+            let notesToSave = pendingNotes.isEmpty ? nil : pendingNotes
             _ = try await ConvexService.shared.createStudySession(
                 goalId: goalId,
                 goalTodoId: goalTodoId,
                 localVideoPath: localVideoPath,
                 localThumbnailPath: localThumbnailPath,
-                durationMinutes: studyTimeMinutes
+                durationMinutes: studyTimeMinutes,
+                notes: notesToSave
             )
 
             uploadProgress = 0.85
@@ -1400,7 +1443,8 @@ struct TimeLapseRecorderView: View {
                     id: goalTodoId,
                     localVideoPath: localVideoPath,
                     localThumbnailPath: localThumbnailPath,
-                    videoDurationMinutes: studyTimeMinutes
+                    videoDurationMinutes: studyTimeMinutes,
+                    videoNotes: notesToSave
                 )
                 try? await ConvexService.shared.toggleGoalTodo(id: goalTodoId, isCompleted: true)
             }
@@ -1414,7 +1458,8 @@ struct TimeLapseRecorderView: View {
                         id: todoId,
                         localVideoPath: localVideoPath,
                         localThumbnailPath: localThumbnailPath,
-                        videoDurationMinutes: studyTimeMinutes
+                        videoDurationMinutes: studyTimeMinutes,
+                        videoNotes: notesToSave
                     )
                     try? await ConvexService.shared.toggleGoalTodo(id: todoId, isCompleted: true)
                 }
