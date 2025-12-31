@@ -8,6 +8,7 @@
 import AVFoundation
 import UIKit
 import CoreImage
+import CoreImage.CIFilterBuiltins
 
 @MainActor
 class DailyRecapService: ObservableObject {
@@ -198,16 +199,176 @@ class DailyRecapService: ObservableObject {
         print("📊 Total composition duration: \(CMTimeGetSeconds(composition.duration))s")
         print("📊 Expected duration: \(CMTimeGetSeconds(currentTime))s")
 
-        // Store clip timing data for UI overlays during playback
+        // Store clip timing data for overlays
+        let overlayData = clipTimingData.map { (title: $0.todo.title, startTime: CMTimeGetSeconds($0.startTime), duration: $0.duration) }
         await MainActor.run {
-            self.clipTimings = clipTimingData.map { (title: $0.todo.title, startTime: CMTimeGetSeconds($0.startTime), duration: $0.duration) }
+            self.clipTimings = overlayData
         }
 
-        // Export video (without burned-in overlays - we'll show them in UI)
-        try await exportVideoSimple(
-            composition: composition,
+        // Step 1: Export concatenated video (Passthrough - fast & reliable)
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DailyRecap_temp_\(UUID().uuidString)")
+            .appendingPathExtension("mov")
+
+        try await exportVideoSimple(composition: composition, outputURL: tempURL)
+
+        await MainActor.run {
+            compilationProgress = 0.8
+        }
+
+        // Step 2: Re-encode with burned-in overlays
+        try await burnInOverlays(
+            sourceURL: tempURL,
+            overlayData: overlayData,
             outputURL: outputURL
         )
+
+        // Cleanup temp file
+        try? FileManager.default.removeItem(at: tempURL)
+    }
+
+    /// Burn overlays into a video file using CIFilter
+    private func burnInOverlays(
+        sourceURL: URL,
+        overlayData: [(title: String, startTime: Double, duration: Double)],
+        outputURL: URL
+    ) async throws {
+        print("🔥 Burning in overlays to video...")
+
+        let asset = AVURLAsset(url: sourceURL)
+
+        // Get video properties
+        let videoTracks = try await asset.loadTracks(withMediaType: .video)
+        guard let videoTrack = videoTracks.first else {
+            throw DailyRecapError.invalidVideoTrack
+        }
+
+        let naturalSize = try await videoTrack.load(.naturalSize)
+        let transform = try await videoTrack.load(.preferredTransform)
+        let isPortrait = transform.a == 0 && abs(transform.b) == 1
+        let renderSize = isPortrait ?
+            CGSize(width: naturalSize.height, height: naturalSize.width) : naturalSize
+
+        print("   Render size: \(renderSize)")
+
+        // Pre-render overlay images
+        let overlayDisplayDuration = 3.0
+        var overlayImages: [(image: CIImage, startTime: Double, endTime: Double)] = []
+
+        for data in overlayData {
+            let endTime = data.startTime + min(data.duration, overlayDisplayDuration)
+            if let textImage = createTextOverlayImage(title: data.title, renderSize: renderSize) {
+                overlayImages.append((image: textImage, startTime: data.startTime, endTime: endTime))
+                print("   Overlay: \(data.title) @ \(data.startTime)s-\(endTime)s, extent: \(textImage.extent)")
+            } else {
+                print("   ❌ Failed to create overlay image for: \(data.title)")
+            }
+        }
+
+        // Create video composition with CIFilter handler
+        var frameCount = 0
+        let videoComposition = AVMutableVideoComposition(asset: asset) { request in
+            frameCount += 1
+            let currentTime = CMTimeGetSeconds(request.compositionTime)
+            var outputImage = request.sourceImage
+
+            if frameCount % 30 == 1 {
+                print("   🎞️ Processing frame \(frameCount) at \(String(format: "%.2f", currentTime))s")
+            }
+
+            // Check if any overlay should be visible
+            for overlay in overlayImages {
+                if currentTime >= overlay.startTime && currentTime <= overlay.endTime {
+                    if frameCount % 30 == 1 {
+                        print("   ✨ Applying overlay at \(String(format: "%.2f", currentTime))s")
+                    }
+                    // Calculate fade opacity
+                    let fadeInDuration = 0.3
+                    let fadeOutDuration = 0.4
+                    var opacity: CGFloat = 1.0
+
+                    let timeIntoOverlay = currentTime - overlay.startTime
+                    let timeUntilEnd = overlay.endTime - currentTime
+
+                    if timeIntoOverlay < fadeInDuration {
+                        opacity = CGFloat(timeIntoOverlay / fadeInDuration)
+                    } else if timeUntilEnd < fadeOutDuration {
+                        opacity = CGFloat(timeUntilEnd / fadeOutDuration)
+                    }
+
+                    // Use CIFilter text generator directly
+                    let textFilter = CIFilter.attributedTextImageGenerator()
+                    let attrs: [NSAttributedString.Key: Any] = [
+                        .font: UIFont.boldSystemFont(ofSize: 28),
+                        .foregroundColor: UIColor.white
+                    ]
+                    // Get the title from overlayData using the timing match
+                    let matchingTitle = overlayData.first { $0.startTime == overlay.startTime }?.title ?? "Task"
+                    textFilter.text = NSAttributedString(string: "✓ " + matchingTitle, attributes: attrs)
+                    textFilter.scaleFactor = 2.0
+
+                    if let textImage = textFilter.outputImage {
+                        // Position text in bottom-left with padding (CIImage origin is bottom-left)
+                        let yPos = request.renderSize.height - 100  // Near top in video
+                        let positioned = textImage.transformed(by: CGAffineTransform(translationX: 30, y: yPos))
+
+                        // Add background pill
+                        let bgRect = CGRect(x: 20, y: yPos - 10, width: textImage.extent.width + 40, height: textImage.extent.height + 20)
+                        let background = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0.7 * opacity))
+                            .cropped(to: bgRect)
+
+                        outputImage = background.composited(over: outputImage)
+
+                        // Apply opacity to text
+                        let textWithOpacity = positioned.applyingFilter("CIColorMatrix", parameters: [
+                            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: opacity)
+                        ])
+                        outputImage = textWithOpacity.composited(over: outputImage)
+                    }
+                    break
+                }
+            }
+
+            request.finish(with: outputImage, context: nil)
+        }
+
+        videoComposition.renderSize = renderSize
+        videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+
+        // Export
+        guard let exportSession = AVAssetExportSession(
+            asset: asset,
+            presetName: AVAssetExportPresetHighestQuality
+        ) else {
+            throw DailyRecapError.exportFailed
+        }
+
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = .mov
+        exportSession.videoComposition = videoComposition
+        exportSession.shouldOptimizeForNetworkUse = true
+
+        print("🚀 Exporting with overlays...")
+        await exportSession.export()
+
+        switch exportSession.status {
+        case .completed:
+            print("✅ Burned-in overlay export complete!")
+            await MainActor.run {
+                compilationProgress = 1.0
+                compiledVideoURL = outputURL
+            }
+        case .failed:
+            print("❌ Burn-in export failed: \(exportSession.error?.localizedDescription ?? "unknown")")
+            if let error = exportSession.error as NSError? {
+                print("   Error code: \(error.code)")
+            }
+            throw exportSession.error ?? DailyRecapError.exportFailed
+        case .cancelled:
+            throw DailyRecapError.exportCancelled
+        default:
+            throw DailyRecapError.exportFailed
+        }
     }
 
     /// Simple export without video composition (reliable)
@@ -256,7 +417,7 @@ class DailyRecapService: ObservableObject {
         }
     }
 
-    /// Export with CIFilter-based text overlays (currently unused due to compatibility issues)
+    /// Export with CIFilter-based text overlays (legacy - unused)
     private func exportVideoWithOverlays(
         composition: AVMutableComposition,
         clipTimingData: [(todo: TodoItem, startTime: CMTime, duration: Double)],
