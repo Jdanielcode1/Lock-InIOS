@@ -8,6 +8,8 @@
 		<string>instagram</string>
 		<string>instagram-stories</string>
 		<string>twitter</string>
+		<string>tiktok</string>
+		<string>snssdk1233</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Record time-lapse videos of your study sessions to track your progress</string>

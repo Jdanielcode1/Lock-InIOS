@@ -41,7 +41,13 @@ struct ArchivedItemsView: View {
 
     var archivedGoalsContent: some View {
         Group {
-            if viewModel.archivedGoals.isEmpty {
+            if viewModel.isLoadingGoals && viewModel.archivedGoals.isEmpty {
+                VStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
+            } else if viewModel.archivedGoals.isEmpty {
                 emptyState(title: "No Archived Goals", message: "Goals you archive will appear here")
             } else {
                 List {
@@ -67,8 +73,24 @@ struct ArchivedItemsView: View {
                                 }
                             }
                     }
+
+                    // Load more indicator
+                    if viewModel.canLoadMoreGoals {
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                            Spacer()
+                        }
+                        .listRowBackground(Color.clear)
+                        .onAppear {
+                            Task { await viewModel.loadMoreGoals() }
+                        }
+                    }
                 }
                 .listStyle(.insetGrouped)
+                .refreshable {
+                    await viewModel.refresh()
+                }
             }
         }
     }
@@ -77,7 +99,13 @@ struct ArchivedItemsView: View {
 
     var archivedTodosContent: some View {
         Group {
-            if viewModel.archivedTodos.isEmpty {
+            if viewModel.isLoadingTodos && viewModel.archivedTodos.isEmpty {
+                VStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
+            } else if viewModel.archivedTodos.isEmpty {
                 emptyState(title: "No Archived To-Dos", message: "To-dos you archive will appear here")
             } else {
                 List {
@@ -103,8 +131,24 @@ struct ArchivedItemsView: View {
                                 }
                             }
                     }
+
+                    // Load more indicator
+                    if viewModel.canLoadMoreTodos {
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                            Spacer()
+                        }
+                        .listRowBackground(Color.clear)
+                        .onAppear {
+                            Task { await viewModel.loadMoreTodos() }
+                        }
+                    }
                 }
                 .listStyle(.insetGrouped)
+                .refreshable {
+                    await viewModel.refresh()
+                }
             }
         }
     }
@@ -195,33 +239,90 @@ struct ArchivedTodoRow: View {
 class ArchivedItemsViewModel: ObservableObject {
     @Published var archivedGoals: [Goal] = []
     @Published var archivedTodos: [TodoItem] = []
+    @Published var isLoadingGoals = false
+    @Published var isLoadingTodos = false
+    @Published var canLoadMoreGoals = true
+    @Published var canLoadMoreTodos = true
 
-    private var cancellables = Set<AnyCancellable>()
+    private var goalsCursor: String?
+    private var todosCursor: String?
     private let convexService = ConvexService.shared
 
     init() {
-        subscribeToArchivedItems()
+        Task {
+            await loadMoreGoals()
+            await loadMoreTodos()
+        }
     }
 
-    private func subscribeToArchivedItems() {
-        convexService.listArchivedGoals()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] goals in
-                self?.archivedGoals = goals
-            }
-            .store(in: &cancellables)
+    func loadMoreGoals() async {
+        guard !isLoadingGoals && canLoadMoreGoals else { return }
 
-        convexService.listArchivedTodos()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] todos in
-                self?.archivedTodos = todos
+        isLoadingGoals = true
+        defer { isLoadingGoals = false }
+
+        do {
+            let result = try await convexService.listArchivedGoalsPaginated(
+                cursor: goalsCursor,
+                numItems: 20
+            )
+
+            // Avoid duplicates
+            for goal in result.page {
+                if !archivedGoals.contains(where: { $0.id == goal.id }) {
+                    archivedGoals.append(goal)
+                }
             }
-            .store(in: &cancellables)
+
+            goalsCursor = result.continueCursor
+            canLoadMoreGoals = !result.isDone
+        } catch {
+            print("Failed to load archived goals: \(error)")
+        }
+    }
+
+    func loadMoreTodos() async {
+        guard !isLoadingTodos && canLoadMoreTodos else { return }
+
+        isLoadingTodos = true
+        defer { isLoadingTodos = false }
+
+        do {
+            let result = try await convexService.listArchivedTodosPaginated(
+                cursor: todosCursor,
+                numItems: 20
+            )
+
+            // Avoid duplicates
+            for todo in result.page {
+                if !archivedTodos.contains(where: { $0.id == todo.id }) {
+                    archivedTodos.append(todo)
+                }
+            }
+
+            todosCursor = result.continueCursor
+            canLoadMoreTodos = !result.isDone
+        } catch {
+            print("Failed to load archived todos: \(error)")
+        }
+    }
+
+    func refresh() async {
+        goalsCursor = nil
+        todosCursor = nil
+        canLoadMoreGoals = true
+        canLoadMoreTodos = true
+        archivedGoals = []
+        archivedTodos = []
+
+        await loadMoreGoals()
+        await loadMoreTodos()
     }
 
     func unarchiveGoal(_ goal: Goal) async {
         do {
             try await convexService.unarchiveGoal(id: goal.id)
+            archivedGoals.removeAll { $0.id == goal.id }
         } catch {
             print("Failed to unarchive goal: \(error)")
         }
@@ -230,6 +331,7 @@ class ArchivedItemsViewModel: ObservableObject {
     func unarchiveTodo(_ todo: TodoItem) async {
         do {
             try await convexService.unarchiveTodo(id: todo.id)
+            archivedTodos.removeAll { $0.id == todo.id }
         } catch {
             print("Failed to unarchive todo: \(error)")
         }
@@ -238,6 +340,7 @@ class ArchivedItemsViewModel: ObservableObject {
     func deleteGoal(_ goal: Goal) async {
         do {
             try await convexService.deleteGoal(id: goal.id)
+            archivedGoals.removeAll { $0.id == goal.id }
         } catch {
             print("Failed to delete goal: \(error)")
         }
@@ -250,6 +353,7 @@ class ArchivedItemsViewModel: ObservableObject {
                 localVideoPath: todo.localVideoPath,
                 localThumbnailPath: todo.localThumbnailPath
             )
+            archivedTodos.removeAll { $0.id == todo.id }
         } catch {
             print("Failed to delete todo: \(error)")
         }

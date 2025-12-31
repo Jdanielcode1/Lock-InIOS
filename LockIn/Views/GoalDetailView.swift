@@ -401,7 +401,7 @@ struct GoalDetailView: View {
                 Spacer()
 
                 if !viewModel.studySessions.isEmpty {
-                    Text("\(viewModel.studySessions.count)")
+                    Text("\(viewModel.studySessions.count)\(viewModel.canLoadMoreSessions ? "+" : "")")
                         .font(.caption.bold())
                         .foregroundStyle(.white)
                         .padding(.horizontal, 8)
@@ -412,7 +412,20 @@ struct GoalDetailView: View {
             }
             .padding(.horizontal, sizing.isIPad ? 0 : 16)
 
-            if viewModel.studySessions.isEmpty {
+            if viewModel.isLoadingSessions && viewModel.studySessions.isEmpty {
+                // Loading state
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text("Loading sessions...")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+                .background(Color(UIColor.secondarySystemGroupedBackground))
+                .cornerRadius(12)
+                .padding(.horizontal, sizing.isIPad ? 0 : 16)
+            } else if viewModel.studySessions.isEmpty {
                 // Friendly empty state
                 VStack(spacing: 12) {
                     Image(systemName: "video.badge.plus")
@@ -444,6 +457,26 @@ struct GoalDetailView: View {
                         if index < viewModel.studySessions.count - 1 {
                             Divider()
                                 .padding(.leading, 96)
+                        }
+                    }
+
+                    // Load more indicator
+                    if viewModel.canLoadMoreSessions {
+                        Button {
+                            Task { await viewModel.loadMoreSessions() }
+                        } label: {
+                            HStack {
+                                if viewModel.isLoadingSessions {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                } else {
+                                    Text("Load More")
+                                        .font(.subheadline)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .foregroundStyle(Color.accentColor)
                         }
                     }
                 }
@@ -581,10 +614,13 @@ class GoalDetailViewModel: ObservableObject {
     @Published var goal: Goal?
     @Published var studySessions: [StudySession] = []
     @Published var goalTodos: [GoalTodo] = []
+    @Published var isLoadingSessions = false
+    @Published var canLoadMoreSessions = true
 
     private var cancellables = Set<AnyCancellable>()
     private let convexService = ConvexService.shared
     private let goalId: String
+    private var sessionsCursor: String?
 
     init(goalId: String, initialGoal: Goal) {
         self.goalId = goalId
@@ -603,21 +639,50 @@ class GoalDetailViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Subscribe to study sessions
-        convexService.listStudySessions(goalId: goalId)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] sessions in
-                self?.studySessions = sessions
-            }
-            .store(in: &cancellables)
-
-        // Subscribe to goal todos
+        // Subscribe to goal todos (keep real-time for todos since they're usually small)
         convexService.listGoalTodos(goalId: goalId)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] todos in
                 self?.goalTodos = todos
             }
             .store(in: &cancellables)
+
+        // Load initial sessions with pagination
+        Task { await loadMoreSessions() }
+    }
+
+    func loadMoreSessions() async {
+        guard !isLoadingSessions && canLoadMoreSessions else { return }
+
+        isLoadingSessions = true
+        defer { isLoadingSessions = false }
+
+        do {
+            let result = try await convexService.listStudySessionsPaginated(
+                goalId: goalId,
+                cursor: sessionsCursor,
+                numItems: 10
+            )
+
+            // Avoid duplicates
+            for session in result.page {
+                if !studySessions.contains(where: { $0.id == session.id }) {
+                    studySessions.append(session)
+                }
+            }
+
+            sessionsCursor = result.continueCursor
+            canLoadMoreSessions = !result.isDone
+        } catch {
+            print("Failed to load sessions: \(error)")
+        }
+    }
+
+    func refreshSessions() async {
+        sessionsCursor = nil
+        canLoadMoreSessions = true
+        studySessions = []
+        await loadMoreSessions()
     }
 
     func deleteStudySessions(at indexSet: IndexSet) async {
@@ -629,6 +694,7 @@ class GoalDetailViewModel: ObservableObject {
                     localVideoPath: session.localVideoPath,
                     localThumbnailPath: session.localThumbnailPath
                 )
+                studySessions.removeAll { $0.id == session.id }
             } catch {
                 print("Failed to delete study session: \(error)")
             }

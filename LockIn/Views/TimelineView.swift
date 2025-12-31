@@ -60,7 +60,7 @@ struct TimelineView: View {
 
     var goalsTimeline: some View {
         Group {
-            if viewModel.isLoading {
+            if viewModel.isLoading && viewModel.sessionsByDate.isEmpty {
                 VStack {
                     Spacer()
                     ProgressView()
@@ -96,10 +96,23 @@ struct TimelineView: View {
                                 DateHeader(date: date)
                             }
                         }
+
+                        // Load more indicator
+                        if viewModel.canLoadMoreSessions {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .onAppear {
+                                    Task { await viewModel.loadMoreSessions() }
+                                }
+                        }
                     }
                     .padding(.horizontal, sizing.horizontalPadding)
                     .padding(.top, 8)
                     .padding(.bottom, 100)
+                }
+                .refreshable {
+                    await viewModel.refresh()
                 }
             }
         }
@@ -109,7 +122,7 @@ struct TimelineView: View {
 
     var todosTimeline: some View {
         Group {
-            if viewModel.isLoading {
+            if viewModel.isLoadingMoreTodos && viewModel.todosByDate.isEmpty {
                 VStack {
                     Spacer()
                     ProgressView()
@@ -149,10 +162,23 @@ struct TimelineView: View {
                                 DateHeader(date: date)
                             }
                         }
+
+                        // Load more indicator
+                        if viewModel.canLoadMoreTodos {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .onAppear {
+                                    Task { await viewModel.loadMoreTodos() }
+                                }
+                        }
                     }
                     .padding(.horizontal, sizing.horizontalPadding)
                     .padding(.top, 8)
                     .padding(.bottom, 100)
+                }
+                .refreshable {
+                    await viewModel.refresh()
                 }
             }
         }
@@ -413,9 +439,16 @@ class TimelineViewModel: ObservableObject {
     @Published var sessionsByDate: [Date: [TimelineItem]] = [:]
     @Published var todosByDate: [Date: [TodoItem]] = [:]
     @Published var isLoading = true
+    @Published var isLoadingMoreSessions = false
+    @Published var isLoadingMoreTodos = false
+    @Published var canLoadMoreSessions = true
+    @Published var canLoadMoreTodos = true
 
     private var cancellables = Set<AnyCancellable>()
     private let convexService = ConvexService.shared
+    private var goals: [Goal] = []
+    private var sessionsCursor: String?
+    private var todosCursor: String?
 
     var sortedDates: [Date] {
         sessionsByDate.keys.sorted(by: >)
@@ -430,90 +463,120 @@ class TimelineViewModel: ObservableObject {
     }
 
     private func loadData() {
-        // Subscribe to goals first
+        // Subscribe to goals for title lookup
         convexService.listGoals()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] goals in
-                self?.loadSessionsForGoals(goals)
-            }
-            .store(in: &cancellables)
-
-        // Subscribe to todos
-        convexService.listTodos()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] todos in
-                self?.updateTodos(todos)
-            }
-            .store(in: &cancellables)
-    }
-
-    private func updateTodos(_ todos: [TodoItem]) {
-        let calendar = Calendar.current
-
-        // Group todos by date (only completed ones for timeline)
-        var newTodosByDate: [Date: [TodoItem]] = [:]
-
-        for todo in todos.filter({ $0.isCompleted }) {
-            let dateKey = calendar.startOfDay(for: todo.createdDate)
-
-            if newTodosByDate[dateKey] == nil {
-                newTodosByDate[dateKey] = []
-            }
-            newTodosByDate[dateKey]?.append(todo)
-        }
-
-        // Sort todos within each date (newest first)
-        for (date, items) in newTodosByDate {
-            newTodosByDate[date] = items.sorted { $0.createdDate > $1.createdDate }
-        }
-
-        todosByDate = newTodosByDate
-    }
-
-    private func loadSessionsForGoals(_ goals: [Goal]) {
-        // Clear existing subscriptions for sessions
-        let goalDict = Dictionary(uniqueKeysWithValues: goals.map { ($0.id, $0.title) })
-
-        // For each goal, subscribe to its sessions
-        for goal in goals {
-            convexService.listStudySessions(goalId: goal.id)
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self] sessions in
-                    self?.updateSessions(sessions, goalTitle: goal.title, goalDict: goalDict)
+                self?.goals = goals
+                // Load initial sessions after getting goals
+                if self?.sessionsByDate.isEmpty == true {
+                    Task { await self?.loadMoreSessions() }
                 }
-                .store(in: &cancellables)
-        }
+            }
+            .store(in: &cancellables)
 
-        isLoading = false
+        // Load initial todos
+        Task { await loadMoreTodos() }
     }
 
-    private func updateSessions(_ sessions: [StudySession], goalTitle: String, goalDict: [String: String]) {
-        let calendar = Calendar.current
+    func loadMoreSessions() async {
+        guard !isLoadingMoreSessions && canLoadMoreSessions else { return }
 
-        // Create timeline items
-        let items = sessions.map { TimelineItem(session: $0, goalTitle: goalTitle) }
+        isLoadingMoreSessions = true
+        defer { isLoadingMoreSessions = false; isLoading = false }
 
-        // Group by date
-        var newSessionsByDate: [Date: [TimelineItem]] = sessionsByDate
+        do {
+            let result = try await convexService.listAllStudySessionsPaginated(
+                cursor: sessionsCursor,
+                numItems: 20
+            )
 
-        for item in items {
-            let dateKey = calendar.startOfDay(for: item.session.createdDate)
+            let calendar = Calendar.current
+            let goalDict = Dictionary(uniqueKeysWithValues: goals.map { ($0.id, $0.title) })
 
-            if newSessionsByDate[dateKey] == nil {
-                newSessionsByDate[dateKey] = []
+            // Create timeline items with goal titles
+            let items = result.page.map { session in
+                let goalTitle = goalDict[session.goalId] ?? "Unknown Goal"
+                return TimelineItem(session: session, goalTitle: goalTitle)
             }
 
-            // Remove existing item with same ID and add updated one
-            newSessionsByDate[dateKey]?.removeAll { $0.id == item.id }
-            newSessionsByDate[dateKey]?.append(item)
-        }
+            // Group by date
+            for item in items {
+                let dateKey = calendar.startOfDay(for: item.session.createdDate)
 
-        // Sort items within each date
-        for (date, items) in newSessionsByDate {
-            newSessionsByDate[date] = items.sorted { $0.session.createdDate > $1.session.createdDate }
-        }
+                if sessionsByDate[dateKey] == nil {
+                    sessionsByDate[dateKey] = []
+                }
 
-        sessionsByDate = newSessionsByDate
+                // Avoid duplicates
+                if !sessionsByDate[dateKey]!.contains(where: { $0.id == item.id }) {
+                    sessionsByDate[dateKey]?.append(item)
+                }
+            }
+
+            // Sort items within each date
+            for (date, items) in sessionsByDate {
+                sessionsByDate[date] = items.sorted { $0.session.createdDate > $1.session.createdDate }
+            }
+
+            sessionsCursor = result.continueCursor
+            canLoadMoreSessions = !result.isDone
+        } catch {
+            print("Failed to load sessions: \(error)")
+        }
+    }
+
+    func loadMoreTodos() async {
+        guard !isLoadingMoreTodos && canLoadMoreTodos else { return }
+
+        isLoadingMoreTodos = true
+        defer { isLoadingMoreTodos = false }
+
+        do {
+            let result = try await convexService.listCompletedTodosPaginated(
+                cursor: todosCursor,
+                numItems: 20
+            )
+
+            let calendar = Calendar.current
+
+            // Group by date
+            for todo in result.page {
+                let dateKey = calendar.startOfDay(for: todo.createdDate)
+
+                if todosByDate[dateKey] == nil {
+                    todosByDate[dateKey] = []
+                }
+
+                // Avoid duplicates
+                if !todosByDate[dateKey]!.contains(where: { $0.id == todo.id }) {
+                    todosByDate[dateKey]?.append(todo)
+                }
+            }
+
+            // Sort items within each date
+            for (date, items) in todosByDate {
+                todosByDate[date] = items.sorted { $0.createdDate > $1.createdDate }
+            }
+
+            todosCursor = result.continueCursor
+            canLoadMoreTodos = !result.isDone
+        } catch {
+            print("Failed to load todos: \(error)")
+        }
+    }
+
+    func refresh() async {
+        // Reset pagination state
+        sessionsCursor = nil
+        todosCursor = nil
+        canLoadMoreSessions = true
+        canLoadMoreTodos = true
+        sessionsByDate = [:]
+        todosByDate = [:]
+
+        await loadMoreSessions()
+        await loadMoreTodos()
     }
 }
 

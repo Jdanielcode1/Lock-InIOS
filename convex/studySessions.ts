@@ -1,4 +1,6 @@
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
+import { action } from "./_generated/server";
 import { userMutation, userQuery } from "./auth";
 
 // Mutation: Save study session with local video path
@@ -110,6 +112,125 @@ export const listAll = userQuery({
       .order("desc")
       .collect();
     return sessions;
+  },
+});
+
+// Query: List all study sessions with pagination (for timeline)
+export const listAllPaginated = userQuery({
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, args) => {
+    const userId = ctx.identity.tokenIdentifier;
+
+    return await ctx.db
+      .query("studySessions")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .order("desc")
+      .paginate(args.paginationOpts);
+  },
+});
+
+// Query: List study sessions for a goal with pagination
+export const listByGoalPaginated = userQuery({
+  args: {
+    goalId: v.id("goals"),
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, args) => {
+    const userId = ctx.identity.tokenIdentifier;
+
+    // Verify goal ownership
+    const goal = await ctx.db.get(args.goalId);
+    if (!goal) throw new Error("Goal not found");
+    if (goal.userId !== userId) throw new Error("Not authorized");
+
+    return await ctx.db
+      .query("studySessions")
+      .withIndex("by_goal", (q) => q.eq("goalId", args.goalId))
+      .order("desc")
+      .paginate(args.paginationOpts);
+  },
+});
+
+// Action wrapper for iOS (ConvexMobile doesn't have .query method)
+export const fetchAllPaginated = action({
+  args: {
+    numItems: v.number(),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<{
+    page: Array<{
+      _id: string;
+      goalId: string;
+      localVideoPath: string;
+      localThumbnailPath?: string;
+      durationMinutes: number;
+      notes?: string;
+      createdAt: number;
+    }>;
+    continueCursor: string | null;
+    isDone: boolean;
+  }> => {
+    const result = await ctx.runQuery(
+      // @ts-ignore - internal API
+      "studySessions:listAllPaginated" as any,
+      { paginationOpts: { numItems: args.numItems, cursor: args.cursor ?? null } }
+    );
+    return {
+      page: result.page.map((s: any) => ({
+        _id: s._id,
+        goalId: s.goalId,
+        localVideoPath: s.localVideoPath,
+        localThumbnailPath: s.localThumbnailPath,
+        durationMinutes: s.durationMinutes,
+        notes: s.notes,
+        createdAt: s.createdAt,
+      })),
+      continueCursor: result.continueCursor,
+      isDone: result.isDone,
+    };
+  },
+});
+
+// Action wrapper for iOS - fetch by goal
+export const fetchByGoalPaginated = action({
+  args: {
+    goalId: v.id("goals"),
+    numItems: v.number(),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<{
+    page: Array<{
+      _id: string;
+      goalId: string;
+      goalTodoId?: string;
+      localVideoPath: string;
+      localThumbnailPath?: string;
+      durationMinutes: number;
+      notes?: string;
+      createdAt: number;
+    }>;
+    continueCursor: string | null;
+    isDone: boolean;
+  }> => {
+    const result = await ctx.runQuery(
+      // @ts-ignore - internal API
+      "studySessions:listByGoalPaginated" as any,
+      { goalId: args.goalId, paginationOpts: { numItems: args.numItems, cursor: args.cursor ?? null } }
+    );
+    return {
+      page: result.page.map((s: any) => ({
+        _id: s._id,
+        goalId: s.goalId,
+        goalTodoId: s.goalTodoId,
+        localVideoPath: s.localVideoPath,
+        localThumbnailPath: s.localThumbnailPath,
+        durationMinutes: s.durationMinutes,
+        notes: s.notes,
+        createdAt: s.createdAt,
+      })),
+      continueCursor: result.continueCursor,
+      isDone: result.isDone,
+    };
   },
 });
 

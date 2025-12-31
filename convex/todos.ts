@@ -1,4 +1,6 @@
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
+import { action } from "./_generated/server";
 import { userMutation, userQuery } from "./auth";
 
 // Query: List all non-archived todos for the current user
@@ -26,6 +28,46 @@ export const listArchived = userQuery({
       .order("desc")
       .collect();
     return todos.filter((todo) => todo.isArchived === true);
+  },
+});
+
+// Query: List archived todos with pagination
+export const listArchivedPaginated = userQuery({
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, args) => {
+    const userId = ctx.identity.tokenIdentifier;
+
+    const results = await ctx.db
+      .query("todos")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .order("desc")
+      .paginate(args.paginationOpts);
+
+    // Filter to only archived items
+    return {
+      ...results,
+      page: results.page.filter((todo) => todo.isArchived === true),
+    };
+  },
+});
+
+// Query: List completed todos with pagination (for timeline)
+export const listCompletedPaginated = userQuery({
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, args) => {
+    const userId = ctx.identity.tokenIdentifier;
+
+    const results = await ctx.db
+      .query("todos")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .order("desc")
+      .paginate(args.paginationOpts);
+
+    // Filter to only completed non-archived items
+    return {
+      ...results,
+      page: results.page.filter((todo) => todo.isCompleted && !todo.isArchived),
+    };
   },
 });
 
@@ -203,5 +245,91 @@ export const attachVideoToMultiple = userMutation({
         isCompleted: true,
       });
     }
+  },
+});
+
+// Action wrapper for iOS - fetch archived todos
+export const fetchArchivedPaginated = action({
+  args: {
+    numItems: v.number(),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<{
+    page: Array<{
+      _id: string;
+      title: string;
+      description?: string;
+      isCompleted: boolean;
+      isArchived?: boolean;
+      localVideoPath?: string;
+      localThumbnailPath?: string;
+      videoNotes?: string;
+      createdAt: number;
+    }>;
+    continueCursor: string | null;
+    isDone: boolean;
+  }> => {
+    const result = await ctx.runQuery(
+      // @ts-ignore - internal API
+      "todos:listArchivedPaginated" as any,
+      { paginationOpts: { numItems: args.numItems, cursor: args.cursor ?? null } }
+    );
+    return {
+      page: result.page.map((t: any) => ({
+        _id: t._id,
+        title: t.title,
+        description: t.description,
+        isCompleted: t.isCompleted,
+        isArchived: t.isArchived,
+        localVideoPath: t.localVideoPath,
+        localThumbnailPath: t.localThumbnailPath,
+        videoNotes: t.videoNotes,
+        createdAt: t.createdAt,
+      })),
+      continueCursor: result.continueCursor,
+      isDone: result.isDone,
+    };
+  },
+});
+
+// Action wrapper for iOS - fetch completed todos
+export const fetchCompletedPaginated = action({
+  args: {
+    numItems: v.number(),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<{
+    page: Array<{
+      _id: string;
+      title: string;
+      description?: string;
+      isCompleted: boolean;
+      localVideoPath?: string;
+      localThumbnailPath?: string;
+      videoNotes?: string;
+      createdAt: number;
+    }>;
+    continueCursor: string | null;
+    isDone: boolean;
+  }> => {
+    const result = await ctx.runQuery(
+      // @ts-ignore - internal API
+      "todos:listCompletedPaginated" as any,
+      { paginationOpts: { numItems: args.numItems, cursor: args.cursor ?? null } }
+    );
+    return {
+      page: result.page.map((t: any) => ({
+        _id: t._id,
+        title: t.title,
+        description: t.description,
+        isCompleted: t.isCompleted,
+        localVideoPath: t.localVideoPath,
+        localThumbnailPath: t.localThumbnailPath,
+        videoNotes: t.videoNotes,
+        createdAt: t.createdAt,
+      })),
+      continueCursor: result.continueCursor,
+      isDone: result.isDone,
+    };
   },
 });

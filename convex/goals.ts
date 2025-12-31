@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { paginationOptsValidator } from "convex/server";
+import { action, query } from "./_generated/server";
 import { userMutation, userQuery } from "./auth";
 
 // Query: List all non-archived goals for the current user
@@ -27,6 +28,26 @@ export const listArchived = userQuery({
       .order("desc")
       .collect();
     return goals.filter((goal) => goal.isArchived === true);
+  },
+});
+
+// Query: List archived goals with pagination
+export const listArchivedPaginated = userQuery({
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, args) => {
+    const userId = ctx.identity.tokenIdentifier;
+
+    const results = await ctx.db
+      .query("goals")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .order("desc")
+      .paginate(args.paginationOpts);
+
+    // Filter to only archived items
+    return {
+      ...results,
+      page: results.page.filter((goal) => goal.isArchived === true),
+    };
   },
 });
 
@@ -152,5 +173,47 @@ export const remove = userMutation({
     if (goal.userId !== userId) throw new Error("Not authorized");
 
     await ctx.db.delete(args.id);
+  },
+});
+
+// Action wrapper for iOS - fetch archived goals
+export const fetchArchivedPaginated = action({
+  args: {
+    numItems: v.number(),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<{
+    page: Array<{
+      _id: string;
+      title: string;
+      description: string;
+      targetHours: number;
+      completedHours: number;
+      status: string;
+      isArchived?: boolean;
+      createdAt: number;
+    }>;
+    continueCursor: string | null;
+    isDone: boolean;
+  }> => {
+    const result = await ctx.runQuery(
+      // @ts-ignore - internal API
+      "goals:listArchivedPaginated" as any,
+      { paginationOpts: { numItems: args.numItems, cursor: args.cursor ?? null } }
+    );
+    return {
+      page: result.page.map((g: any) => ({
+        _id: g._id,
+        title: g.title,
+        description: g.description,
+        targetHours: g.targetHours,
+        completedHours: g.completedHours,
+        status: g.status,
+        isArchived: g.isArchived,
+        createdAt: g.createdAt,
+      })),
+      continueCursor: result.continueCursor,
+      isDone: result.isDone,
+    };
   },
 });

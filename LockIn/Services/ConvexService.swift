@@ -480,6 +480,76 @@ class ConvexService: ObservableObject {
             .replaceError(with: [])
             .eraseToAnyPublisher()
     }
+
+    // MARK: - Paginated Actions (ConvexMobile doesn't have .query, so we use action wrappers)
+    // Note: Convex v.number() expects float64, so we cast Int to Double
+
+    func listAllStudySessionsPaginated(cursor: String? = nil, numItems: Int = 20) async throws -> PaginatedStudySessions {
+        if let cursor = cursor {
+            return try await convexClient.action("studySessions:fetchAllPaginated", with: [
+                "numItems": Double(numItems),
+                "cursor": cursor
+            ])
+        } else {
+            return try await convexClient.action("studySessions:fetchAllPaginated", with: [
+                "numItems": Double(numItems)
+            ])
+        }
+    }
+
+    func listStudySessionsPaginated(goalId: String, cursor: String? = nil, numItems: Int = 10) async throws -> PaginatedStudySessions {
+        if let cursor = cursor {
+            return try await convexClient.action("studySessions:fetchByGoalPaginated", with: [
+                "goalId": goalId,
+                "numItems": Double(numItems),
+                "cursor": cursor
+            ])
+        } else {
+            return try await convexClient.action("studySessions:fetchByGoalPaginated", with: [
+                "goalId": goalId,
+                "numItems": Double(numItems)
+            ])
+        }
+    }
+
+    func listArchivedTodosPaginated(cursor: String? = nil, numItems: Int = 20) async throws -> PaginatedTodos {
+        if let cursor = cursor {
+            return try await convexClient.action("todos:fetchArchivedPaginated", with: [
+                "numItems": Double(numItems),
+                "cursor": cursor
+            ])
+        } else {
+            return try await convexClient.action("todos:fetchArchivedPaginated", with: [
+                "numItems": Double(numItems)
+            ])
+        }
+    }
+
+    func listCompletedTodosPaginated(cursor: String? = nil, numItems: Int = 20) async throws -> PaginatedTodos {
+        if let cursor = cursor {
+            return try await convexClient.action("todos:fetchCompletedPaginated", with: [
+                "numItems": Double(numItems),
+                "cursor": cursor
+            ])
+        } else {
+            return try await convexClient.action("todos:fetchCompletedPaginated", with: [
+                "numItems": Double(numItems)
+            ])
+        }
+    }
+
+    func listArchivedGoalsPaginated(cursor: String? = nil, numItems: Int = 20) async throws -> PaginatedGoals {
+        if let cursor = cursor {
+            return try await convexClient.action("goals:fetchArchivedPaginated", with: [
+                "numItems": Double(numItems),
+                "cursor": cursor
+            ])
+        } else {
+            return try await convexClient.action("goals:fetchArchivedPaginated", with: [
+                "numItems": Double(numItems)
+            ])
+        }
+    }
 }
 
 enum ConvexServiceError: Error {
@@ -491,4 +561,24 @@ enum ConvexServiceError: Error {
             return "Resource not found"
         }
     }
+}
+
+// MARK: - Paginated Result
+
+struct PaginatedStudySessions: Decodable {
+    let page: [StudySession]
+    let continueCursor: String?
+    let isDone: Bool
+}
+
+struct PaginatedTodos: Decodable {
+    let page: [TodoItem]
+    let continueCursor: String?
+    let isDone: Bool
+}
+
+struct PaginatedGoals: Decodable {
+    let page: [Goal]
+    let continueCursor: String?
+    let isDone: Bool
 }
