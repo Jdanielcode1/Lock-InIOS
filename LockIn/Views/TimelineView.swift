@@ -159,7 +159,17 @@ struct TimelineView: View {
                                 .background(Color(UIColor.secondarySystemGroupedBackground))
                                 .cornerRadius(12)
                             } header: {
-                                DateHeader(date: date)
+                                HStack {
+                                    DateHeader(date: date)
+                                    Spacer()
+                                    // Show Daily Recap button for today's section if there are videos
+                                    if Calendar.current.isDateInToday(date) {
+                                        let todosWithVideos = viewModel.todaysTodosWithVideos
+                                        if !todosWithVideos.isEmpty {
+                                            DailyRecapButton(todosWithVideos: todosWithVideos)
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -456,6 +466,13 @@ class TimelineViewModel: ObservableObject {
 
     var sortedTodoDates: [Date] {
         todosByDate.keys.sorted(by: >)
+    }
+
+    /// Today's completed todos that have videos (for Daily Recap)
+    var todaysTodosWithVideos: [TodoItem] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        return (todosByDate[today] ?? []).filter { $0.isCompleted && $0.hasVideo }
     }
 
     init() {
