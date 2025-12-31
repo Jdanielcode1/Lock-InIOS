@@ -53,8 +53,11 @@ class DailyRecapService: ObservableObject {
             isCompiling = false
         }
 
+        // Sort todos chronologically (oldest first)
+        let sortedTodos = todos.sorted { $0.createdDate < $1.createdDate }
+
         // Collect video URLs
-        let videoData: [(todo: TodoItem, url: URL)] = todos.compactMap { todo in
+        let videoData: [(todo: TodoItem, url: URL)] = sortedTodos.compactMap { todo in
             guard let url = todo.videoURL,
                   FileManager.default.fileExists(atPath: url.path) else {
                 return nil
