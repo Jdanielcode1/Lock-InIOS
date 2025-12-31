@@ -17,6 +17,7 @@ class DailyRecapService: ObservableObject {
     @Published var compilationProgress: Double = 0
     @Published var compiledVideoURL: URL?
     @Published var errorMessage: String?
+    @Published var clipTimings: [(title: String, startTime: Double, duration: Double)] = []
 
     // Configuration
     private let clipDuration: TimeInterval = 12.0  // Target ~12 seconds per clip
@@ -92,6 +93,7 @@ class DailyRecapService: ObservableObject {
         compilationProgress = 0
         compiledVideoURL = nil
         errorMessage = nil
+        clipTimings = []
     }
 
     // MARK: - Private Compilation Logic
@@ -118,6 +120,9 @@ class DailyRecapService: ObservableObject {
         var currentTime = CMTime.zero
         let totalClips = videoData.count
         var renderSize: CGSize = CGSize(width: 1080, height: 1920)
+
+        // Track clip data for overlay timing
+        var clipTimingData: [(todo: TodoItem, startTime: CMTime, duration: Double)] = []
 
         // Process each video clip - insert into the SAME track sequentially
         for (index, data) in videoData.enumerated() {
@@ -149,6 +154,9 @@ class DailyRecapService: ObservableObject {
                     at: currentTime
                 )
                 print("   ✅ Inserted video at \(CMTimeGetSeconds(currentTime))s")
+
+                // Track timing for overlay
+                clipTimingData.append((todo: data.todo, startTime: currentTime, duration: trimDuration))
             } catch {
                 print("   ❌ Failed to insert video: \(error)")
                 continue
@@ -190,26 +198,25 @@ class DailyRecapService: ObservableObject {
         print("📊 Total composition duration: \(CMTimeGetSeconds(composition.duration))s")
         print("📊 Expected duration: \(CMTimeGetSeconds(currentTime))s")
 
-        // Export
-        try await exportVideoReencoded(
+        // Store clip timing data for UI overlays during playback
+        await MainActor.run {
+            self.clipTimings = clipTimingData.map { (title: $0.todo.title, startTime: CMTimeGetSeconds($0.startTime), duration: $0.duration) }
+        }
+
+        // Export video (without burned-in overlays - we'll show them in UI)
+        try await exportVideoSimple(
             composition: composition,
-            renderSize: renderSize,
             outputURL: outputURL
         )
     }
 
-    /// Export with re-encoding to ensure compatibility
-    private func exportVideoReencoded(
+    /// Simple export without video composition (reliable)
+    private func exportVideoSimple(
         composition: AVMutableComposition,
-        renderSize: CGSize,
         outputURL: URL
     ) async throws {
-        // Use Passthrough preset - works best for concatenating similar video sources
-        // This preserves the original encoding and is most reliable
         let preset = AVAssetExportPresetPassthrough
-        let selectedFileType: AVFileType = .mov
-
-        print("🎬 Using preset: \(preset), fileType: \(selectedFileType)")
+        print("🎬 Using simple passthrough export")
 
         guard let exportSession = AVAssetExportSession(
             asset: composition,
@@ -219,19 +226,11 @@ class DailyRecapService: ObservableObject {
             throw DailyRecapError.exportFailed
         }
 
-        // Update output URL extension based on file type
-        var finalOutputURL = outputURL
-        if selectedFileType == .mov && outputURL.pathExtension != "mov" {
-            finalOutputURL = outputURL.deletingPathExtension().appendingPathExtension("mov")
-        } else if selectedFileType == .mp4 && outputURL.pathExtension != "mp4" {
-            finalOutputURL = outputURL.deletingPathExtension().appendingPathExtension("mp4")
-        }
-
-        exportSession.outputURL = finalOutputURL
-        exportSession.outputFileType = selectedFileType
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = .mov
         exportSession.shouldOptimizeForNetworkUse = true
 
-        print("🚀 Starting export to: \(finalOutputURL.lastPathComponent)")
+        print("🚀 Starting export to: \(outputURL.lastPathComponent)")
         await exportSession.export()
         print("📤 Export status: \(exportSession.status.rawValue)")
 
@@ -240,7 +239,7 @@ class DailyRecapService: ObservableObject {
             print("✅ Export completed successfully!")
             await MainActor.run {
                 compilationProgress = 1.0
-                compiledVideoURL = finalOutputURL
+                compiledVideoURL = outputURL
             }
         case .failed:
             print("❌ Export failed: \(exportSession.error?.localizedDescription ?? "unknown")")
@@ -257,9 +256,199 @@ class DailyRecapService: ObservableObject {
         }
     }
 
+    /// Export with CIFilter-based text overlays (currently unused due to compatibility issues)
+    private func exportVideoWithOverlays(
+        composition: AVMutableComposition,
+        clipTimingData: [(todo: TodoItem, startTime: CMTime, duration: Double)],
+        renderSize: CGSize,
+        outputURL: URL
+    ) async throws {
+        print("🎨 Setting up CIFilter-based text overlays...")
+
+        // Pre-render all text overlay images
+        var overlayImages: [(image: CIImage, startTime: Double, endTime: Double)] = []
+        for data in clipTimingData {
+            let startSeconds = CMTimeGetSeconds(data.startTime)
+            let endSeconds = startSeconds + min(data.duration, titleDisplayDuration + 1.0)  // Show for ~3 seconds
+
+            if let textImage = createTextOverlayImage(
+                title: data.todo.title,
+                renderSize: renderSize
+            ) {
+                overlayImages.append((image: textImage, startTime: startSeconds, endTime: endSeconds))
+                print("   Created overlay for: \(data.todo.title) (\(startSeconds)s - \(endSeconds)s)")
+            }
+        }
+
+        // Create video composition with CIFilter handler
+        let videoComposition = AVMutableVideoComposition(asset: composition) { request in
+            let currentTime = CMTimeGetSeconds(request.compositionTime)
+            var outputImage = request.sourceImage.clampedToExtent()
+
+            // Check if any overlay should be visible at this time
+            for overlay in overlayImages {
+                if currentTime >= overlay.startTime && currentTime <= overlay.endTime {
+                    // Calculate fade in/out opacity
+                    let fadeInDuration = 0.3
+                    let fadeOutDuration = 0.4
+                    var opacity: CGFloat = 1.0
+
+                    let timeIntoOverlay = currentTime - overlay.startTime
+                    let timeUntilEnd = overlay.endTime - currentTime
+
+                    if timeIntoOverlay < fadeInDuration {
+                        opacity = CGFloat(timeIntoOverlay / fadeInDuration)
+                    } else if timeUntilEnd < fadeOutDuration {
+                        opacity = CGFloat(timeUntilEnd / fadeOutDuration)
+                    }
+
+                    // Apply opacity to overlay
+                    let overlayWithOpacity = overlay.image.applyingFilter("CIColorMatrix", parameters: [
+                        "inputAVector": CIVector(x: 0, y: 0, z: 0, w: opacity)
+                    ])
+
+                    // Composite overlay on top of video
+                    if let compositeFilter = CIFilter(name: "CISourceOverCompositing") {
+                        compositeFilter.setValue(overlayWithOpacity, forKey: kCIInputImageKey)
+                        compositeFilter.setValue(outputImage, forKey: kCIInputBackgroundImageKey)
+                        if let result = compositeFilter.outputImage {
+                            outputImage = result
+                        }
+                    }
+                    break  // Only show one overlay at a time
+                }
+            }
+
+            // Crop to render size
+            let cropped = outputImage.cropped(to: CGRect(origin: .zero, size: renderSize))
+            request.finish(with: cropped, context: nil)
+        }
+
+        videoComposition.renderSize = renderSize
+        videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+
+        // Export
+        let preset = AVAssetExportPresetHighestQuality
+        print("🎬 Using preset: \(preset) with CIFilter overlays")
+
+        guard let exportSession = AVAssetExportSession(
+            asset: composition,
+            presetName: preset
+        ) else {
+            print("❌ Failed to create export session")
+            throw DailyRecapError.exportFailed
+        }
+
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = .mov
+        exportSession.videoComposition = videoComposition
+        exportSession.shouldOptimizeForNetworkUse = true
+
+        print("🚀 Starting export with CIFilter overlays to: \(outputURL.lastPathComponent)")
+        await exportSession.export()
+        print("📤 Export status: \(exportSession.status.rawValue)")
+
+        switch exportSession.status {
+        case .completed:
+            print("✅ Export completed successfully with overlays!")
+            await MainActor.run {
+                compilationProgress = 1.0
+                compiledVideoURL = outputURL
+            }
+        case .failed:
+            print("❌ Export failed: \(exportSession.error?.localizedDescription ?? "unknown")")
+            if let error = exportSession.error as NSError? {
+                print("   Error domain: \(error.domain)")
+                print("   Error code: \(error.code)")
+                print("   User info: \(error.userInfo)")
+            }
+            throw exportSession.error ?? DailyRecapError.exportFailed
+        case .cancelled:
+            throw DailyRecapError.exportCancelled
+        default:
+            throw DailyRecapError.exportFailed
+        }
+    }
+
+    /// Creates a text overlay image using Core Graphics
+    private func createTextOverlayImage(title: String, renderSize: CGSize) -> CIImage? {
+        let fontSize: CGFloat = min(renderSize.width, renderSize.height) * 0.04
+        let padding: CGFloat = 30
+        let badgeHeight: CGFloat = fontSize * 2.2
+        let checkmarkSize: CGFloat = fontSize * 1.4
+
+        // Calculate badge dimensions
+        let maxTextWidth = renderSize.width * 0.6
+        let textAttributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: fontSize, weight: .semibold),
+            .foregroundColor: UIColor.white
+        ]
+        let textSize = (title as NSString).boundingRect(
+            with: CGSize(width: maxTextWidth, height: badgeHeight),
+            options: .usesLineFragmentOrigin,
+            attributes: textAttributes,
+            context: nil
+        ).size
+
+        let badgeWidth = checkmarkSize + textSize.width + padding * 2
+
+        // Create the overlay image
+        let renderer = UIGraphicsImageRenderer(size: renderSize)
+        let image = renderer.image { context in
+            let ctx = context.cgContext
+
+            // Position in top-left corner
+            let badgeX: CGFloat = padding
+            let badgeY: CGFloat = padding + 60  // Safe area offset
+
+            // Draw pill background
+            let pillRect = CGRect(x: badgeX, y: badgeY, width: badgeWidth, height: badgeHeight)
+            let pillPath = UIBezierPath(roundedRect: pillRect, cornerRadius: badgeHeight / 2)
+            UIColor.black.withAlphaComponent(0.75).setFill()
+            pillPath.fill()
+
+            // Draw checkmark circle
+            let checkmarkX = badgeX + padding / 2
+            let checkmarkY = badgeY + (badgeHeight - checkmarkSize) / 2
+            let circleRect = CGRect(x: checkmarkX, y: checkmarkY, width: checkmarkSize, height: checkmarkSize)
+            UIColor.green.setFill()
+            UIBezierPath(ovalIn: circleRect).fill()
+
+            // Draw checkmark
+            ctx.setStrokeColor(UIColor.white.cgColor)
+            ctx.setLineWidth(checkmarkSize * 0.12)
+            ctx.setLineCap(.round)
+            ctx.setLineJoin(.round)
+
+            let checkPath = UIBezierPath()
+            checkPath.move(to: CGPoint(
+                x: checkmarkX + checkmarkSize * 0.25,
+                y: checkmarkY + checkmarkSize * 0.5
+            ))
+            checkPath.addLine(to: CGPoint(
+                x: checkmarkX + checkmarkSize * 0.42,
+                y: checkmarkY + checkmarkSize * 0.68
+            ))
+            checkPath.addLine(to: CGPoint(
+                x: checkmarkX + checkmarkSize * 0.75,
+                y: checkmarkY + checkmarkSize * 0.32
+            ))
+            checkPath.stroke()
+
+            // Draw text
+            let textX = checkmarkX + checkmarkSize + 8
+            let textY = badgeY + (badgeHeight - fontSize * 1.2) / 2
+            let textRect = CGRect(x: textX, y: textY, width: textSize.width, height: fontSize * 1.4)
+            (title as NSString).draw(in: textRect, withAttributes: textAttributes)
+        }
+
+        return CIImage(image: image)
+    }
+
     // MARK: - Overlay Layers
 
     /// Creates the overlay layer with title text and checkmark animation
+    /// Positioned in top-left corner as a compact pill badge
     private func createOverlayLayer(
         title: String,
         startTime: CMTime,
@@ -270,56 +459,72 @@ class DailyRecapService: ObservableObject {
         containerLayer.frame = CGRect(origin: .zero, size: renderSize)
         containerLayer.opacity = 0  // Start hidden
 
-        // Calculate font size based on render size
-        let fontSize: CGFloat = min(renderSize.width, renderSize.height) * 0.05
-        let padding: CGFloat = 20
-        let bannerHeight: CGFloat = fontSize * 2.5
+        // Calculate sizes based on render dimensions
+        let fontSize: CGFloat = min(renderSize.width, renderSize.height) * 0.04
+        let padding: CGFloat = 30
+        let badgeHeight: CGFloat = fontSize * 2.2
+        let checkmarkSize: CGFloat = fontSize * 1.4
+        let cornerRadius: CGFloat = badgeHeight / 2
 
-        // Background blur/dim effect for readability (lower third)
-        let backgroundLayer = CALayer()
-        backgroundLayer.frame = CGRect(
-            x: 0,
-            y: renderSize.height - bannerHeight - 60,  // Lower third
-            width: renderSize.width,
-            height: bannerHeight
+        // Calculate badge width based on text (max 70% of screen width)
+        let maxTextWidth = renderSize.width * 0.6
+        let textWidth = min(CGFloat(title.count) * fontSize * 0.6, maxTextWidth)
+        let badgeWidth = checkmarkSize + textWidth + padding * 1.5
+
+        // Position in top-left corner (accounting for flipped geometry)
+        let badgeX: CGFloat = padding
+        let badgeY: CGFloat = padding + 60  // Safe area offset
+
+        // Background pill shape
+        let backgroundLayer = CAShapeLayer()
+        let pillPath = UIBezierPath(
+            roundedRect: CGRect(x: badgeX, y: badgeY, width: badgeWidth, height: badgeHeight),
+            cornerRadius: cornerRadius
         )
-        backgroundLayer.backgroundColor = UIColor.black.withAlphaComponent(0.6).cgColor
+        backgroundLayer.path = pillPath.cgPath
+        backgroundLayer.fillColor = UIColor.black.withAlphaComponent(0.75).cgColor
         containerLayer.addSublayer(backgroundLayer)
 
-        // Title text layer
-        let textLayer = CATextLayer()
-        textLayer.string = title
-        textLayer.font = CTFontCreateWithName("SF Pro Display Bold" as CFString, fontSize, nil)
-        textLayer.fontSize = fontSize
-        textLayer.foregroundColor = UIColor.white.cgColor
-        textLayer.shadowColor = UIColor.black.cgColor
-        textLayer.shadowOffset = CGSize(width: 2, height: 2)
-        textLayer.shadowRadius = 4
-        textLayer.shadowOpacity = 0.8
-        textLayer.alignmentMode = .left
-        textLayer.contentsScale = UIScreen.main.scale
-        textLayer.frame = CGRect(
-            x: padding,
-            y: renderSize.height - bannerHeight - 60 + (bannerHeight - fontSize) / 2,
-            width: renderSize.width - 100,  // Leave room for checkmark
-            height: fontSize * 1.5
-        )
-        textLayer.truncationMode = .end
-        containerLayer.addSublayer(textLayer)
-
-        // Checkmark layer
-        let checkmarkLayer = createCheckmarkLayer(size: CGSize(width: fontSize * 1.5, height: fontSize * 1.5))
+        // Checkmark layer (left side of badge)
+        let checkmarkLayer = createCheckmarkLayer(size: CGSize(width: checkmarkSize, height: checkmarkSize))
         checkmarkLayer.position = CGPoint(
-            x: renderSize.width - padding - fontSize,
-            y: renderSize.height - bannerHeight - 60 + bannerHeight / 2
+            x: badgeX + padding / 2 + checkmarkSize / 2,
+            y: badgeY + badgeHeight / 2
         )
         checkmarkLayer.opacity = 0  // Start hidden for animation
         containerLayer.addSublayer(checkmarkLayer)
 
+        // Title text layer (right of checkmark)
+        let textLayer = CATextLayer()
+        textLayer.string = title
+        textLayer.font = CTFontCreateWithName("SF Pro Display Semibold" as CFString, fontSize, nil)
+        textLayer.fontSize = fontSize
+        textLayer.foregroundColor = UIColor.white.cgColor
+        textLayer.alignmentMode = .left
+        textLayer.contentsScale = 3.0  // High resolution for crisp text
+        textLayer.truncationMode = .end
+        textLayer.frame = CGRect(
+            x: badgeX + padding / 2 + checkmarkSize + 8,
+            y: badgeY + (badgeHeight - fontSize * 1.2) / 2,
+            width: textWidth,
+            height: fontSize * 1.4
+        )
+        containerLayer.addSublayer(textLayer)
+
         // ANIMATIONS
         let startSeconds = CMTimeGetSeconds(startTime)
 
-        // Container fade in
+        // Slide in from left + fade in
+        let slideIn = CABasicAnimation(keyPath: "transform.translation.x")
+        slideIn.fromValue = -badgeWidth - padding
+        slideIn.toValue = 0
+        slideIn.duration = 0.4
+        slideIn.beginTime = AVCoreAnimationBeginTimeAtZero + startSeconds
+        slideIn.fillMode = .forwards
+        slideIn.isRemovedOnCompletion = false
+        slideIn.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        containerLayer.add(slideIn, forKey: "slideIn")
+
         let fadeIn = CABasicAnimation(keyPath: "opacity")
         fadeIn.fromValue = 0
         fadeIn.toValue = 1
@@ -329,27 +534,26 @@ class DailyRecapService: ObservableObject {
         fadeIn.isRemovedOnCompletion = false
         containerLayer.add(fadeIn, forKey: "fadeIn")
 
-        // Container fade out (after title display)
+        // Fade out after display duration
         let fadeOut = CABasicAnimation(keyPath: "opacity")
         fadeOut.fromValue = 1
         fadeOut.toValue = 0
-        fadeOut.duration = 0.3
-        fadeOut.beginTime = AVCoreAnimationBeginTimeAtZero + startSeconds + titleDisplayDuration
+        fadeOut.duration = 0.4
+        fadeOut.beginTime = AVCoreAnimationBeginTimeAtZero + startSeconds + titleDisplayDuration + 0.5
         fadeOut.fillMode = .forwards
         fadeOut.isRemovedOnCompletion = false
         containerLayer.add(fadeOut, forKey: "fadeOut")
 
-        // Checkmark scale animation (pop in)
+        // Checkmark pop-in animation (delayed)
         let scaleAnimation = CAKeyframeAnimation(keyPath: "transform.scale")
         scaleAnimation.values = [0, 1.3, 1.0]
         scaleAnimation.keyTimes = [0, 0.6, 1.0]
-        scaleAnimation.duration = 0.4
+        scaleAnimation.duration = 0.35
         scaleAnimation.beginTime = AVCoreAnimationBeginTimeAtZero + startSeconds + checkmarkAnimationDelay
         scaleAnimation.fillMode = .forwards
         scaleAnimation.isRemovedOnCompletion = false
         checkmarkLayer.add(scaleAnimation, forKey: "scale")
 
-        // Checkmark opacity animation
         let checkOpacity = CABasicAnimation(keyPath: "opacity")
         checkOpacity.fromValue = 0
         checkOpacity.toValue = 1

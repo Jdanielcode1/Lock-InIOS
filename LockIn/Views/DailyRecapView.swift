@@ -59,6 +59,9 @@ struct DailyRecapView: View {
     @State private var saveAlertMessage = ""
     @State private var isSaving = false
     @State private var showingErrorAlert = false
+    @State private var currentOverlayTitle: String?
+    @State private var overlayOpacity: Double = 0
+    @State private var timeObserver: Any?
 
     var body: some View {
         ZStack {
@@ -277,7 +280,24 @@ struct DailyRecapView: View {
                     .ignoresSafeArea()
             }
 
-            // Overlay controls
+            // Todo title overlay (top-left)
+            VStack {
+                HStack {
+                    if let title = currentOverlayTitle {
+                        TodoOverlayBadge(title: title)
+                            .opacity(overlayOpacity)
+                            .animation(.easeInOut(duration: 0.3), value: overlayOpacity)
+                            .transition(.move(edge: .leading).combined(with: .opacity))
+                    }
+                    Spacer()
+                }
+                .padding(.leading, 20)
+                .padding(.top, 120)
+
+                Spacer()
+            }
+
+            // Controls overlay
             VStack {
                 // Top bar
                 HStack {
@@ -355,14 +375,25 @@ struct DailyRecapView: View {
         }
         .onDisappear {
             player?.pause()
+            if let observer = timeObserver {
+                player?.removeTimeObserver(observer)
+            }
         }
     }
 
     // MARK: - Functions
 
     private func setupPlayer(url: URL) {
-        player = AVPlayer(url: url)
+        let newPlayer = AVPlayer(url: url)
+        player = newPlayer
         player?.play()
+
+        // Add time observer for overlay updates
+        let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+        timeObserver = newPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [self] time in
+            let currentSeconds = CMTimeGetSeconds(time)
+            updateOverlay(forTime: currentSeconds)
+        }
 
         // Loop video
         NotificationCenter.default.addObserver(
@@ -372,6 +403,50 @@ struct DailyRecapView: View {
         ) { _ in
             player?.seek(to: .zero)
             player?.play()
+        }
+    }
+
+    private func updateOverlay(forTime currentSeconds: Double) {
+        let clipTimings = recapService.clipTimings
+        let displayDuration = 3.0  // Show overlay for 3 seconds
+        let fadeInDuration = 0.3
+        let fadeOutDuration = 0.4
+
+        // Find which clip we're in
+        for timing in clipTimings {
+            let endTime = timing.startTime + min(timing.duration, displayDuration)
+
+            if currentSeconds >= timing.startTime && currentSeconds <= endTime {
+                // We're in this clip's overlay time
+                let timeIntoOverlay = currentSeconds - timing.startTime
+                let timeUntilEnd = endTime - currentSeconds
+
+                // Calculate opacity for fade in/out
+                var newOpacity: Double = 1.0
+                if timeIntoOverlay < fadeInDuration {
+                    newOpacity = timeIntoOverlay / fadeInDuration
+                } else if timeUntilEnd < fadeOutDuration {
+                    newOpacity = timeUntilEnd / fadeOutDuration
+                }
+
+                withAnimation(.easeInOut(duration: 0.1)) {
+                    currentOverlayTitle = timing.title
+                    overlayOpacity = newOpacity
+                }
+                return
+            }
+        }
+
+        // No overlay should be visible
+        if currentOverlayTitle != nil {
+            withAnimation(.easeOut(duration: 0.3)) {
+                overlayOpacity = 0
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                if overlayOpacity == 0 {
+                    currentOverlayTitle = nil
+                }
+            }
         }
     }
 
@@ -414,6 +489,40 @@ struct DailyRecapView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Todo Overlay Badge
+
+struct TodoOverlayBadge: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            // Checkmark circle
+            ZStack {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 24, height: 24)
+
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+            }
+
+            // Title text
+            Text(title)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            Capsule()
+                .fill(Color.black.opacity(0.75))
+        )
+        .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
     }
 }
 
