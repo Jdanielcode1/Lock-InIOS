@@ -11,84 +11,81 @@ struct VideoNotesSheet: View {
     @Binding var notes: String
     var onSave: () -> Void
     var onSkip: () -> Void
-    var isEditing: Bool = false  // True when editing existing notes
+    var isEditing: Bool = false
 
     @FocusState private var isFocused: Bool
-    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
-        NavigationView {
-            VStack(spacing: 20) {
-                // Header
-                VStack(spacing: 8) {
-                    Image(systemName: "note.text")
-                        .font(.system(size: 40))
-                        .foregroundColor(.accentColor)
+        ZStack {
+            // Background
+            Color(.systemBackground)
+                .ignoresSafeArea()
 
-                    Text(isEditing ? "Edit Notes" : "Add Notes")
-                        .font(.title2.bold())
-
-                    Text("Capture your thoughts, learnings, or what you accomplished")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
+            VStack(spacing: 0) {
+                // Top bar - just close button
+                HStack {
+                    Button {
+                        handleDismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.secondary)
+                            .frame(width: 32, height: 32)
+                            .background(Color(.tertiarySystemFill))
+                            .clipShape(Circle())
+                    }
+                    Spacer()
                 }
-                .padding(.top, 20)
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
 
-                // Text Editor
+                // TextEditor - the hero
                 ZStack(alignment: .topLeading) {
                     if notes.isEmpty {
-                        Text("What did you learn or accomplish?")
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 12)
+                        Text("What did you accomplish?")
+                            .font(.system(size: 18))
+                            .foregroundColor(Color(.quaternaryLabel))
+                            .padding(.top, 8)
                     }
 
                     TextEditor(text: $notes)
+                        .font(.system(size: 18))
                         .scrollContentBackground(.hidden)
-                        .padding(8)
                         .focused($isFocused)
                 }
-                .frame(minHeight: 150, maxHeight: 250)
-                .background(Color(.systemGray6))
-                .cornerRadius(12)
-                .padding(.horizontal)
-
-                // Tip about dictation
-                HStack(spacing: 6) {
-                    Image(systemName: "mic.fill")
-                        .font(.caption)
-                    Text("Tip: Use the microphone on your keyboard to dictate")
-                        .font(.caption)
-                }
-                .foregroundColor(.secondary)
-                .padding(.horizontal)
+                .padding(.horizontal, 20)
+                .padding(.top, 24)
 
                 Spacer()
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(isEditing ? "Cancel" : "Skip") {
-                        onSkip()
-                    }
+
+                // Done button - bottom center
+                Button {
+                    onSave()
+                } label: {
+                    Text("Done")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 120, height: 44)
+                        .background(Color.accentColor)
+                        .clipShape(Capsule())
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        onSave()
-                    }
-                    .fontWeight(.semibold)
-                }
+                .padding(.bottom, 40)
             }
         }
         .onAppear {
-            // Delay focus slightly for smoother sheet presentation
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 isFocused = true
             }
         }
-        .interactiveDismissDisabled(!isEditing) // Prevent accidental dismiss when adding new notes
+    }
+
+    private func handleDismiss() {
+        // If empty, just skip. If has content, save it.
+        if notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            onSkip()
+        } else {
+            onSave()
+        }
     }
 }
 

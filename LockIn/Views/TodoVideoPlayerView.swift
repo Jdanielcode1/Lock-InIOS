@@ -120,136 +120,118 @@ struct TodoVideoPlayerView: View {
     // MARK: - Main Overlay
 
     var mainOverlay: some View {
-        VStack {
-            // Top bar
-            HStack {
+        VStack(spacing: 0) {
+            // Top bar - minimal
+            HStack(spacing: 12) {
                 Button {
                     cleanupPlayer()
                     dismiss()
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.title2)
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.white)
-                        .padding(12)
-                        .background(Color.black.opacity(0.5))
+                        .frame(width: 36, height: 36)
+                        .background(.ultraThinMaterial)
                         .clipShape(Circle())
                 }
 
                 Spacer()
 
-                // Share button
-                Button {
-                    showShareSheet = true
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.title2)
-                        .foregroundColor(.white)
-                        .padding(12)
-                        .background(Color.black.opacity(0.5))
-                        .clipShape(Circle())
-                }
-
-                // Save button
-                Button {
-                    saveVideoToCameraRoll()
-                } label: {
-                    if isSaving {
-                        ProgressView()
-                            .tint(.white)
-                            .frame(width: 44, height: 44)
-                            .background(Color.black.opacity(0.5))
-                            .clipShape(Circle())
-                    } else {
-                        Image(systemName: "square.and.arrow.down")
-                            .font(.title2)
+                // Action icons - compact row
+                HStack(spacing: 8) {
+                    Button {
+                        showShareSheet = true
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.white)
-                            .padding(12)
-                            .background(Color.black.opacity(0.5))
+                            .frame(width: 36, height: 36)
+                            .background(.ultraThinMaterial)
                             .clipShape(Circle())
                     }
-                }
-                .disabled(isSaving)
 
-                // Todo title
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(todo.title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-
-                    if todo.isCompleted {
-                        HStack(spacing: 4) {
-                            Image(systemName: "checkmark.circle.fill")
-                            Text("Completed")
+                    Button {
+                        saveVideoToCameraRoll()
+                    } label: {
+                        Group {
+                            if isSaving {
+                                ProgressView()
+                                    .tint(.white)
+                                    .scaleEffect(0.8)
+                            } else {
+                                Image(systemName: "arrow.down.to.line")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.white)
+                            }
                         }
-                        .font(.caption)
-                        .foregroundStyle(.green)
+                        .frame(width: 36, height: 36)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
                     }
+                    .disabled(isSaving)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.black.opacity(0.5))
-                .cornerRadius(12)
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 20)
             .padding(.top, 60)
 
             Spacer()
 
-            // Notes section (if notes exist)
-            notesSection
-                .padding(.horizontal, 20)
-                .padding(.bottom, 16)
+            // Bottom section
+            VStack(spacing: 16) {
+                // Notes card (tappable)
+                notesSection
 
-            // Action buttons at bottom
-            VStack(spacing: 12) {
-                // Notes button
-                Button {
-                    editingNotes = todo.videoNotes ?? ""
-                    showNotesEditor = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "note.text")
-                            .font(.system(size: 14, weight: .semibold))
-                        Text(todo.videoNotes?.isEmpty == false ? "Edit Notes" : "Add Notes")
-                            .font(.system(size: 14, weight: .semibold))
-                        if isSavingNotes {
-                            ProgressView()
-                                .scaleEffect(0.7)
-                                .tint(.white)
+                // Action bar
+                HStack(spacing: 12) {
+                    // Notes button
+                    Button {
+                        editingNotes = todo.videoNotes ?? ""
+                        showNotesEditor = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "note.text")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text(todo.videoNotes?.isEmpty == false ? "Edit" : "Notes")
+                                .font(.system(size: 13, weight: .semibold))
+                            if isSavingNotes {
+                                ProgressView()
+                                    .scaleEffect(0.6)
+                                    .tint(.white)
+                            }
+                        }
+                        .foregroundColor(.white)
+                        .frame(height: 38)
+                        .padding(.horizontal, 16)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Capsule())
+                    }
+                    .disabled(isSavingNotes)
+
+                    // Voiceover button
+                    Button {
+                        startVoiceoverCountdown()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: hasVoiceoverAdded ? "waveform" : "mic.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text(hasVoiceoverAdded ? "Redo" : "Voice")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundColor(hasVoiceoverAdded ? .white : .black)
+                        .frame(height: 38)
+                        .padding(.horizontal, 16)
+                        .background {
+                            if hasVoiceoverAdded {
+                                Capsule().fill(.ultraThinMaterial)
+                            } else {
+                                Capsule().fill(Color.white)
+                            }
                         }
                     }
-                    .foregroundColor(.white)
-                    .frame(height: 40)
-                    .padding(.horizontal, 20)
-                    .background(todo.videoNotes?.isEmpty == false ? Color.accentColor : Color.white.opacity(0.2))
-                    .cornerRadius(20)
-                }
-                .disabled(isSavingNotes)
-
-                // Voiceover button
-                Button {
-                    startVoiceoverCountdown()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: hasVoiceoverAdded ? "arrow.counterclockwise" : "mic.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                        Text(hasVoiceoverAdded ? "Re-record" : "Voiceover")
-                            .font(.system(size: 14, weight: .semibold))
-                        if hasVoiceoverAdded {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 12))
-                                .foregroundColor(.white.opacity(0.8))
-                        }
-                    }
-                    .foregroundColor(.white)
-                    .frame(height: 40)
-                    .padding(.horizontal, 20)
-                    .background(hasVoiceoverAdded ? Color.orange.opacity(0.8) : Color.orange)
-                    .cornerRadius(20)
                 }
             }
-            .padding(.bottom, 60)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 50)
         }
     }
 
@@ -258,41 +240,26 @@ struct TodoVideoPlayerView: View {
     var notesSection: some View {
         Group {
             if let notes = todo.videoNotes, !notes.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            isNotesExpanded.toggle()
-                        }
-                    } label: {
-                        HStack {
-                            Image(systemName: "note.text")
-                                .font(.system(size: 14))
-                            Text("Notes")
-                                .font(.system(size: 14, weight: .semibold))
-                            Spacer()
-                            Image(systemName: isNotesExpanded ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 12, weight: .semibold))
-                        }
-                        .foregroundColor(.white)
-                    }
-
-                    if isNotesExpanded {
-                        Text(notes)
-                            .font(.system(size: 14))
-                            .foregroundColor(.white.opacity(0.9))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .transition(.opacity.combined(with: .move(edge: .top)))
-                    } else {
-                        Text(notes)
-                            .font(.system(size: 14))
-                            .foregroundColor(.white.opacity(0.9))
-                            .lineLimit(2)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                Button {
+                    editingNotes = notes
+                    showNotesEditor = true
+                } label: {
+                    Text(notes)
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.9))
+                        .lineLimit(isNotesExpanded ? 10 : 2)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                        .background(.ultraThinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .onLongPressGesture(minimumDuration: 0.3) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        isNotesExpanded.toggle()
                     }
                 }
-                .padding(16)
-                .background(Color.black.opacity(0.6))
-                .cornerRadius(12)
             }
         }
     }
@@ -326,98 +293,85 @@ struct TodoVideoPlayerView: View {
     // MARK: - Voiceover Views
 
     var voiceoverCompilingView: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             ProgressView()
-                .scaleEffect(1.5)
-                .tint(.orange)
+                .scaleEffect(1.2)
+                .tint(.white)
 
-            Text("Adding Voiceover...")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(.white)
+            Text("Adding voiceover...")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(.white.opacity(0.8))
         }
+        .padding(24)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 
     var voiceoverRecordingOverlay: some View {
         VStack {
-            // Top: Recording indicator + time
-            HStack {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 12, height: 12)
-                        .modifier(PulsingModifier())
+            // Top: Recording indicator
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(Color.red)
+                    .frame(width: 10, height: 10)
+                    .modifier(PulsingModifier())
 
-                    Text("Recording Voiceover")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
-                }
+                Text(formatVoiceoverTime(voiceoverCurrentTime))
+                    .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.white)
 
                 Spacer()
-
-                // Time display
-                Text("\(formatVoiceoverTime(voiceoverCurrentTime)) / \(formatVoiceoverTime(voiceoverTotalDuration))")
-                    .font(.system(size: 14, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white)
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(.ultraThinMaterial)
+            .clipShape(Capsule())
             .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .background(Color.black.opacity(0.7))
+            .padding(.top, 60)
 
             Spacer()
 
-            // Progress bar at bottom
-            VStack(spacing: 16) {
+            // Progress bar + Stop
+            VStack(spacing: 20) {
                 // Progress bar
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
-                        // Background track
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.white.opacity(0.3))
-                            .frame(height: 8)
+                        Capsule()
+                            .fill(Color.white.opacity(0.2))
+                            .frame(height: 4)
 
-                        // Progress fill
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.orange)
-                            .frame(width: geometry.size.width * voiceoverProgress, height: 8)
+                        Capsule()
+                            .fill(Color.white)
+                            .frame(width: geometry.size.width * voiceoverProgress, height: 4)
                     }
                 }
-                .frame(height: 8)
+                .frame(height: 4)
                 .padding(.horizontal, 20)
 
                 // Stop button
                 Button {
                     stopVoiceoverRecording()
                 } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "stop.fill")
-                            .font(.system(size: 18, weight: .semibold))
-                        Text("Stop Recording")
-                            .font(.system(size: 17, weight: .semibold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(width: 220, height: 56)
-                    .background(Color.red)
-                    .cornerRadius(28)
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.black)
+                        .frame(width: 56, height: 56)
+                        .background(Color.white)
+                        .clipShape(Circle())
                 }
             }
-            .padding(.bottom, 40)
+            .padding(.bottom, 50)
         }
     }
 
     var voiceoverCountdownOverlay: some View {
         ZStack {
-            Color.black.opacity(0.8)
+            Color.black.opacity(0.6)
                 .ignoresSafeArea()
 
-            VStack(spacing: 20) {
-                Text("\(voiceoverCountdownNumber)")
-                    .font(.system(size: 120, weight: .bold))
-                    .foregroundStyle(.white)
-
-                Text("Get ready to narrate...")
-                    .font(.body)
-                    .foregroundStyle(.white.opacity(0.7))
-            }
+            Text("\(voiceoverCountdownNumber)")
+                .font(.system(size: 100, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
         }
     }
 
