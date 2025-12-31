@@ -397,14 +397,31 @@ class ConvexService: ObservableObject {
         }
     }
 
-    func attachVideoToTodo(id: String, localVideoPath: String, localThumbnailPath: String?) async throws {
-        if let thumbnailPath = localThumbnailPath {
+    func attachVideoToTodo(id: String, localVideoPath: String, localThumbnailPath: String?, videoNotes: String? = nil) async throws {
+        let hasThumb = localThumbnailPath != nil
+        let hasNotes = videoNotes != nil && !videoNotes!.isEmpty
+
+        switch (hasThumb, hasNotes) {
+        case (true, true):
             let _: String? = try await convexClient.mutation("todos:attachVideo", with: [
                 "id": id,
                 "localVideoPath": localVideoPath,
-                "localThumbnailPath": thumbnailPath
+                "localThumbnailPath": localThumbnailPath!,
+                "videoNotes": videoNotes!
             ])
-        } else {
+        case (true, false):
+            let _: String? = try await convexClient.mutation("todos:attachVideo", with: [
+                "id": id,
+                "localVideoPath": localVideoPath,
+                "localThumbnailPath": localThumbnailPath!
+            ])
+        case (false, true):
+            let _: String? = try await convexClient.mutation("todos:attachVideo", with: [
+                "id": id,
+                "localVideoPath": localVideoPath,
+                "videoNotes": videoNotes!
+            ])
+        case (false, false):
             let _: String? = try await convexClient.mutation("todos:attachVideo", with: [
                 "id": id,
                 "localVideoPath": localVideoPath
@@ -412,14 +429,28 @@ class ConvexService: ObservableObject {
         }
     }
 
-    func attachVideoToMultipleTodos(ids: [String], localVideoPath: String, localThumbnailPath: String?) async throws {
+    func attachVideoToMultipleTodos(ids: [String], localVideoPath: String, localThumbnailPath: String?, videoNotes: String? = nil) async throws {
         // Loop through each todo and attach the same video
         for id in ids {
             try await attachVideoToTodo(
                 id: id,
                 localVideoPath: localVideoPath,
-                localThumbnailPath: localThumbnailPath
+                localThumbnailPath: localThumbnailPath,
+                videoNotes: videoNotes
             )
+        }
+    }
+
+    func updateTodoVideoNotes(todoId: String, videoNotes: String?) async throws {
+        if let notes = videoNotes {
+            let _: String? = try await convexClient.mutation("todos:updateVideoNotes", with: [
+                "id": todoId,
+                "videoNotes": notes
+            ])
+        } else {
+            let _: String? = try await convexClient.mutation("todos:updateVideoNotes", with: [
+                "id": todoId
+            ])
         }
     }
 

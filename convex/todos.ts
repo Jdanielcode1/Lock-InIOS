@@ -105,6 +105,7 @@ export const attachVideo = userMutation({
     id: v.id("todos"),
     localVideoPath: v.string(),
     localThumbnailPath: v.optional(v.string()),
+    videoNotes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = ctx.identity.tokenIdentifier;
@@ -115,8 +116,25 @@ export const attachVideo = userMutation({
     await ctx.db.patch(args.id, {
       localVideoPath: args.localVideoPath,
       localThumbnailPath: args.localThumbnailPath,
+      videoNotes: args.videoNotes,
       isCompleted: true,
     });
+  },
+});
+
+// Mutation: Update video notes for a todo
+export const updateVideoNotes = userMutation({
+  args: {
+    id: v.id("todos"),
+    videoNotes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = ctx.identity.tokenIdentifier;
+    const todo = await ctx.db.get(args.id);
+    if (!todo) throw new Error("Todo not found");
+    if (todo.userId !== userId) throw new Error("Not authorized");
+
+    await ctx.db.patch(args.id, { videoNotes: args.videoNotes });
   },
 });
 

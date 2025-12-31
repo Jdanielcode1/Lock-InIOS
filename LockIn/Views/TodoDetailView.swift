@@ -16,15 +16,15 @@ struct TodoDetailView: View {
     @State private var isCompleted: Bool
     @State private var isSaving = false
     @State private var showingDeleteAlert = false
-    @State private var hasChanges = false
     @State private var showingRecorder = false
     @State private var showingVideoPlayer = false
+    @State private var thumbnail: UIImage?
     @FocusState private var titleFocused: Bool
+    @FocusState private var descriptionFocused: Bool
 
     private let convexService = ConvexService.shared
     @StateObject private var todoViewModel = TodoViewModel()
 
-    // Reactive todo from subscription
     private var todo: TodoItem {
         todoViewModel.todos.first(where: { $0.id == initialTodo.id }) ?? initialTodo
     }
@@ -40,249 +40,199 @@ struct TodoDetailView: View {
         !title.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
-    private var formattedDate: String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: todo.createdDate)
-    }
-
     var body: some View {
         NavigationView {
-            List {
-                // Status Section
-                Section {
-                    HStack(spacing: 16) {
-                        // Completion toggle
-                        Button {
-                            withAnimation(.spring(response: 0.3)) {
-                                isCompleted.toggle()
-                                hasChanges = true
+            ScrollView {
+                VStack(spacing: 0) {
+                    // MARK: - Title & Status
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack(alignment: .top, spacing: 14) {
+                            // Completion toggle
+                            Button {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    isCompleted.toggle()
+                                }
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                Task { await saveChanges() }
+                            } label: {
+                                Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 26, weight: .medium))
+                                    .foregroundStyle(isCompleted ? Color.green : Color(.tertiaryLabel))
+                                    .contentTransition(.symbolEffect(.replace))
                             }
+                            .buttonStyle(.plain)
+                            .padding(.top, 2)
 
-                            // Haptic feedback
-                            let generator = UIImpactFeedbackGenerator(style: .medium)
-                            generator.impactOccurred()
-                        } label: {
-                            Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
-                                .font(.system(size: 28))
-                                .foregroundStyle(isCompleted ? .green : Color(UIColor.tertiaryLabel))
-                                .contentTransition(.symbolEffect(.replace))
-                        }
-                        .buttonStyle(.plain)
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(isCompleted ? "Completed" : "In Progress")
-                                .font(.headline)
-                                .foregroundStyle(isCompleted ? .green : .primary)
-
-                            Text("Tap to toggle status")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-                    }
-                    .padding(.vertical, 4)
-                } header: {
-                    Text("Status")
-                }
-
-                // Title Section
-                Section {
-                    TextField("Todo title", text: $title)
-                        .font(.body)
-                        .focused($titleFocused)
-                        .onChange(of: title) { _, _ in
-                            hasChanges = true
-                        }
-                } header: {
-                    Text("Title")
-                } footer: {
-                    if !isValid && !title.isEmpty {
-                        Text("Title cannot be empty")
-                            .foregroundStyle(.red)
-                    }
-                }
-
-                // Description Section
-                Section {
-                    TextField("Add notes or details...", text: $description, axis: .vertical)
-                        .lineLimit(3...6)
-                        .onChange(of: description) { _, _ in
-                            hasChanges = true
-                        }
-                } header: {
-                    Text("Description")
-                } footer: {
-                    Text("Optional")
-                }
-
-                // Video/Recording Section
-                Section {
-                    if todo.hasVideo {
-                        // Play video button
-                        Button {
-                            showingVideoPlayer = true
-                        } label: {
-                            HStack(spacing: 12) {
-                                // Thumbnail
-                                if let thumbnailURL = todo.thumbnailURL,
-                                   let data = try? Data(contentsOf: thumbnailURL),
-                                   let uiImage = UIImage(data: data) {
-                                    Image(uiImage: uiImage)
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: 60, height: 45)
-                                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                                        .overlay {
-                                            Image(systemName: "play.circle.fill")
-                                                .font(.title3)
-                                                .foregroundStyle(.white)
-                                                .shadow(radius: 2)
-                                        }
-                                } else {
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(Color(UIColor.systemGray5))
-                                        .frame(width: 60, height: 45)
-                                        .overlay {
-                                            Image(systemName: "play.circle.fill")
-                                                .foregroundStyle(.secondary)
-                                        }
+                            // Title field
+                            TextField("What needs to be done?", text: $title, axis: .vertical)
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(isCompleted ? .secondary : .primary)
+                                .strikethrough(isCompleted, color: .secondary)
+                                .focused($titleFocused)
+                                .submitLabel(.done)
+                                .onSubmit {
+                                    titleFocused = false
+                                    Task { await saveChanges() }
                                 }
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Watch Recording")
-                                        .font(.subheadline.bold())
-                                        .foregroundStyle(.primary)
-
-                                    Text("Tap to play video proof")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                Spacer()
-
-                                Image(systemName: "checkmark.seal.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(.green)
-                            }
-                            .padding(.vertical, 4)
                         }
-                    } else {
-                        // Record button
-                        Button {
-                            showingRecorder = true
-                        } label: {
-                            HStack(spacing: 12) {
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(Color.accentColor.opacity(0.15))
-                                        .frame(width: 60, height: 45)
 
-                                    Image(systemName: "video.badge.plus")
-                                        .font(.title3)
-                                        .foregroundStyle(Color.accentColor)
-                                }
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Record Video")
-                                        .font(.subheadline.bold())
-                                        .foregroundStyle(.primary)
-
-                                    Text("Add proof for this todo")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                Spacer()
-
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .padding(.vertical, 4)
-                        }
-                    }
-                } header: {
-                    Text("Recording")
-                } footer: {
-                    if todo.hasVideo {
-                        Text("Video proof attached")
-                    } else {
-                        Text("Record a video to prove completion")
-                    }
-                }
-
-                // Info Section
-                Section {
-                    HStack {
-                        Label("Created", systemImage: "calendar")
-                        Spacer()
-                        Text(formattedDate)
+                        // Description
+                        TextField("Add notes...", text: $description, axis: .vertical)
+                            .font(.system(size: 15))
                             .foregroundStyle(.secondary)
+                            .lineLimit(1...8)
+                            .focused($descriptionFocused)
+                            .padding(.leading, 40)
+                            .onSubmit {
+                                descriptionFocused = false
+                                Task { await saveChanges() }
+                            }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 24)
+                    .padding(.bottom, 28)
+
+                    // MARK: - Video Section
+                    VStack(spacing: 0) {
+                        if todo.hasVideo {
+                            // Video exists - show playback card
+                            Button {
+                                showingVideoPlayer = true
+                            } label: {
+                                HStack(spacing: 14) {
+                                    // Thumbnail
+                                    ZStack {
+                                        if let thumbnail = thumbnail {
+                                            Image(uiImage: thumbnail)
+                                                .resizable()
+                                                .aspectRatio(contentMode: .fill)
+                                                .frame(width: 72, height: 54)
+                                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                        } else {
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .fill(Color(.systemGray5))
+                                                .frame(width: 72, height: 54)
+                                        }
+
+                                        // Play icon
+                                        Circle()
+                                            .fill(.ultraThinMaterial)
+                                            .frame(width: 28, height: 28)
+                                            .overlay {
+                                                Image(systemName: "play.fill")
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundStyle(.white)
+                                                    .offset(x: 1)
+                                            }
+                                    }
+
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text("Recording")
+                                            .font(.system(size: 15, weight: .semibold))
+                                            .foregroundStyle(.primary)
+
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "checkmark.seal.fill")
+                                                .font(.system(size: 11))
+                                            Text("Verified")
+                                                .font(.system(size: 12, weight: .medium))
+                                        }
+                                        .foregroundStyle(.green)
+                                    }
+
+                                    Spacer()
+
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .padding(14)
+                                .background(Color(.secondarySystemGroupedBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 20)
+                        } else {
+                            // No video - show record button
+                            Button {
+                                showingRecorder = true
+                            } label: {
+                                HStack(spacing: 14) {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .fill(Color.accentColor.opacity(0.12))
+                                            .frame(width: 72, height: 54)
+
+                                        Image(systemName: "video.fill")
+                                            .font(.system(size: 20, weight: .medium))
+                                            .foregroundStyle(Color.accentColor)
+                                    }
+
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text("Record Video")
+                                            .font(.system(size: 15, weight: .semibold))
+                                            .foregroundStyle(.primary)
+
+                                        Text("Prove your work")
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    Spacer()
+
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .padding(14)
+                                .background(Color(.secondarySystemGroupedBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 20)
+                        }
                     }
 
-                    HStack {
-                        Label("ID", systemImage: "number")
-                        Spacer()
-                        Text(String(todo.id.prefix(8)) + "...")
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                    }
-                } header: {
-                    Text("Info")
-                }
+                    Spacer(minLength: 40)
 
-                // Danger Zone
-                Section {
-                    Button(role: .destructive) {
+                    // MARK: - Delete
+                    Button {
                         showingDeleteAlert = true
                     } label: {
-                        HStack {
-                            Label("Delete Todo", systemImage: "trash.fill")
-                            Spacer()
-                        }
+                        Text("Delete")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(.red.opacity(0.8))
                     }
-                } footer: {
-                    Text("This action cannot be undone.")
+                    .padding(.bottom, 30)
                 }
             }
-            .listStyle(.insetGrouped)
-            .navigationTitle("Edit Todo")
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-
-                ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         Task {
                             await saveChanges()
+                            dismiss()
                         }
                     } label: {
-                        if isSaving {
-                            ProgressView()
-                        } else {
-                            Text("Save")
-                                .fontWeight(.semibold)
-                        }
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 30, height: 30)
+                            .background(Color(.tertiarySystemFill))
+                            .clipShape(Circle())
                     }
-                    .disabled(!isValid || isSaving || !hasChanges)
                 }
             }
-            .alert("Delete Todo", isPresented: $showingDeleteAlert) {
+            .alert("Delete Todo?", isPresented: $showingDeleteAlert) {
                 Button("Cancel", role: .cancel) { }
                 Button("Delete", role: .destructive) {
-                    Task {
-                        await deleteTodo()
-                    }
+                    Task { await deleteTodo() }
                 }
             } message: {
-                Text("Are you sure you want to delete this todo? This action cannot be undone.")
+                Text("This can't be undone.")
             }
             .fullScreenCover(isPresented: $showingRecorder) {
                 TodoRecorderView(todo: todo, viewModel: todoViewModel)
@@ -293,38 +243,45 @@ struct TodoDetailView: View {
                 }
             }
             .onChange(of: todo.isCompleted) { _, newValue in
-                // Sync completion status when todo updates from backend (e.g., after recording)
-                if !hasChanges {
-                    isCompleted = newValue
-                }
+                isCompleted = newValue
             }
-            .interactiveDismissDisabled(hasChanges)
+            .onAppear {
+                loadThumbnail()
+            }
+            .onChange(of: todo.localThumbnailPath) { _, _ in
+                loadThumbnail()
+            }
         }
     }
 
+    private func loadThumbnail() {
+        guard let thumbnailURL = todo.thumbnailURL,
+              let data = try? Data(contentsOf: thumbnailURL),
+              let image = UIImage(data: data) else {
+            thumbnail = nil
+            return
+        }
+        thumbnail = image
+    }
+
     private func saveChanges() async {
-        isSaving = true
+        let trimmedTitle = title.trimmingCharacters(in: .whitespaces)
+        guard !trimmedTitle.isEmpty else { return }
+
+        let trimmedDescription = description.trimmingCharacters(in: .whitespaces)
 
         do {
-            // Update title and description
-            let trimmedTitle = title.trimmingCharacters(in: .whitespaces)
-            let trimmedDescription = description.trimmingCharacters(in: .whitespaces)
-
             try await convexService.updateTodo(
                 id: todo.id,
                 title: trimmedTitle,
                 description: trimmedDescription.isEmpty ? nil : trimmedDescription
             )
 
-            // Update completion status if changed
             if isCompleted != todo.isCompleted {
                 try await convexService.toggleTodo(id: todo.id, isCompleted: isCompleted)
             }
-
-            dismiss()
         } catch {
-            print("Failed to save todo: \(error)")
-            isSaving = false
+            print("Failed to save: \(error)")
         }
     }
 
@@ -337,7 +294,7 @@ struct TodoDetailView: View {
             )
             dismiss()
         } catch {
-            print("Failed to delete todo: \(error)")
+            print("Failed to delete: \(error)")
         }
     }
 }
@@ -350,6 +307,7 @@ struct TodoDetailView: View {
         isCompleted: false,
         localVideoPath: nil,
         localThumbnailPath: nil,
+        videoNotes: nil,
         createdAt: Date().timeIntervalSince1970 * 1000
     ))
 }

@@ -85,21 +85,22 @@ struct VideoPlayerView: View {
                                     editingNotes = session.notes ?? ""
                                     showNotesEditor = true
                                 } label: {
-                                    HStack(spacing: 8) {
+                                    HStack(spacing: 6) {
                                         Image(systemName: "note.text")
-                                            .font(.system(size: 18, weight: .semibold))
+                                            .font(.system(size: 14, weight: .semibold))
                                         Text(session.notes?.isEmpty == false ? "Edit Notes" : "Add Notes")
-                                            .font(.system(size: 17, weight: .semibold))
+                                            .font(.system(size: 14, weight: .semibold))
                                         if isSavingNotes {
                                             ProgressView()
-                                                .scaleEffect(0.8)
+                                                .scaleEffect(0.7)
                                                 .tint(.white)
                                         }
                                     }
                                     .foregroundColor(.white)
-                                    .frame(width: 280, height: 50)
+                                    .frame(height: 40)
+                                    .padding(.horizontal, 20)
                                     .background(session.notes?.isEmpty == false ? Color.accentColor : Color.white.opacity(0.2))
-                                    .cornerRadius(25)
+                                    .cornerRadius(20)
                                 }
                                 .disabled(isSavingNotes)
 
@@ -157,16 +158,6 @@ struct VideoPlayerView: View {
         .onDisappear { tabBarVisibility.show() }
         .toolbar {
             if !isRecordingVoiceover && !showVoiceoverCountdown && !isCompilingVoiceover {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        cleanupPlayer()
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .foregroundColor(.white)
-                    }
-                }
-
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 4) {
                         Text(session.formattedDuration)
@@ -316,21 +307,22 @@ struct VideoPlayerView: View {
         Button {
             startVoiceoverCountdown()
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Image(systemName: hasVoiceoverAdded ? "arrow.counterclockwise" : "mic.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                Text(hasVoiceoverAdded ? "Re-record Voiceover" : "Add Voiceover")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
+                Text(hasVoiceoverAdded ? "Re-record" : "Voiceover")
+                    .font(.system(size: 14, weight: .semibold))
                 if hasVoiceoverAdded {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 14))
+                        .font(.system(size: 12))
                         .foregroundColor(.white.opacity(0.8))
                 }
             }
             .foregroundColor(.white)
-            .frame(width: 280, height: 50)
+            .frame(height: 40)
+            .padding(.horizontal, 20)
             .background(hasVoiceoverAdded ? Color.orange.opacity(0.8) : Color.orange)
-            .cornerRadius(25)
+            .cornerRadius(20)
         }
     }
 

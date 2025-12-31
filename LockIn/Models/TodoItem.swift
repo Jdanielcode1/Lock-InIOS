@@ -14,6 +14,7 @@ struct TodoItem: Identifiable, Codable {
     var isCompleted: Bool
     var localVideoPath: String?
     var localThumbnailPath: String?
+    var videoNotes: String?
     let createdAt: Double
 
     var id: String { _id }

@@ -74,6 +74,7 @@ export default defineSchema({
     isArchived: v.optional(v.boolean()),
     localVideoPath: v.optional(v.string()),
     localThumbnailPath: v.optional(v.string()),
+    videoNotes: v.optional(v.string()), // Notes/description for the attached video
     createdAt: v.float64(),
   })
     .index("by_user", ["userId"])
