@@ -19,6 +19,9 @@ struct CameraRecorderView: View {
     @State private var previewThumbnail: UIImage?
     @State private var player: AVPlayer?
 
+    // Privacy mode
+    @StateObject private var privacyManager = PrivacyModeManager()
+
     private let videoService = VideoService.shared
 
     init(goalId: String, goalTodoId: String?) {
@@ -44,11 +47,15 @@ struct CameraRecorderView: View {
                             CameraPreview(session: viewModel.captureSession)
                                 .frame(height: 600)
                                 .cornerRadius(20)
+                                .opacity(privacyManager.shouldHideControls && viewModel.isRecording ? 0 : 1)
 
-                            // Camera flip button (shown when not recording)
-                            if !viewModel.isRecording {
+                            // Camera flip button (shown when not recording, hidden in privacy mode)
+                            if !viewModel.isRecording && !privacyManager.shouldHideControls {
                                 VStack {
                                     HStack {
+                                        // Privacy mode toggle
+                                        PrivacyModeToggle(privacyManager: privacyManager)
+
                                         Spacer()
 
                                         Button {
@@ -68,8 +75,8 @@ struct CameraRecorderView: View {
                                 }
                             }
 
-                            // Recording overlay
-                            if viewModel.isRecording {
+                            // Recording overlay (hidden in privacy mode)
+                            if viewModel.isRecording && !privacyManager.shouldHideControls {
                                 VStack {
                                     HStack {
                                         // Recording indicator
@@ -103,18 +110,50 @@ struct CameraRecorderView: View {
                                     Spacer()
                                 }
                             }
+
+                            // MARK: - Privacy Mode Overlay
+
+                            // Stealth stopwatch overlay (shows minimal timer on black screen)
+                            if privacyManager.shouldHideControls && viewModel.isRecording {
+                                StealthStopwatchView(
+                                    recordingDuration: viewModel.recordingDuration,
+                                    onDoubleTap: {
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            privacyManager.deactivate()
+                                        }
+                                    },
+                                    onStopRecording: {
+                                        viewModel.stopRecording()
+                                    }
+                                )
+                                .frame(height: 600)
+                                .cornerRadius(20)
+                                .transition(.opacity)
+                            }
+
+                            // Privacy toggle always accessible during privacy mode
+                            if privacyManager.shouldHideControls && viewModel.isRecording {
+                                VStack {
+                                    HStack {
+                                        PrivacyModeToggle(privacyManager: privacyManager)
+                                        Spacer()
+                                    }
+                                    .padding()
+                                    Spacer()
+                                }
+                            }
                         }
                         .padding(.horizontal)
                     }
 
                     Spacer()
 
-                    // Controls
+                    // Controls (hidden in privacy mode when recording)
                     if viewModel.isUploading {
                         uploadProgressView
                     } else if viewModel.recordedVideoURL != nil {
                         finishedRecordingButtons
-                    } else {
+                    } else if !privacyManager.shouldHideControls || !viewModel.isRecording {
                         recordingButton
                     }
                 }
@@ -149,6 +188,14 @@ struct CameraRecorderView: View {
             // Re-enable screen auto-lock
             UIApplication.shared.isIdleTimerDisabled = false
             viewModel.cleanup()
+        }
+        .onChange(of: viewModel.isRecording) { _, isRecording in
+            // Activate/deactivate privacy mode when recording starts/stops
+            if isRecording {
+                privacyManager.onRecordingStarted()
+            } else {
+                privacyManager.onRecordingStopped()
+            }
         }
     }
 

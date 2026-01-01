@@ -93,6 +93,9 @@ struct TimeLapseRecorderView: View {
     @State private var pendingNotes: String = ""
     @State private var showNotesSheet: Bool = false
 
+    // Privacy mode
+    @StateObject private var privacyManager = PrivacyModeManager()
+
     private let videoService = VideoService.shared
 
     init(goalId: String, goalTodoId: String?, availableTodos: [GoalTodo] = []) {
@@ -114,25 +117,28 @@ struct TimeLapseRecorderView: View {
                 // YouTube-style preview after recording
                 previewCompletedView
             } else {
-                // Full screen camera preview
+                // Full screen camera preview (hidden in stealth mode)
                 CameraPreview(session: recorder.captureSession)
                     .ignoresSafeArea()
+                    .opacity(privacyManager.shouldHideControls && recorder.isRecording ? 0 : 1)
 
-                // Camera overlay controls
-                cameraOverlayControls
+                // Camera overlay controls (hidden in privacy mode)
+                if !privacyManager.shouldHideControls || !recorder.isRecording {
+                    cameraOverlayControls
+                }
 
-                // Floating todo checklist (when recording with available todos)
-                if !availableTodos.isEmpty && recorder.isRecording {
+                // Floating todo checklist (hidden in privacy mode)
+                if !availableTodos.isEmpty && recorder.isRecording && !privacyManager.shouldHideControls {
                     todoChecklistOverlay
                 }
 
-                // Alarm overlay
+                // Alarm overlay (always show - important for user)
                 if showAlarmOverlay {
                     alarmOverlay
                 }
 
-                // Mic unavailable toast message
-                if showMicUnavailableMessage {
+                // Mic unavailable toast message (hidden in privacy mode)
+                if showMicUnavailableMessage && !privacyManager.shouldHideControls {
                     VStack {
                         HStack(spacing: 8) {
                             Image(systemName: "mic.slash.fill")
@@ -150,6 +156,37 @@ struct TimeLapseRecorderView: View {
                         Spacer()
                     }
                     .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
+                // MARK: - Privacy Mode Overlay
+
+                // Stealth stopwatch overlay (shows minimal timer on black screen)
+                if privacyManager.shouldHideControls && recorder.isRecording {
+                    StealthStopwatchView(
+                        recordingDuration: recorder.recordingDuration,
+                        onDoubleTap: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                privacyManager.deactivate()
+                            }
+                        },
+                        onStopRecording: {
+                            recorder.stopRecording()
+                        }
+                    )
+                    .transition(.opacity)
+                }
+
+                // Privacy toggle always accessible (top-left corner during privacy mode)
+                if privacyManager.shouldHideControls && recorder.isRecording {
+                    VStack {
+                        HStack {
+                            PrivacyModeToggle(privacyManager: privacyManager)
+                                .padding(.leading, 20)
+                                .padding(.top, 60)
+                            Spacer()
+                        }
+                        Spacer()
+                    }
                 }
             }
         }
@@ -218,6 +255,14 @@ struct TimeLapseRecorderView: View {
             if let error = newError {
                 errorMessage = error
                 recorder.diskSpaceError = nil
+            }
+        }
+        .onChange(of: recorder.isRecording) { _, isRecording in
+            // Activate/deactivate privacy mode when recording starts/stops
+            if isRecording {
+                privacyManager.onRecordingStarted()
+            } else {
+                privacyManager.onRecordingStopped()
             }
         }
         .shareSheet(isPresented: $showShareSheet, videoURL: recorder.recordedVideoURL ?? URL(fileURLWithPath: ""))
@@ -789,6 +834,9 @@ struct TimeLapseRecorderView: View {
                         .background(Color.black.opacity(0.5))
                         .cornerRadius(20)
                 }
+
+                // Privacy mode toggle
+                PrivacyModeToggle(privacyManager: privacyManager)
 
                 Spacer()
 

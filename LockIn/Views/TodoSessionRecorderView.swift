@@ -60,6 +60,9 @@ struct TodoSessionRecorderView: View {
     @State private var pendingNotes: String = ""
     @State private var showNotesSheet: Bool = false
 
+    // Privacy mode
+    @StateObject private var privacyManager = PrivacyModeManager()
+
     private let videoService = VideoService.shared
 
     // Computed properties
@@ -95,15 +98,18 @@ struct TodoSessionRecorderView: View {
             } else if recorder.recordedVideoURL != nil {
                 previewCompletedView
             } else {
-                // Full screen camera preview
+                // Full screen camera preview (hidden in stealth mode)
                 CameraPreview(session: recorder.captureSession)
                     .ignoresSafeArea()
+                    .opacity(privacyManager.shouldHideControls && recorder.isRecording ? 0 : 1)
 
-                // Camera overlay controls
-                cameraOverlayControls
+                // Camera overlay controls (hidden in privacy mode)
+                if !privacyManager.shouldHideControls || !recorder.isRecording {
+                    cameraOverlayControls
+                }
 
-                // Todo list overlay (positioned below cancel button)
-                if showTodoOverlay && totalCount > 0 {
+                // Todo list overlay (positioned below cancel button, hidden in privacy mode)
+                if showTodoOverlay && totalCount > 0 && !privacyManager.shouldHideControls {
                     VStack {
                         todoListOverlay
                             .padding(.top, 110) // Below the top bar
@@ -114,9 +120,40 @@ struct TodoSessionRecorderView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
-                // Alarm overlay
+                // Alarm overlay (always show - important for user)
                 if showAlarmOverlay {
                     alarmOverlay
+                }
+
+                // MARK: - Privacy Mode Overlay
+
+                // Stealth stopwatch overlay (shows minimal timer on black screen)
+                if privacyManager.shouldHideControls && recorder.isRecording {
+                    StealthStopwatchView(
+                        recordingDuration: recorder.recordingDuration,
+                        onDoubleTap: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                privacyManager.deactivate()
+                            }
+                        },
+                        onStopRecording: {
+                            recorder.stopRecording()
+                        }
+                    )
+                    .transition(.opacity)
+                }
+
+                // Privacy toggle always accessible (top-left corner during privacy mode)
+                if privacyManager.shouldHideControls && recorder.isRecording {
+                    VStack {
+                        HStack {
+                            PrivacyModeToggle(privacyManager: privacyManager)
+                                .padding(.leading, 20)
+                                .padding(.top, 60)
+                            Spacer()
+                        }
+                        Spacer()
+                    }
                 }
             }
         }
@@ -176,6 +213,14 @@ struct TodoSessionRecorderView: View {
                newDuration >= countdownDuration {
                 countdownReachedZero = true
                 triggerCountdownAlert()
+            }
+        }
+        .onChange(of: recorder.isRecording) { _, isRecording in
+            // Activate/deactivate privacy mode when recording starts/stops
+            if isRecording {
+                privacyManager.onRecordingStarted()
+            } else {
+                privacyManager.onRecordingStopped()
             }
         }
         .shareSheet(isPresented: $showShareSheet, videoURL: recorder.recordedVideoURL ?? URL(fileURLWithPath: ""))
@@ -589,6 +634,9 @@ struct TodoSessionRecorderView: View {
                             .background(Color.black.opacity(0.5))
                             .cornerRadius(20)
                     }
+
+                    // Privacy mode toggle
+                    PrivacyModeToggle(privacyManager: privacyManager)
 
                     // Todo badge (always show if todos selected)
                     if totalCount > 0 {
