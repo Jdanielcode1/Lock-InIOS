@@ -271,31 +271,55 @@ class DailyRecapService: ObservableObject {
             }
         }
 
-        // Calculate max real time we might need to display
-        // Check all clips for their max real time from speed segments
-        var maxRealSeconds = Int(clipDuration) + 1  // Default fallback
-        for data in overlayData {
-            if let segments = data.speedSegments, let lastSegment = segments.last {
-                let clipMaxRealTime = Int(lastSegment.endRealTime) + 1
-                maxRealSeconds = max(maxRealSeconds, clipMaxRealTime)
-            }
-        }
-        // Cap at 60 minutes (3600 seconds) to avoid excessive memory
-        maxRealSeconds = min(maxRealSeconds, 3600)
+        // Calculate max real time we might need to display (per-clip and cumulative)
+        var maxRealSecondsPerClip = Int(clipDuration) + 1  // Default fallback
+        var totalCumulativeRealTime: Double = 0
 
-        // Pre-render stopwatch images for all possible real times
+        // First pass: calculate each clip's real duration and cumulative total
+        var clipRealDurations: [Double] = []
+        for data in overlayData {
+            var clipRealDuration = data.duration  // Default: video duration = real duration (1x speed)
+            if let segments = data.speedSegments, let lastSegment = segments.last {
+                clipRealDuration = lastSegment.endRealTime
+                maxRealSecondsPerClip = max(maxRealSecondsPerClip, Int(clipRealDuration) + 1)
+            }
+            clipRealDurations.append(clipRealDuration)
+            totalCumulativeRealTime += clipRealDuration
+        }
+
+        // Cap at 60 minutes for per-clip, but allow up to 4 hours for cumulative
+        maxRealSecondsPerClip = min(maxRealSecondsPerClip, 3600)
+        let maxCumulativeSeconds = min(Int(totalCumulativeRealTime) + 1, 14400) // 4 hours max
+
+        // Pre-render stopwatch images for per-clip timer
         var stopwatchCache: [Int: CIImage] = [:]
-        for sec in 0..<maxRealSeconds {
+        for sec in 0..<maxRealSecondsPerClip {
             if let img = createStopwatchOverlay(seconds: sec, videoSize: renderSize, opacity: 1.0) {
                 stopwatchCache[sec] = img
             }
         }
-        print("   ⏱️ Pre-rendered \(stopwatchCache.count) stopwatch images (max \(maxRealSeconds)s)")
+        print("   ⏱️ Pre-rendered \(stopwatchCache.count) per-clip stopwatch images")
 
-        // Build clip time ranges for per-clip stopwatch (including speed segments)
-        var clipRanges: [(startTime: Double, endTime: Double, speedSegments: [SpeedSegment]?)] = []
-        for data in overlayData {
-            clipRanges.append((startTime: data.startTime, endTime: data.startTime + data.duration, speedSegments: data.speedSegments))
+        // Pre-render cumulative total timer images (with "TOTAL" label style)
+        var cumulativeCache: [Int: CIImage] = [:]
+        for sec in 0..<maxCumulativeSeconds {
+            if let img = createTotalTimeOverlay(seconds: sec, videoSize: renderSize, opacity: 1.0) {
+                cumulativeCache[sec] = img
+            }
+        }
+        print("   ⏱️ Pre-rendered \(cumulativeCache.count) cumulative timer images (total \(Int(totalCumulativeRealTime))s)")
+
+        // Build clip time ranges with cumulative offset
+        var clipRanges: [(startTime: Double, endTime: Double, speedSegments: [SpeedSegment]?, cumulativeOffset: Double)] = []
+        var cumulativeOffset: Double = 0
+        for (index, data) in overlayData.enumerated() {
+            clipRanges.append((
+                startTime: data.startTime,
+                endTime: data.startTime + data.duration,
+                speedSegments: data.speedSegments,
+                cumulativeOffset: cumulativeOffset
+            ))
+            cumulativeOffset += clipRealDurations[index]
         }
 
         // Capture the calculateRealTime function for use in the closure
@@ -350,7 +374,7 @@ class DailyRecapService: ObservableObject {
                 }
             }
 
-            // Composite stopwatch overlay (always visible for entire clip)
+            // Composite stopwatch overlays (always visible for entire clip)
             // Uses speed segments to show accurate real elapsed time
             for clip in clipRanges {
                 if currentTime >= clip.startTime && currentTime < clip.endTime {
@@ -361,12 +385,13 @@ class DailyRecapService: ObservableObject {
                         videoTimeInClip,
                         clip.speedSegments
                     )
-                    let displaySeconds = min(Int(realElapsedTime), maxRealSeconds - 1)
 
-                    if let stopwatchImage = stopwatchCache[displaySeconds] {
-                        // Position bottom-right (CIImage origin is bottom-left)
-                        let scale = min(request.renderSize.width, request.renderSize.height) / 1280.0
-                        let padding: CGFloat = 20 * scale
+                    let scale = min(request.renderSize.width, request.renderSize.height) / 1280.0
+                    let padding: CGFloat = 20 * scale
+
+                    // 1. Per-clip timer (bottom-right)
+                    let perClipSeconds = min(Int(realElapsedTime), maxRealSecondsPerClip - 1)
+                    if let stopwatchImage = stopwatchCache[perClipSeconds] {
                         let xPos = request.renderSize.width - stopwatchImage.extent.width - padding
                         let yPos = padding
 
@@ -375,6 +400,20 @@ class DailyRecapService: ObservableObject {
 
                         outputImage = positioned.composited(over: outputImage)
                     }
+
+                    // 2. Cumulative total timer (bottom-left)
+                    let cumulativeTime = clip.cumulativeOffset + realElapsedTime
+                    let cumulativeSeconds = min(Int(cumulativeTime), maxCumulativeSeconds - 1)
+                    if let cumulativeImage = cumulativeCache[cumulativeSeconds] {
+                        let xPos = padding
+                        let yPos = padding
+
+                        let positioned = cumulativeImage
+                            .transformed(by: CGAffineTransform(translationX: xPos, y: yPos))
+
+                        outputImage = positioned.composited(over: outputImage)
+                    }
+
                     break
                 }
             }
@@ -733,6 +772,95 @@ class DailyRecapService: ObservableObject {
 
             // === TIME TEXT ===
             let textX = badgeRect.minX + horizontalPadding
+            let textY = badgeRect.midY - fontSize * 0.55
+
+            let textAttrs: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: UIColor.white.withAlphaComponent(opacity)
+            ]
+
+            let textRect = CGRect(x: textX, y: textY, width: textSize.width, height: fontSize * 1.3)
+            (timeText as NSString).draw(in: textRect, withAttributes: textAttrs)
+        }
+
+        return CIImage(image: image)
+    }
+
+    /// Creates a total/cumulative time overlay with "TOTAL" label
+    private func createTotalTimeOverlay(seconds: Int, videoSize: CGSize, opacity: CGFloat) -> CIImage? {
+        let scale = min(videoSize.width, videoSize.height) / 1280.0
+
+        // === DESIGN TOKENS ===
+        let badgeHeight: CGFloat = 44 * scale
+        let cornerRadius: CGFloat = badgeHeight / 2
+        let horizontalPadding: CGFloat = 14 * scale
+        let fontSize: CGFloat = 18 * scale
+        let iconSize: CGFloat = 16 * scale
+
+        // Format time as MM:SS or HH:MM:SS for longer durations
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+        let secs = seconds % 60
+        let timeText: String
+        if hours > 0 {
+            timeText = String(format: "%d:%02d:%02d", hours, minutes, secs)
+        } else {
+            timeText = String(format: "%02d:%02d", minutes, secs)
+        }
+
+        // Use monospace font for consistent width
+        let font = UIFont.monospacedDigitSystemFont(ofSize: fontSize, weight: .bold)
+        let textAttributes: [NSAttributedString.Key: Any] = [.font: font]
+        let textSize = (timeText as NSString).size(withAttributes: textAttributes)
+
+        // Total badge width (icon + TOTAL label + time)
+        let spacing: CGFloat = 6 * scale
+        let badgeWidth = horizontalPadding + iconSize + spacing + textSize.width + horizontalPadding
+
+        // Create image with shadow padding
+        let shadowPadding: CGFloat = 12 * scale
+        let canvasWidth = badgeWidth + shadowPadding * 2
+        let canvasHeight = badgeHeight + shadowPadding * 2
+
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: canvasWidth, height: canvasHeight))
+        let image = renderer.image { context in
+            let ctx = context.cgContext
+
+            // Badge rect (centered in canvas for shadow room)
+            let badgeRect = CGRect(x: shadowPadding, y: shadowPadding, width: badgeWidth, height: badgeHeight)
+            let pillPath = UIBezierPath(roundedRect: badgeRect, cornerRadius: cornerRadius)
+
+            // === SHADOW ===
+            ctx.saveGState()
+            ctx.setShadow(offset: CGSize(width: 0, height: 3 * scale), blur: 8 * scale, color: UIColor.black.withAlphaComponent(0.35 * opacity).cgColor)
+            UIColor.black.setFill()
+            pillPath.fill()
+            ctx.restoreGState()
+
+            // === MAIN BACKGROUND (Purple tint to differentiate from per-clip timer) ===
+            UIColor(red: 0.15, green: 0.1, blue: 0.2, alpha: 0.88 * opacity).setFill()
+            pillPath.fill()
+
+            // === SUBTLE BORDER ===
+            UIColor.white.withAlphaComponent(0.15 * opacity).setStroke()
+            pillPath.lineWidth = 1
+            pillPath.stroke()
+
+            // === SIGMA/SUM ICON (Σ) ===
+            let iconX = badgeRect.minX + horizontalPadding
+            let iconY = badgeRect.midY - iconSize * 0.5
+
+            // Draw sum symbol
+            let sumFont = UIFont.systemFont(ofSize: iconSize * 1.1, weight: .bold)
+            let sumAttrs: [NSAttributedString.Key: Any] = [
+                .font: sumFont,
+                .foregroundColor: UIColor(red: 0.6, green: 0.5, blue: 1.0, alpha: opacity)  // Purple accent
+            ]
+            let sumRect = CGRect(x: iconX, y: iconY, width: iconSize, height: iconSize)
+            ("Σ" as NSString).draw(in: sumRect, withAttributes: sumAttrs)
+
+            // === TIME TEXT ===
+            let textX = iconX + iconSize + spacing
             let textY = badgeRect.midY - fontSize * 0.55
 
             let textAttrs: [NSAttributedString.Key: Any] = [
