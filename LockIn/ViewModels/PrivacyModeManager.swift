@@ -83,6 +83,12 @@ class PrivacyModeManager: ObservableObject {
         isActive = false
         stopHapticFeedback()
 
+        // Reset privacy level back to off (full exit)
+        if privacyLevel != .off {
+            // Temporarily disable didSet side effects by checking isActive first
+            privacyLevel = .off
+        }
+
         // Confirmation haptic
         let notificationGenerator = UINotificationFeedbackGenerator()
         notificationGenerator.notificationOccurred(.warning)
