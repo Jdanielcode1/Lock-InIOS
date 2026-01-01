@@ -61,10 +61,15 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     @Published var lowDiskSpaceWarning: Bool = false
     @Published var diskSpaceError: String?
 
+    // Zoom level (0.5 = ultra-wide, 1.0 = wide, 2.0+ = telephoto)
+    @Published var currentZoomLevel: CGFloat = 1.0  // 0.5 = ultra-wide, 1.0 = normal
+    @Published var hasUltraWide: Bool = false  // Whether 0.5x is available
+
     nonisolated(unsafe) let captureSession = AVCaptureSession()
     private var videoOutput: AVCaptureVideoDataOutput?
     private var currentVideoInput: AVCaptureDeviceInput?
     private var currentCameraPosition: AVCaptureDevice.Position = .front
+    private var isUsingVirtualDevice: Bool = false  // True if using triple/dual camera
 
     // Audio recording
     private var audioRecorder: AVAudioRecorder?
@@ -484,9 +489,45 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
         captureSession.sessionPreset = .high
 
-        // Add video input
-        guard let videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: currentCameraPosition),
-              let videoInput = try? AVCaptureDeviceInput(device: videoDevice),
+        // Try to get a virtual device for seamless zoom (back camera only)
+        // Virtual devices allow smooth zoom between 0.5x and 1x
+        var videoDevice: AVCaptureDevice?
+
+        if currentCameraPosition == .back {
+            // Try triple camera first (iPhone Pro models)
+            videoDevice = AVCaptureDevice.default(.builtInTripleCamera, for: .video, position: .back)
+
+            // Fall back to dual wide camera (iPhone 11+)
+            if videoDevice == nil {
+                videoDevice = AVCaptureDevice.default(.builtInDualWideCamera, for: .video, position: .back)
+            }
+
+            // Check if we got a virtual device with ultra-wide
+            if let device = videoDevice {
+                hasUltraWide = true
+                isUsingVirtualDevice = true
+                currentZoomLevel = 1.0
+                // Set initial zoom to 2.0 (which is 1x on virtual device)
+                do {
+                    try device.lockForConfiguration()
+                    device.videoZoomFactor = 2.0  // 2.0 = wide angle (1x)
+                    device.unlockForConfiguration()
+                } catch {
+                    print("❌ Failed to set initial zoom: \(error)")
+                }
+            }
+        }
+
+        // Fall back to standard wide angle camera
+        if videoDevice == nil {
+            videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: currentCameraPosition)
+            hasUltraWide = false
+            isUsingVirtualDevice = false
+            currentZoomLevel = 1.0
+        }
+
+        guard let device = videoDevice,
+              let videoInput = try? AVCaptureDeviceInput(device: device),
               captureSession.canAddInput(videoInput) else {
             captureSession.commitConfiguration()
             return
@@ -494,6 +535,8 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
         captureSession.addInput(videoInput)
         currentVideoInput = videoInput
+
+        print("📷 Camera: \(device.deviceType), hasUltraWide: \(hasUltraWide)")
 
         // Add video output
         let output = AVCaptureVideoDataOutput()
@@ -1174,8 +1217,23 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
         let newPosition: AVCaptureDevice.Position = currentCameraPosition == .front ? .back : .front
 
-        guard let newVideoDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: newPosition),
-              let newVideoInput = try? AVCaptureDeviceInput(device: newVideoDevice) else {
+        var newVideoDevice: AVCaptureDevice?
+
+        // For back camera, try to use virtual device for seamless zoom
+        if newPosition == .back {
+            newVideoDevice = AVCaptureDevice.default(.builtInTripleCamera, for: .video, position: .back)
+            if newVideoDevice == nil {
+                newVideoDevice = AVCaptureDevice.default(.builtInDualWideCamera, for: .video, position: .back)
+            }
+        }
+
+        // Fall back to wide angle for front camera or if virtual not available
+        if newVideoDevice == nil {
+            newVideoDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: newPosition)
+        }
+
+        guard let device = newVideoDevice,
+              let newVideoInput = try? AVCaptureDeviceInput(device: device) else {
             return
         }
 
@@ -1186,11 +1244,58 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             captureSession.addInput(newVideoInput)
             currentVideoInput = newVideoInput
             currentCameraPosition = newPosition
+
+            // Check if we're using a virtual device (has ultra-wide)
+            let deviceType = device.deviceType
+            if deviceType == .builtInTripleCamera || deviceType == .builtInDualWideCamera {
+                hasUltraWide = true
+                isUsingVirtualDevice = true
+                // Set to 1x (zoom factor 2.0 on virtual device)
+                do {
+                    try device.lockForConfiguration()
+                    device.videoZoomFactor = 2.0
+                    device.unlockForConfiguration()
+                } catch {
+                    print("❌ Failed to set initial zoom: \(error)")
+                }
+            } else {
+                hasUltraWide = false
+                isUsingVirtualDevice = false
+            }
+            currentZoomLevel = 1.0
         } else {
             captureSession.addInput(currentInput)
         }
 
         captureSession.commitConfiguration()
+    }
+
+    // MARK: - Zoom Control
+
+    /// Toggle between 0.5x (ultra-wide) and 1x (normal) zoom
+    /// Uses virtual device - zoom factor 1.0 = ultra-wide (0.5x), 2.0 = wide (1x)
+    func cycleZoom() {
+        guard hasUltraWide, isUsingVirtualDevice else {
+            print("⚠️ Ultra-wide not available (front camera or unsupported device)")
+            return
+        }
+
+        guard let device = currentVideoInput?.device else { return }
+
+        // Toggle between 0.5x and 1x
+        let newZoomLevel: CGFloat = currentZoomLevel == 1.0 ? 0.5 : 1.0
+        // Virtual device mapping: 0.5x = factor 1.0, 1x = factor 2.0
+        let zoomFactor: CGFloat = newZoomLevel == 0.5 ? 1.0 : 2.0
+
+        do {
+            try device.lockForConfiguration()
+            device.videoZoomFactor = zoomFactor
+            device.unlockForConfiguration()
+            currentZoomLevel = newZoomLevel
+            print("📷 Zoom: \(newZoomLevel)x (factor: \(zoomFactor))")
+        } catch {
+            print("❌ Failed to set zoom: \(error)")
+        }
     }
 
     func clearFrames() {

@@ -617,6 +617,20 @@ struct TodoRecorderView: View {
 
                 // Camera flip button (when not recording)
                 if !recorder.isRecording {
+                    // Zoom button (only show on back camera with ultra-wide)
+                    if recorder.hasUltraWide {
+                        Button {
+                            recorder.cycleZoom()
+                        } label: {
+                            Text(zoomLevelText)
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 44, height: 44)
+                                .background(Color.black.opacity(0.5))
+                                .clipShape(Circle())
+                        }
+                    }
+
                     Button {
                         recorder.switchCamera()
                     } label: {
@@ -945,6 +959,15 @@ struct TodoRecorderView: View {
 
     var isOvertime: Bool {
         countdownEnabled && countdownDuration > 0 && recorder.recordingDuration > countdownDuration
+    }
+
+    var zoomLevelText: String {
+        let level = recorder.currentZoomLevel
+        if level < 1.0 {
+            return String(format: ".%d", Int(level * 10))  // ".5" for 0.5x
+        } else {
+            return String(format: "%.0f", level)  // "1", "2", "3" for 1x, 2x, 3x
+        }
     }
 
     var timerDisplayText: String {
