@@ -1179,11 +1179,13 @@ struct TodoRecorderView: View {
 
             // Attach video to todo (this also marks it as completed)
             let notesToSave = pendingNotes.isEmpty ? nil : pendingNotes
+            let speedSegmentsJSON = recorder.getSpeedSegmentsJSON()
             await viewModel.attachVideo(
                 to: todo,
                 videoPath: localVideoPath,
                 thumbnailPath: localThumbnailPath,
-                videoNotes: notesToSave
+                videoNotes: notesToSave,
+                speedSegmentsJSON: speedSegmentsJSON
             )
 
             uploadProgress = 1.0

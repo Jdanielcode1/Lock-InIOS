@@ -1296,11 +1296,13 @@ struct TodoSessionRecorderView: View {
             // Attach the same video to all checked todos (marks them as completed too)
             if !checkedTodoIds.isEmpty {
                 let notesToSave = pendingNotes.isEmpty ? nil : pendingNotes
+                let speedSegmentsJSON = recorder.getSpeedSegmentsJSON()
                 await viewModel.attachVideoToMultiple(
                     todoIds: Array(checkedTodoIds),
                     videoPath: localVideoPath,
                     thumbnailPath: localThumbnailPath,
-                    videoNotes: notesToSave
+                    videoNotes: notesToSave,
+                    speedSegmentsJSON: speedSegmentsJSON
                 )
             }
             uploadProgress = 0.9

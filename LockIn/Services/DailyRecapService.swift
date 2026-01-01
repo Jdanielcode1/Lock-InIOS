@@ -199,10 +199,15 @@ class DailyRecapService: ObservableObject {
         print("📊 Total composition duration: \(CMTimeGetSeconds(composition.duration))s")
         print("📊 Expected duration: \(CMTimeGetSeconds(currentTime))s")
 
-        // Store clip timing data for overlays
-        let overlayData = clipTimingData.map { (title: $0.todo.title, startTime: CMTimeGetSeconds($0.startTime), duration: $0.duration) }
+        // Store clip timing data for overlays (including speed segments for accurate stopwatch)
+        let overlayData = clipTimingData.map { (
+            title: $0.todo.title,
+            startTime: CMTimeGetSeconds($0.startTime),
+            duration: $0.duration,
+            speedSegments: $0.todo.speedSegments
+        ) }
         await MainActor.run {
-            self.clipTimings = overlayData
+            self.clipTimings = overlayData.map { ($0.title, $0.startTime, $0.duration) }
         }
 
         // Step 1: Export concatenated video (Passthrough - fast & reliable)
@@ -230,7 +235,7 @@ class DailyRecapService: ObservableObject {
     /// Burn overlays into a video file using CIFilter
     private func burnInOverlays(
         sourceURL: URL,
-        overlayData: [(title: String, startTime: Double, duration: Double)],
+        overlayData: [(title: String, startTime: Double, duration: Double, speedSegments: [SpeedSegment]?)],
         outputURL: URL
     ) async throws {
         print("🔥 Burning in overlays to video...")
@@ -265,6 +270,36 @@ class DailyRecapService: ObservableObject {
                 print("   ❌ Failed to create badge for: \(data.title)")
             }
         }
+
+        // Calculate max real time we might need to display
+        // Check all clips for their max real time from speed segments
+        var maxRealSeconds = Int(clipDuration) + 1  // Default fallback
+        for data in overlayData {
+            if let segments = data.speedSegments, let lastSegment = segments.last {
+                let clipMaxRealTime = Int(lastSegment.endRealTime) + 1
+                maxRealSeconds = max(maxRealSeconds, clipMaxRealTime)
+            }
+        }
+        // Cap at 60 minutes (3600 seconds) to avoid excessive memory
+        maxRealSeconds = min(maxRealSeconds, 3600)
+
+        // Pre-render stopwatch images for all possible real times
+        var stopwatchCache: [Int: CIImage] = [:]
+        for sec in 0..<maxRealSeconds {
+            if let img = createStopwatchOverlay(seconds: sec, videoSize: renderSize, opacity: 1.0) {
+                stopwatchCache[sec] = img
+            }
+        }
+        print("   ⏱️ Pre-rendered \(stopwatchCache.count) stopwatch images (max \(maxRealSeconds)s)")
+
+        // Build clip time ranges for per-clip stopwatch (including speed segments)
+        var clipRanges: [(startTime: Double, endTime: Double, speedSegments: [SpeedSegment]?)] = []
+        for data in overlayData {
+            clipRanges.append((startTime: data.startTime, endTime: data.startTime + data.duration, speedSegments: data.speedSegments))
+        }
+
+        // Capture the calculateRealTime function for use in the closure
+        let calculateRealTimeFunc = self.calculateRealTime
 
         // Create video composition with CIFilter handler
         var frameCount = 0
@@ -311,6 +346,35 @@ class DailyRecapService: ObservableObject {
                         ])
 
                     outputImage = positioned.composited(over: outputImage)
+                    break
+                }
+            }
+
+            // Composite stopwatch overlay (always visible for entire clip)
+            // Uses speed segments to show accurate real elapsed time
+            for clip in clipRanges {
+                if currentTime >= clip.startTime && currentTime < clip.endTime {
+                    let videoTimeInClip = currentTime - clip.startTime
+
+                    // Calculate real elapsed time using speed segments
+                    let realElapsedTime = calculateRealTimeFunc(
+                        videoTimeInClip,
+                        clip.speedSegments
+                    )
+                    let displaySeconds = min(Int(realElapsedTime), maxRealSeconds - 1)
+
+                    if let stopwatchImage = stopwatchCache[displaySeconds] {
+                        // Position bottom-right (CIImage origin is bottom-left)
+                        let scale = min(request.renderSize.width, request.renderSize.height) / 1280.0
+                        let padding: CGFloat = 20 * scale
+                        let xPos = request.renderSize.width - stopwatchImage.extent.width - padding
+                        let yPos = padding
+
+                        let positioned = stopwatchImage
+                            .transformed(by: CGAffineTransform(translationX: xPos, y: yPos))
+
+                        outputImage = positioned.composited(over: outputImage)
+                    }
                     break
                 }
             }
@@ -613,6 +677,115 @@ class DailyRecapService: ObservableObject {
         }
 
         return CIImage(image: image)
+    }
+
+    /// Creates a stopwatch overlay showing elapsed time (MM:SS format)
+    private func createStopwatchOverlay(seconds: Int, videoSize: CGSize, opacity: CGFloat) -> CIImage? {
+        let scale = min(videoSize.width, videoSize.height) / 1280.0
+
+        // === DESIGN TOKENS ===
+        let badgeHeight: CGFloat = 44 * scale
+        let cornerRadius: CGFloat = badgeHeight / 2
+        let horizontalPadding: CGFloat = 16 * scale
+        let fontSize: CGFloat = 22 * scale
+
+        // Format time as MM:SS
+        let minutes = seconds / 60
+        let secs = seconds % 60
+        let timeText = String(format: "%02d:%02d", minutes, secs)
+
+        // Use monospace font for consistent width
+        let font = UIFont.monospacedDigitSystemFont(ofSize: fontSize, weight: .bold)
+        let textAttributes: [NSAttributedString.Key: Any] = [.font: font]
+        let textSize = (timeText as NSString).size(withAttributes: textAttributes)
+
+        // Total badge width
+        let badgeWidth = horizontalPadding * 2 + textSize.width
+
+        // Create image with shadow padding
+        let shadowPadding: CGFloat = 12 * scale
+        let canvasWidth = badgeWidth + shadowPadding * 2
+        let canvasHeight = badgeHeight + shadowPadding * 2
+
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: canvasWidth, height: canvasHeight))
+        let image = renderer.image { context in
+            let ctx = context.cgContext
+
+            // Badge rect (centered in canvas for shadow room)
+            let badgeRect = CGRect(x: shadowPadding, y: shadowPadding, width: badgeWidth, height: badgeHeight)
+            let pillPath = UIBezierPath(roundedRect: badgeRect, cornerRadius: cornerRadius)
+
+            // === SHADOW ===
+            ctx.saveGState()
+            ctx.setShadow(offset: CGSize(width: 0, height: 3 * scale), blur: 8 * scale, color: UIColor.black.withAlphaComponent(0.35 * opacity).cgColor)
+            UIColor.black.setFill()
+            pillPath.fill()
+            ctx.restoreGState()
+
+            // === MAIN BACKGROUND (Dark glass) ===
+            UIColor(red: 0.1, green: 0.1, blue: 0.12, alpha: 0.85 * opacity).setFill()
+            pillPath.fill()
+
+            // === SUBTLE BORDER ===
+            UIColor.white.withAlphaComponent(0.1 * opacity).setStroke()
+            pillPath.lineWidth = 1
+            pillPath.stroke()
+
+            // === TIME TEXT ===
+            let textX = badgeRect.minX + horizontalPadding
+            let textY = badgeRect.midY - fontSize * 0.55
+
+            let textAttrs: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: UIColor.white.withAlphaComponent(opacity)
+            ]
+
+            let textRect = CGRect(x: textX, y: textY, width: textSize.width, height: fontSize * 1.3)
+            (timeText as NSString).draw(in: textRect, withAttributes: textAttrs)
+        }
+
+        return CIImage(image: image)
+    }
+
+    /// Calculate real elapsed time from video position using speed segments
+    /// Returns the actual recording time at a given video playback position
+    private func calculateRealTime(
+        videoTimeInClip: Double,
+        speedSegments: [SpeedSegment]?
+    ) -> Double {
+        // If no segments, assume 1x speed (video time = real time)
+        guard let segments = speedSegments, !segments.isEmpty else {
+            return videoTimeInClip
+        }
+
+        // Video plays at 30fps, so we need to find what frame we're at
+        // and use the speed segments to calculate real elapsed time
+        let currentFrame = Int(videoTimeInClip * 30)
+
+        // Find the segment this frame falls into and calculate real time
+        for segment in segments {
+            if currentFrame >= segment.startFrameIndex && currentFrame < segment.endFrameIndex {
+                // We're in this segment
+                let framesIntoSegment = currentFrame - segment.startFrameIndex
+                let totalFramesInSegment = segment.endFrameIndex - segment.startFrameIndex
+
+                // Calculate how far through this segment we are (0.0 to 1.0)
+                let progress = totalFramesInSegment > 0 ?
+                    Double(framesIntoSegment) / Double(totalFramesInSegment) : 0.0
+
+                // Interpolate real time within this segment
+                let segmentRealDuration = segment.endRealTime - segment.startRealTime
+                return segment.startRealTime + (progress * segmentRealDuration)
+            }
+        }
+
+        // If we're past all segments, use the last segment's end time
+        if let lastSegment = segments.last, currentFrame >= lastSegment.endFrameIndex {
+            return lastSegment.endRealTime
+        }
+
+        // Fallback: assume 1x speed
+        return videoTimeInClip
     }
 
     /// Creates a text overlay image using Core Graphics

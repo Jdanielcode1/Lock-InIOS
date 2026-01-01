@@ -397,46 +397,35 @@ class ConvexService: ObservableObject {
         }
     }
 
-    func attachVideoToTodo(id: String, localVideoPath: String, localThumbnailPath: String?, videoNotes: String? = nil) async throws {
-        let hasThumb = localThumbnailPath != nil
-        let hasNotes = videoNotes != nil && !videoNotes!.isEmpty
+    func attachVideoToTodo(id: String, localVideoPath: String, localThumbnailPath: String?, videoNotes: String? = nil, speedSegmentsJSON: String? = nil) async throws {
+        // Build args dictionary dynamically to handle optional parameters
+        var args: [String: ConvexEncodable] = [
+            "id": id,
+            "localVideoPath": localVideoPath
+        ]
 
-        switch (hasThumb, hasNotes) {
-        case (true, true):
-            let _: String? = try await convexClient.mutation("todos:attachVideo", with: [
-                "id": id,
-                "localVideoPath": localVideoPath,
-                "localThumbnailPath": localThumbnailPath!,
-                "videoNotes": videoNotes!
-            ])
-        case (true, false):
-            let _: String? = try await convexClient.mutation("todos:attachVideo", with: [
-                "id": id,
-                "localVideoPath": localVideoPath,
-                "localThumbnailPath": localThumbnailPath!
-            ])
-        case (false, true):
-            let _: String? = try await convexClient.mutation("todos:attachVideo", with: [
-                "id": id,
-                "localVideoPath": localVideoPath,
-                "videoNotes": videoNotes!
-            ])
-        case (false, false):
-            let _: String? = try await convexClient.mutation("todos:attachVideo", with: [
-                "id": id,
-                "localVideoPath": localVideoPath
-            ])
+        if let thumb = localThumbnailPath {
+            args["localThumbnailPath"] = thumb
         }
+        if let notes = videoNotes, !notes.isEmpty {
+            args["videoNotes"] = notes
+        }
+        if let segments = speedSegmentsJSON {
+            args["speedSegmentsJSON"] = segments
+        }
+
+        let _: String? = try await convexClient.mutation("todos:attachVideo", with: args)
     }
 
-    func attachVideoToMultipleTodos(ids: [String], localVideoPath: String, localThumbnailPath: String?, videoNotes: String? = nil) async throws {
+    func attachVideoToMultipleTodos(ids: [String], localVideoPath: String, localThumbnailPath: String?, videoNotes: String? = nil, speedSegmentsJSON: String? = nil) async throws {
         // Loop through each todo and attach the same video
         for id in ids {
             try await attachVideoToTodo(
                 id: id,
                 localVideoPath: localVideoPath,
                 localThumbnailPath: localThumbnailPath,
-                videoNotes: videoNotes
+                videoNotes: videoNotes,
+                speedSegmentsJSON: speedSegmentsJSON
             )
         }
     }

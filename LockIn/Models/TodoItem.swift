@@ -15,6 +15,7 @@ struct TodoItem: Identifiable, Codable {
     var localVideoPath: String?
     var localThumbnailPath: String?
     var videoNotes: String?
+    var speedSegmentsJSON: String?
     let createdAt: Double
 
     var id: String { _id }
@@ -39,6 +40,11 @@ struct TodoItem: Identifiable, Codable {
     // Created date for display
     var createdDate: Date {
         Date(timeIntervalSince1970: createdAt / 1000)
+    }
+
+    // Parse speed segments from JSON for accurate stopwatch calculation
+    var speedSegments: [SpeedSegment]? {
+        TimeLapseRecorder.parseSpeedSegments(from: speedSegmentsJSON)
     }
 }
 

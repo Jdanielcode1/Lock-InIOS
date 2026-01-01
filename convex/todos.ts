@@ -148,6 +148,7 @@ export const attachVideo = userMutation({
     localVideoPath: v.string(),
     localThumbnailPath: v.optional(v.string()),
     videoNotes: v.optional(v.string()),
+    speedSegmentsJSON: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = ctx.identity.tokenIdentifier;
@@ -159,6 +160,7 @@ export const attachVideo = userMutation({
       localVideoPath: args.localVideoPath,
       localThumbnailPath: args.localThumbnailPath,
       videoNotes: args.videoNotes,
+      speedSegmentsJSON: args.speedSegmentsJSON,
       isCompleted: true,
     });
   },
@@ -229,6 +231,7 @@ export const attachVideoToMultiple = userMutation({
     ids: v.array(v.id("todos")),
     localVideoPath: v.string(),
     localThumbnailPath: v.optional(v.string()),
+    speedSegmentsJSON: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = ctx.identity.tokenIdentifier;
@@ -242,6 +245,7 @@ export const attachVideoToMultiple = userMutation({
       await ctx.db.patch(id, {
         localVideoPath: args.localVideoPath,
         localThumbnailPath: args.localThumbnailPath,
+        speedSegmentsJSON: args.speedSegmentsJSON,
         isCompleted: true,
       });
     }
@@ -264,6 +268,7 @@ export const fetchArchivedPaginated = action({
       localVideoPath?: string;
       localThumbnailPath?: string;
       videoNotes?: string;
+      speedSegmentsJSON?: string;
       createdAt: number;
     }>;
     continueCursor: string | null;
@@ -284,6 +289,7 @@ export const fetchArchivedPaginated = action({
         localVideoPath: t.localVideoPath,
         localThumbnailPath: t.localThumbnailPath,
         videoNotes: t.videoNotes,
+        speedSegmentsJSON: t.speedSegmentsJSON,
         createdAt: t.createdAt,
       })),
       continueCursor: result.continueCursor,
@@ -307,6 +313,7 @@ export const fetchCompletedPaginated = action({
       localVideoPath?: string;
       localThumbnailPath?: string;
       videoNotes?: string;
+      speedSegmentsJSON?: string;
       createdAt: number;
     }>;
     continueCursor: string | null;
@@ -326,6 +333,7 @@ export const fetchCompletedPaginated = action({
         localVideoPath: t.localVideoPath,
         localThumbnailPath: t.localThumbnailPath,
         videoNotes: t.videoNotes,
+        speedSegmentsJSON: t.speedSegmentsJSON,
         createdAt: t.createdAt,
       })),
       continueCursor: result.continueCursor,

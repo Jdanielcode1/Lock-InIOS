@@ -11,12 +11,20 @@ import UIKit
 // MARK: - Segment Tracking Structs
 
 /// Tracks a period where the capture speed was constant
-struct SpeedSegment {
+struct SpeedSegment: Codable {
     let startFrameIndex: Int      // First frame index in this segment
     var endFrameIndex: Int        // Last frame index (exclusive)
     let startRealTime: TimeInterval  // Real time when segment started (excluding pauses)
     var endRealTime: TimeInterval    // Real time when segment ended
     let frameInterval: TimeInterval  // Capture interval during this segment
+
+    /// Calculate the speed multiplier for this segment (playback speed vs real time)
+    var speedMultiplier: Double {
+        // Normal mode (frameInterval <= 0) = 1x speed
+        // Timelapse: playback at 30fps, captured at 1/frameInterval fps
+        // speedMultiplier = 30 * frameInterval (e.g., 0.5s interval = 15x speed)
+        return frameInterval <= 0 ? 1.0 : 30.0 * frameInterval
+    }
 }
 
 /// Tracks a period where audio was being recorded
@@ -185,6 +193,29 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             return maxNormalModeDuration
         }
         return maxRecordingDuration
+    }
+
+    /// Get the speed segments for this recording (for accurate stopwatch in recaps)
+    func getSpeedSegments() -> [SpeedSegment] {
+        return speedSegments
+    }
+
+    /// Export speed segments as JSON string for storage
+    func getSpeedSegmentsJSON() -> String? {
+        guard !speedSegments.isEmpty else { return nil }
+        let encoder = JSONEncoder()
+        if let data = try? encoder.encode(speedSegments),
+           let json = String(data: data, encoding: .utf8) {
+            return json
+        }
+        return nil
+    }
+
+    /// Parse speed segments from JSON string
+    static func parseSpeedSegments(from json: String?) -> [SpeedSegment]? {
+        guard let json = json, let data = json.data(using: .utf8) else { return nil }
+        let decoder = JSONDecoder()
+        return try? decoder.decode([SpeedSegment].self, from: data)
     }
 
     // MARK: - Background Task Management

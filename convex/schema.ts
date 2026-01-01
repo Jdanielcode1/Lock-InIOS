@@ -75,6 +75,7 @@ export default defineSchema({
     localVideoPath: v.optional(v.string()),
     localThumbnailPath: v.optional(v.string()),
     videoNotes: v.optional(v.string()), // Notes/description for the attached video
+    speedSegmentsJSON: v.optional(v.string()), // JSON array of speed segments for accurate stopwatch in recaps
     createdAt: v.float64(),
   })
     .index("by_user", ["userId"])
