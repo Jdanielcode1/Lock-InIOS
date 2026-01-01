@@ -44,7 +44,8 @@ struct TodoItem: Identifiable, Codable {
 
     // Parse speed segments from JSON for accurate stopwatch calculation
     var speedSegments: [SpeedSegment]? {
-        TimeLapseRecorder.parseSpeedSegments(from: speedSegmentsJSON)
+        guard let json = speedSegmentsJSON, let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode([SpeedSegment].self, from: data)
     }
 }
 
