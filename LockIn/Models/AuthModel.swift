@@ -44,6 +44,10 @@ class AuthModel: ObservableObject {
     func logout() {
         Task {
             await convexClient.logout()
+            // Also clear Auth0's cached credentials to ensure clean state
+            let credentialsManager = CredentialsManager(authentication: Auth0.authentication())
+            _ = credentialsManager.clear()
+            print("🚪 Logged out and cleared cached credentials")
         }
     }
 
@@ -61,6 +65,25 @@ class AuthModel: ObservableObject {
                 isRefreshing = false
                 // Trigger fresh login
                 await convexClient.login()
+            }
+        }
+    }
+
+    /// Refresh session when app comes back from background (if authenticated)
+    /// This helps handle expired tokens before they cause errors
+    func refreshSessionIfNeeded() {
+        // Only refresh if we think we're authenticated
+        if case .authenticated(_) = authState {
+            print("🔄 App became active - refreshing auth session")
+            Task {
+                do {
+                    try await convexClient.loginFromCache()
+                    print("✅ Auth session refreshed successfully")
+                } catch {
+                    print("⚠️ Auth refresh failed: \(error.localizedDescription)")
+                    // Don't force login here - let the user see the error
+                    // and manually re-authenticate if needed
+                }
             }
         }
     }

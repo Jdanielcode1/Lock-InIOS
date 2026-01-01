@@ -25,6 +25,7 @@ struct LockInApp: App {
 struct RootView: View {
     @ObservedObject var authModel: AuthModel
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -39,6 +40,12 @@ struct RootView: View {
             }
         }
         .preferredColorScheme(appearanceMode.colorScheme)
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase == .active && oldPhase == .background {
+                // App came back from background - refresh auth to handle expired tokens
+                authModel.refreshSessionIfNeeded()
+            }
+        }
     }
 }
 
