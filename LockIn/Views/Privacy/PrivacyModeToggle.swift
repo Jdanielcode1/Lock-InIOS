@@ -55,7 +55,7 @@ struct PrivacyModePickerSheet: View {
             VStack(spacing: 24) {
                 // Privacy Level Selection
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("PRIVACY MODE")
+                    Text("FOCUS MODE")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 20)
@@ -87,11 +87,11 @@ struct PrivacyModePickerSheet: View {
 
                 // Info text
                 VStack(spacing: 8) {
-                    Text("Double-tap the screen to show controls")
+                    Text("Double-tap to show controls")
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
 
-                    Text("You'll feel a gentle vibration every 45s to confirm recording")
+                    Text("A subtle vibration every 45s confirms recording is active")
                         .font(.system(size: 12))
                         .foregroundColor(Color(UIColor.tertiaryLabel))
                 }
@@ -100,7 +100,7 @@ struct PrivacyModePickerSheet: View {
                 .padding(.bottom, 16)
             }
             .padding(.top, 8)
-            .navigationTitle("Privacy Mode")
+            .navigationTitle("Focus Mode")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -172,7 +172,7 @@ struct PrivacyLevelRow: View {
 
             PrivacyModeToggle(privacyManager: {
                 let manager = PrivacyModeManager()
-                manager.privacyLevel = .stealth
+                manager.privacyLevel = .focus
                 manager.isActive = true
                 return manager
             }())

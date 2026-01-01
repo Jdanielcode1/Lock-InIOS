@@ -12,21 +12,21 @@ import UIKit
 
 enum PrivacyLevel: String, CaseIterable, Identifiable {
     case off = "Off"
-    case stealth = "Stealth"
+    case focus = "Focus"
 
     var id: String { rawValue }
 
     var icon: String {
         switch self {
-        case .off: return "eye"
-        case .stealth: return "eye.slash"
+        case .off: return "viewfinder"
+        case .focus: return "scope"
         }
     }
 
     var description: String {
         switch self {
         case .off: return "All controls visible"
-        case .stealth: return "Minimal stopwatch display"
+        case .focus: return "Minimal timer display"
         }
     }
 }
@@ -44,7 +44,7 @@ class PrivacyModeManager: ObservableObject {
     @Published var privacyLevel: PrivacyLevel = .off {
         didSet {
             // Auto-activate/deactivate when level changes (for mid-recording changes)
-            if privacyLevel == .stealth && !isActive {
+            if privacyLevel == .focus && !isActive {
                 activate()
             } else if privacyLevel == .off && isActive {
                 deactivate()
@@ -60,8 +60,8 @@ class PrivacyModeManager: ObservableObject {
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .soft)
 
     // Computed properties for easy state checking
-    var isStealth: Bool { privacyLevel == .stealth && isActive }
-    var shouldHideControls: Bool { isStealth }
+    var isFocusMode: Bool { privacyLevel == .focus && isActive }
+    var shouldHideControls: Bool { isFocusMode }
 
     init() {
         hapticGenerator.prepare()
