@@ -193,20 +193,47 @@ struct GoalsListView: View {
     }
 
     var goalsEmptyStateView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             Spacer()
+                .frame(height: 40)
 
-            Image(systemName: "target")
-                .font(.system(size: 56, weight: .light))
-                .foregroundStyle(.secondary)
+            // Icon with video badge
+            ZStack(alignment: .bottomTrailing) {
+                Image(systemName: "target")
+                    .font(.system(size: 44, weight: .light))
+                    .foregroundStyle(Color.accentColor)
 
-            Text("No Goals Yet")
-                .font(.title2.bold())
+                Image(systemName: "video.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.white)
+                    .padding(6)
+                    .background(Color.green)
+                    .clipShape(Circle())
+                    .offset(x: 6, y: 6)
+            }
 
-            Text("Create your first goal to start\ntracking your study sessions!")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            VStack(spacing: 8) {
+                Text("No Goals Yet")
+                    .font(.title2.bold())
+
+                Text("Set a goal and track progress by\nrecording video study sessions")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            // Value prop callout
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(.green)
+                Text("Video proof keeps you accountable")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Color.green.opacity(0.1))
+            .cornerRadius(20)
 
             Button {
                 showingCreateGoal = true
@@ -218,12 +245,14 @@ struct GoalsListView: View {
                     .background(Color.accentColor)
                     .foregroundStyle(.white)
                     .cornerRadius(12)
+                    .shadow(color: Color.accentColor.opacity(0.3), radius: 8, x: 0, y: 4)
             }
             .padding(.top, 8)
 
             Spacer()
+            Spacer()
         }
-        .padding()
+        .padding(.horizontal, 24)
     }
 
     // MARK: - Todos Content
@@ -583,20 +612,44 @@ struct GoalsListView: View {
     }
 
     var todosEmptyStateView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             Spacer()
+                .frame(height: 40)
 
-            Image(systemName: "checklist")
-                .font(.system(size: 56, weight: .light))
-                .foregroundStyle(.secondary)
+            // Icon with video badge
+            ZStack(alignment: .bottomTrailing) {
+                Image(systemName: "checklist")
+                    .font(.system(size: 44, weight: .light))
+                    .foregroundStyle(Color.accentColor)
 
-            Text("No To-Dos Yet")
-                .font(.title2.bold())
+                Image(systemName: "video.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.white)
+                    .padding(6)
+                    .background(Color.green)
+                    .clipShape(Circle())
+                    .offset(x: 6, y: 6)
+            }
 
-            Text("Add tasks and complete them\nby recording a video!")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            VStack(spacing: 8) {
+                Text("No To-Dos Yet")
+                    .font(.title2.bold())
+
+                Text("Add tasks and mark them complete\nby recording a video of your work")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            // How it works section
+            VStack(spacing: 12) {
+                HStack(spacing: 12) {
+                    howItWorksStep(number: "1", text: "Add a task")
+                    howItWorksStep(number: "2", text: "Record yourself")
+                    howItWorksStep(number: "3", text: "Stay on track")
+                }
+            }
+            .padding(.top, 4)
 
             Button {
                 showingCreateTodo = true
@@ -608,12 +661,31 @@ struct GoalsListView: View {
                     .background(Color.accentColor)
                     .foregroundStyle(.white)
                     .cornerRadius(12)
+                    .shadow(color: Color.accentColor.opacity(0.3), radius: 8, x: 0, y: 4)
             }
             .padding(.top, 8)
 
             Spacer()
+            Spacer()
         }
-        .padding()
+        .padding(.horizontal, 24)
+    }
+
+    private func howItWorksStep(number: String, text: String) -> some View {
+        VStack(spacing: 6) {
+            Text(number)
+                .font(.caption.bold())
+                .foregroundStyle(.white)
+                .frame(width: 24, height: 24)
+                .background(Color.accentColor)
+                .clipShape(Circle())
+
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 

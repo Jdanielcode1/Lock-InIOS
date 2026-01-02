@@ -11,7 +11,7 @@ struct ContentView: View {
     @State private var selectedTab: Tab = .goals
     @State private var showingCreateGoal = false
     @State private var showingCreateTodo = false
-    @State private var showingActionSheet = false
+    @State private var showingFABMenu = false
     @StateObject private var todoViewModel = TodoViewModel()
     @StateObject private var tabBarVisibility = TabBarVisibility()
 
@@ -35,23 +35,21 @@ struct ContentView: View {
             // Floating tab bar
             if tabBarVisibility.isVisible {
                 FloatingTabBar(selectedTab: $selectedTab) {
-                    showingActionSheet = true
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showingFABMenu = true
+                    }
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-        }
-        .animation(.easeInOut(duration: 0.2), value: tabBarVisibility.isVisible)
-        .confirmationDialog("Create New", isPresented: $showingActionSheet) {
-            Button("New Goal") {
-                showingCreateGoal = true
-            }
 
-            Button("New To-Do") {
+            // FAB Popup Menu
+            FABPopupMenu(isPresented: $showingFABMenu) {
+                showingCreateGoal = true
+            } onNewTodo: {
                 showingCreateTodo = true
             }
-
-            Button("Cancel", role: .cancel) {}
         }
+        .animation(.easeInOut(duration: 0.2), value: tabBarVisibility.isVisible)
         .sheet(isPresented: $showingCreateGoal) {
             CreateGoalView()
         }

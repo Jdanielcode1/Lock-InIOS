@@ -68,6 +68,21 @@ class GoalsViewModel: ObservableObject {
         }
     }
 
+    /// Creates a goal and returns the goal ID for adding tasks
+    func createGoalReturningId(title: String, description: String, targetHours: Double) async -> String? {
+        do {
+            return try await convexService.createGoal(
+                title: title,
+                description: description,
+                targetHours: targetHours
+            )
+        } catch {
+            errorMessage = "Failed to create goal: \(error.localizedDescription)"
+            ErrorAlertManager.shared.show(.saveFailed("Couldn't create goal. Please try again."))
+            return nil
+        }
+    }
+
     func deleteGoal(_ goal: Goal) async {
         do {
             try await convexService.deleteGoal(id: goal.id)

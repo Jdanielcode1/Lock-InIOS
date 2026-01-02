@@ -167,4 +167,27 @@ class TodoViewModel: ObservableObject {
             ErrorAlertManager.shared.show(.saveFailed("Couldn't archive todo. Please try again."))
         }
     }
+
+    func createGoalTodo(
+        goalId: String,
+        title: String,
+        description: String?,
+        todoType: GoalTodoType = .simple,
+        estimatedHours: Double? = nil,
+        frequency: TodoFrequency = .none
+    ) async {
+        do {
+            _ = try await convexService.createGoalTodo(
+                goalId: goalId,
+                title: title,
+                description: description,
+                todoType: todoType,
+                estimatedHours: estimatedHours,
+                frequency: frequency
+            )
+        } catch {
+            errorMessage = "Failed to create goal todo: \(error.localizedDescription)"
+            ErrorAlertManager.shared.show(.saveFailed("Couldn't create todo. Please try again."))
+        }
+    }
 }
