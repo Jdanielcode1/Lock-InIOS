@@ -329,14 +329,15 @@ struct TimelineCard: View {
 
     private func loadThumbnail() {
         Task {
-            if let thumbnailURL = item.session.thumbnailURL,
-               FileManager.default.fileExists(atPath: thumbnailURL.path),
-               let data = try? Data(contentsOf: thumbnailURL),
-               let image = UIImage(data: data) {
-                await MainActor.run { thumbnail = image }
-                return
+            // Try cached thumbnail first
+            if let thumbnailURL = item.session.thumbnailURL {
+                if let image = await ThumbnailCache.shared.thumbnail(for: thumbnailURL) {
+                    await MainActor.run { thumbnail = image }
+                    return
+                }
             }
 
+            // Generate from video if no thumbnail exists
             if let videoURL = item.session.videoURL,
                FileManager.default.fileExists(atPath: videoURL.path) {
                 if let generated = try? await VideoService.shared.generateThumbnail(from: videoURL) {
@@ -420,13 +421,12 @@ struct TodoTimelineCard: View {
     }
 
     private func loadThumbnail() {
-        guard let thumbnailURL = todo.thumbnailURL,
-              FileManager.default.fileExists(atPath: thumbnailURL.path),
-              let data = try? Data(contentsOf: thumbnailURL),
-              let image = UIImage(data: data) else {
-            return
+        guard let thumbnailURL = todo.thumbnailURL else { return }
+        Task {
+            if let image = await ThumbnailCache.shared.thumbnail(for: thumbnailURL) {
+                await MainActor.run { thumbnail = image }
+            }
         }
-        thumbnail = image
     }
 }
 

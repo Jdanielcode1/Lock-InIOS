@@ -92,13 +92,12 @@ struct TodoCard: View {
     }
 
     private func loadThumbnail() {
-        guard let thumbnailURL = todo.thumbnailURL,
-              FileManager.default.fileExists(atPath: thumbnailURL.path),
-              let data = try? Data(contentsOf: thumbnailURL),
-              let image = UIImage(data: data) else {
-            return
+        guard let thumbnailURL = todo.thumbnailURL else { return }
+        Task {
+            if let image = await ThumbnailCache.shared.thumbnail(for: thumbnailURL) {
+                await MainActor.run { thumbnail = image }
+            }
         }
-        thumbnail = image
     }
 }
 

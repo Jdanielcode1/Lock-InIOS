@@ -255,13 +255,17 @@ struct TodoDetailView: View {
     }
 
     private func loadThumbnail() {
-        guard let thumbnailURL = todo.thumbnailURL,
-              let data = try? Data(contentsOf: thumbnailURL),
-              let image = UIImage(data: data) else {
+        guard let thumbnailURL = todo.thumbnailURL else {
             thumbnail = nil
             return
         }
-        thumbnail = image
+        Task {
+            if let image = await ThumbnailCache.shared.thumbnail(for: thumbnailURL) {
+                await MainActor.run { thumbnail = image }
+            } else {
+                await MainActor.run { thumbnail = nil }
+            }
+        }
     }
 
     private func saveChanges() async {

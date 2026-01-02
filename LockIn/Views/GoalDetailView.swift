@@ -581,14 +581,11 @@ struct StudySessionCard: View {
 
     private func loadThumbnail() async {
         // Try to load cached thumbnail first
-        if let thumbnailURL = session.thumbnailURL,
-           FileManager.default.fileExists(atPath: thumbnailURL.path),
-           let data = try? Data(contentsOf: thumbnailURL),
-           let image = UIImage(data: data) {
-            await MainActor.run {
-                self.thumbnail = image
+        if let thumbnailURL = session.thumbnailURL {
+            if let image = await ThumbnailCache.shared.thumbnail(for: thumbnailURL) {
+                await MainActor.run { self.thumbnail = image }
+                return
             }
-            return
         }
 
         // Fallback: generate from video if no cached thumbnail
@@ -599,9 +596,7 @@ struct StudySessionCard: View {
 
         do {
             let generatedThumbnail = try await VideoService.shared.generateThumbnail(from: videoURL)
-            await MainActor.run {
-                self.thumbnail = generatedThumbnail
-            }
+            await MainActor.run { self.thumbnail = generatedThumbnail }
         } catch {
             print("Failed to generate thumbnail: \(error)")
         }
