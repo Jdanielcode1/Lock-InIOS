@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import Auth0
 import ConvexMobile
 
 struct SettingsView: View {
@@ -77,21 +76,6 @@ struct SettingsView: View {
                         Spacer()
                     }
                     .padding(.vertical, 4)
-
-                    // Refresh session button - shows when there might be auth issues
-                    Button {
-                        authModel.refreshSession()
-                    } label: {
-                        HStack {
-                            Label("Refresh Session", systemImage: "arrow.clockwise")
-                            Spacer()
-                            if authModel.isRefreshing {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                            }
-                        }
-                    }
-                    .disabled(authModel.isRefreshing)
 
                     Button(role: .destructive) {
                         showingLogoutAlert = true

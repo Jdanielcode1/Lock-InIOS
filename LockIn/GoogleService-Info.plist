@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>1083398783692-eutnfuj5e4erl38rd784ll06tk93tb9r.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.1083398783692-eutnfuj5e4erl38rd784ll06tk93tb9r</string>
+	<key>API_KEY</key>
+	<string>AIzaSyBN5nLzCVMSQzVR29_56RcYzhZLdCsPHPU</string>
+	<key>GCM_SENDER_ID</key>
+	<string>1083398783692</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>danielc1234.LockIn</string>
+	<key>PROJECT_ID</key>
+	<string>lapsein</string>
+	<key>STORAGE_BUCKET</key>
+	<string>lapsein.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:1083398783692:ios:9f87545f4a277762f73869</string>
+</dict>
+</plist>

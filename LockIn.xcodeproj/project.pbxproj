@@ -8,7 +8,12 @@
 
 /* Begin PBXBuildFile section */
 		DC08D6182EA6D25B0030C1D4 /* ConvexMobile in Frameworks */ = {isa = PBXBuildFile; productRef = DC08D6172EA6D25B0030C1D4 /* ConvexMobile */; };
-		DCBD54C52F00672E0075CAC4 /* ConvexAuth0 in Frameworks */ = {isa = PBXBuildFile; productRef = DCBD54C42F00672E0075CAC4 /* ConvexAuth0 */; };
+		DCF87B732F0876E800DE7C98 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = DCF87B722F0876E800DE7C98 /* GoogleSignIn */; };
+		DCF87B752F0876E800DE7C98 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = DCF87B742F0876E800DE7C98 /* GoogleSignInSwift */; };
+		DCF87B7A2F087ECC00DE7C98 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = DCF87B792F087ECC00DE7C98 /* FirebaseAnalytics */; };
+		DCF87B7C2F087ECC00DE7C98 /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = DCF87B7B2F087ECC00DE7C98 /* FirebaseAnalyticsCore */; };
+		DCF87B7E2F087ECC00DE7C98 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = DCF87B7D2F087ECC00DE7C98 /* FirebaseAuth */; };
+		DCF87B802F087ECC00DE7C98 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = DCF87B7F2F087ECC00DE7C98 /* FirebaseCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,8 +46,13 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DCBD54C52F00672E0075CAC4 /* ConvexAuth0 in Frameworks */,
+				DCF87B7C2F087ECC00DE7C98 /* FirebaseAnalyticsCore in Frameworks */,
 				DC08D6182EA6D25B0030C1D4 /* ConvexMobile in Frameworks */,
+				DCF87B732F0876E800DE7C98 /* GoogleSignIn in Frameworks */,
+				DCF87B7A2F087ECC00DE7C98 /* FirebaseAnalytics in Frameworks */,
+				DCF87B7E2F087ECC00DE7C98 /* FirebaseAuth in Frameworks */,
+				DCF87B802F087ECC00DE7C98 /* FirebaseCore in Frameworks */,
+				DCF87B752F0876E800DE7C98 /* GoogleSignInSwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -86,7 +96,12 @@
 			name = LockIn;
 			packageProductDependencies = (
 				DC08D6172EA6D25B0030C1D4 /* ConvexMobile */,
-				DCBD54C42F00672E0075CAC4 /* ConvexAuth0 */,
+				DCF87B722F0876E800DE7C98 /* GoogleSignIn */,
+				DCF87B742F0876E800DE7C98 /* GoogleSignInSwift */,
+				DCF87B792F087ECC00DE7C98 /* FirebaseAnalytics */,
+				DCF87B7B2F087ECC00DE7C98 /* FirebaseAnalyticsCore */,
+				DCF87B7D2F087ECC00DE7C98 /* FirebaseAuth */,
+				DCF87B7F2F087ECC00DE7C98 /* FirebaseCore */,
 			);
 			productName = LockIn;
 			productReference = DC3054942EA6CA6700C66B51 /* LockIn.app */;
@@ -118,7 +133,8 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				DC08D6162EA6D25B0030C1D4 /* XCRemoteSwiftPackageReference "convex-swift" */,
-				DCBD54C32F00672E0075CAC4 /* XCRemoteSwiftPackageReference "convex-swift-auth0" */,
+				DCF87B712F0876E800DE7C98 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				DCF87B782F087ECC00DE7C98 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DC3054952EA6CA6700C66B51 /* Products */;
@@ -282,7 +298,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LockIn/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "";
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Record time-lapse videos of your study sessions to track your progress";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Record audio with your study session videos";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save and import study session videos";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -314,7 +333,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LockIn/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "";
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Record time-lapse videos of your study sessions to track your progress";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Record audio with your study session videos";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save and import study session videos";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -366,12 +388,20 @@
 				minimumVersion = 0.5.6;
 			};
 		};
-		DCBD54C32F00672E0075CAC4 /* XCRemoteSwiftPackageReference "convex-swift-auth0" */ = {
+		DCF87B712F0876E800DE7C98 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/get-convex/convex-swift-auth0";
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 0.3.0;
+				minimumVersion = 9.0.0;
+			};
+		};
+		DCF87B782F087ECC00DE7C98 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.7.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -382,10 +412,35 @@
 			package = DC08D6162EA6D25B0030C1D4 /* XCRemoteSwiftPackageReference "convex-swift" */;
 			productName = ConvexMobile;
 		};
-		DCBD54C42F00672E0075CAC4 /* ConvexAuth0 */ = {
+		DCF87B722F0876E800DE7C98 /* GoogleSignIn */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = DCBD54C32F00672E0075CAC4 /* XCRemoteSwiftPackageReference "convex-swift-auth0" */;
-			productName = ConvexAuth0;
+			package = DCF87B712F0876E800DE7C98 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		DCF87B742F0876E800DE7C98 /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DCF87B712F0876E800DE7C98 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignInSwift;
+		};
+		DCF87B792F087ECC00DE7C98 /* FirebaseAnalytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DCF87B782F087ECC00DE7C98 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalytics;
+		};
+		DCF87B7B2F087ECC00DE7C98 /* FirebaseAnalyticsCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DCF87B782F087ECC00DE7C98 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalyticsCore;
+		};
+		DCF87B7D2F087ECC00DE7C98 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DCF87B782F087ECC00DE7C98 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		DCF87B7F2F087ECC00DE7C98 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DCF87B782F087ECC00DE7C98 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

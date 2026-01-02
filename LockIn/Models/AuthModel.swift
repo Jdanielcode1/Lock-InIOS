@@ -2,89 +2,188 @@
 //  AuthModel.swift
 //  LockIn
 //
-//  Created by Claude on 27/12/25.
+//  Firebase Authentication model for managing user auth state
 //
 
-import Auth0
+import FirebaseAuth
 import Combine
 import ConvexMobile
 import SwiftUI
+import AuthenticationServices
+
+/// Sign-in method options
+enum SignInMethod {
+    case apple
+    case google
+    case anonymous
+}
 
 @MainActor
 class AuthModel: ObservableObject {
-    @Published var authState: AuthState<Credentials> = .loading
+    @Published var authState: AuthState<FirebaseAuthResult> = .loading
     @Published var isRefreshing: Bool = false
+    @Published var errorMessage: String?
+
+    private var authStateListener: AuthStateDidChangeListenerHandle?
 
     init() {
+        // Subscribe to Convex auth state
         convexClient.authState.replaceError(with: .unauthenticated)
             .receive(on: DispatchQueue.main)
             .assign(to: &$authState)
+
+        // Try to restore session from Firebase
         Task {
             await loginFromCacheWithRetry()
         }
     }
 
-    /// Attempts to login from cache, with automatic retry on failure
+    deinit {
+        if let listener = authStateListener {
+            Auth.auth().removeStateDidChangeListener(listener)
+        }
+    }
+
+    /// Attempts to login from cache (restore existing Firebase session)
     private func loginFromCacheWithRetry() async {
         do {
             try await convexClient.loginFromCache()
         } catch {
             print("Login from cache failed: \(error.localizedDescription)")
-            // Token refresh failed - user needs to re-authenticate
-            // The authState will be set to .unauthenticated automatically
+            // No cached session - user needs to sign in
         }
     }
 
-    func login() {
+    // MARK: - Sign In Methods
+
+    /// Sign in with Apple
+    func signInWithApple() {
+        errorMessage = nil
         Task {
-            await convexClient.login()
+            do {
+                let result = try await firebaseAuthProvider.signInWithApple()
+                // Convex client will be updated automatically via authState subscription
+                try await updateConvexAuth(with: result)
+            } catch {
+                handleAuthError(error)
+            }
         }
     }
 
+    /// Sign in with Google
+    func signInWithGoogle() {
+        errorMessage = nil
+        Task {
+            do {
+                let result = try await firebaseAuthProvider.signInWithGoogle()
+                try await updateConvexAuth(with: result)
+            } catch {
+                handleAuthError(error)
+            }
+        }
+    }
+
+    /// Sign in anonymously (guest mode)
+    func signInAnonymously() {
+        errorMessage = nil
+        Task {
+            do {
+                let result = try await firebaseAuthProvider.signInAnonymously()
+                try await updateConvexAuth(with: result)
+            } catch {
+                handleAuthError(error)
+            }
+        }
+    }
+
+    /// Generic login - defaults to showing options (handled by LoginView)
+    func login() {
+        // This is called by convexClient.login() - we use specific methods instead
+        // For backwards compatibility, default to anonymous
+        signInAnonymously()
+    }
+
+    // MARK: - Session Management
+
+    /// Update Convex with the Firebase auth result
+    private func updateConvexAuth(with result: FirebaseAuthResult) async throws {
+        // The convexClient will automatically pick up the auth state change
+        // We just need to trigger a cache login to sync the token
+        try await convexClient.loginFromCache()
+    }
+
+    /// Sign out of Firebase and Convex
     func logout() {
         Task {
-            await convexClient.logout()
-            // Also clear Auth0's cached credentials to ensure clean state
-            let credentialsManager = CredentialsManager(authentication: Auth0.authentication())
-            _ = credentialsManager.clear()
-            print("🚪 Logged out and cleared cached credentials")
+            do {
+                await convexClient.logout()
+                print("Logged out successfully")
+            } catch {
+                print("Logout error: \(error.localizedDescription)")
+            }
         }
     }
 
-    /// Force refresh the session by re-logging in
+    /// Force refresh the session by getting a new token
     func refreshSession() {
         isRefreshing = true
         Task {
-            // First try to refresh from cache (this triggers token refresh)
             do {
                 try await convexClient.loginFromCache()
                 isRefreshing = false
             } catch {
-                // If cache refresh fails, we need a fresh login
-                print("Session refresh failed, needs re-login: \(error)")
+                print("Session refresh failed: \(error)")
                 isRefreshing = false
-                // Trigger fresh login
-                await convexClient.login()
             }
         }
     }
 
-    /// Refresh session when app comes back from background (if authenticated)
-    /// This helps handle expired tokens before they cause errors
+    /// Refresh session when app comes back from background
     func refreshSessionIfNeeded() {
-        // Only refresh if we think we're authenticated
         if case .authenticated(_) = authState {
-            print("🔄 App became active - refreshing auth session")
+            print("App became active - refreshing auth session")
             Task {
                 do {
                     try await convexClient.loginFromCache()
-                    print("✅ Auth session refreshed successfully")
+                    print("Auth session refreshed successfully")
                 } catch {
-                    print("⚠️ Auth refresh failed: \(error.localizedDescription)")
-                    // Don't force login here - let the user see the error
-                    // and manually re-authenticate if needed
+                    print("Auth refresh failed: \(error.localizedDescription)")
                 }
             }
         }
+    }
+
+    // MARK: - Error Handling
+
+    private func handleAuthError(_ error: Error) {
+        if let authError = error as? FirebaseAuthError {
+            errorMessage = authError.errorDescription
+        } else if (error as NSError).domain == ASAuthorizationError.errorDomain {
+            let authError = error as NSError
+            if authError.code == ASAuthorizationError.canceled.rawValue {
+                // User cancelled - not an error
+                errorMessage = nil
+                return
+            }
+            errorMessage = "Apple Sign-In failed: \(error.localizedDescription)"
+        } else {
+            errorMessage = error.localizedDescription
+        }
+        print("Auth error: \(error)")
+    }
+
+    /// Check if current user is anonymous (guest)
+    var isAnonymousUser: Bool {
+        return Auth.auth().currentUser?.isAnonymous ?? false
+    }
+
+    /// Get current user's display name
+    var displayName: String? {
+        return Auth.auth().currentUser?.displayName
+    }
+
+    /// Get current user's email
+    var email: String? {
+        return Auth.auth().currentUser?.email
     }
 }

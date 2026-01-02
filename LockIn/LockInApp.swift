@@ -7,6 +7,8 @@
 
 import SwiftUI
 import ConvexMobile
+import FirebaseCore
+import GoogleSignIn
 
 @main
 struct LockInApp: App {
@@ -70,13 +72,31 @@ struct LoadingView: View {
     }
 }
 
-// MARK: - AppDelegate for Orientation Control
+// MARK: - AppDelegate for Firebase & Orientation Control
 
 class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        // Initialize Firebase
+        FirebaseApp.configure()
+        return true
+    }
+
     func application(
         _ application: UIApplication,
         supportedInterfaceOrientationsFor window: UIWindow?
     ) -> UIInterfaceOrientationMask {
         return OrientationManager.shared.allowedOrientations
+    }
+
+    // Handle Google Sign-In URL callback
+    func application(
+        _ app: UIApplication,
+        open url: URL,
+        options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+    ) -> Bool {
+        return GIDSignIn.sharedInstance.handle(url)
     }
 }

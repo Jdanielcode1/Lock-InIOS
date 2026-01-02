@@ -7,13 +7,15 @@
 
 import Foundation
 import ConvexMobile
-import ConvexAuth0
 import Combine
+
+// Firebase auth provider instance (shared for token management)
+let firebaseAuthProvider = FirebaseAuthProvider()
 
 // Global authenticated Convex client
 let convexClient = ConvexClientWithAuth(
     deploymentUrl: "https://tidy-wildcat-344.convex.cloud",
-    authProvider: Auth0Provider(enableCachedLogins: true)
+    authProvider: firebaseAuthProvider
 )
 
 @MainActor

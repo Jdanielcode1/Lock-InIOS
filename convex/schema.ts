@@ -4,7 +4,7 @@ import { v } from "convex/values";
 export default defineSchema({
   // Users table for storing user profiles
   users: defineTable({
-    tokenIdentifier: v.string(), // Auth0 user ID
+    tokenIdentifier: v.string(), // User ID
     email: v.optional(v.string()),
     name: v.optional(v.string()),
     pictureUrl: v.optional(v.string()),
@@ -12,7 +12,7 @@ export default defineSchema({
   }).index("by_token", ["tokenIdentifier"]),
 
   goals: defineTable({
-    userId: v.string(), // Auth0 user ID
+    userId: v.string(), // User ID
     title: v.string(),
     description: v.string(),
     targetHours: v.float64(),
@@ -27,7 +27,7 @@ export default defineSchema({
 
   // Goal Todos - tasks within goals (replacing subtasks)
   goalTodos: defineTable({
-    userId: v.string(), // Auth0 user ID
+    userId: v.string(), // User ID
     goalId: v.id("goals"),
     title: v.string(),
     description: v.optional(v.string()),
@@ -53,7 +53,7 @@ export default defineSchema({
     .index("by_user", ["userId"]),
 
   studySessions: defineTable({
-    userId: v.string(), // Auth0 user ID
+    userId: v.string(), // User ID
     goalId: v.id("goals"),
     goalTodoId: v.optional(v.id("goalTodos")),
     localVideoPath: v.string(),
@@ -67,7 +67,7 @@ export default defineSchema({
     .index("by_user", ["userId"]),
 
   todos: defineTable({
-    userId: v.string(), // Auth0 user ID
+    userId: v.string(), // User ID
     title: v.string(),
     description: v.optional(v.string()),
     isCompleted: v.boolean(),
