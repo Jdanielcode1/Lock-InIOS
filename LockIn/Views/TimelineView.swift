@@ -163,7 +163,7 @@ struct TimelineView: View {
                                     DateHeader(date: date)
                                     Spacer()
                                     // Show Daily Recap button for today's section if there are videos
-                                    if Calendar.current.isDateInToday(date) {
+                                    if DateFormatterCache.calendar.isDateInToday(date) {
                                         let todosWithVideos = viewModel.todaysTodosWithVideos
                                         if !todosWithVideos.isEmpty {
                                             DailyRecapButton(todosWithVideos: todosWithVideos)
@@ -247,16 +247,7 @@ struct DateHeader: View {
     }
 
     func formatDate(_ date: Date) -> String {
-        let calendar = Calendar.current
-        if calendar.isDateInToday(date) {
-            return "Today"
-        } else if calendar.isDateInYesterday(date) {
-            return "Yesterday"
-        } else {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "EEEE, MMM d"
-            return formatter.string(from: date)
-        }
+        DateFormatterCache.formatDateHeader(date)
     }
 }
 
@@ -322,9 +313,7 @@ struct TimelineCard: View {
     }
 
     func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        return formatter.string(from: date)
+        DateFormatterCache.formatTime(date)
     }
 
     private func loadThumbnail() {
@@ -415,9 +404,7 @@ struct TodoTimelineCard: View {
     }
 
     func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        return formatter.string(from: date)
+        DateFormatterCache.formatTime(date)
     }
 
     private func loadThumbnail() {
@@ -457,6 +444,7 @@ class TimelineViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private let convexService = ConvexService.shared
     private var goals: [Goal] = []
+    private var goalTitleCache: [String: String] = [:]  // Cached goal ID -> title lookup
     private var sessionsCursor: String?
     private var todosCursor: String?
 
@@ -470,8 +458,7 @@ class TimelineViewModel: ObservableObject {
 
     /// Today's completed todos that have videos (for Daily Recap)
     var todaysTodosWithVideos: [TodoItem] {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
+        let today = DateFormatterCache.startOfDay(for: Date())
         return (todosByDate[today] ?? []).filter { $0.isCompleted && $0.hasVideo }
     }
 
@@ -485,6 +472,8 @@ class TimelineViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] goals in
                 self?.goals = goals
+                // Rebuild cached goal dictionary only when goals change
+                self?.goalTitleCache = Dictionary(uniqueKeysWithValues: goals.map { ($0.id, $0.title) })
                 // Load initial sessions after getting goals
                 if self?.sessionsByDate.isEmpty == true {
                     Task { await self?.loadMoreSessions() }
@@ -508,18 +497,15 @@ class TimelineViewModel: ObservableObject {
                 numItems: 20
             )
 
-            let calendar = Calendar.current
-            let goalDict = Dictionary(uniqueKeysWithValues: goals.map { ($0.id, $0.title) })
-
-            // Create timeline items with goal titles
+            // Create timeline items with goal titles using cached dictionary
             let items = result.page.map { session in
-                let goalTitle = goalDict[session.goalId] ?? "Unknown Goal"
+                let goalTitle = goalTitleCache[session.goalId] ?? "Unknown Goal"
                 return TimelineItem(session: session, goalTitle: goalTitle)
             }
 
             // Group by date
             for item in items {
-                let dateKey = calendar.startOfDay(for: item.session.createdDate)
+                let dateKey = DateFormatterCache.startOfDay(for: item.session.createdDate)
 
                 if sessionsByDate[dateKey] == nil {
                     sessionsByDate[dateKey] = []
@@ -555,11 +541,9 @@ class TimelineViewModel: ObservableObject {
                 numItems: 20
             )
 
-            let calendar = Calendar.current
-
             // Group by date
             for todo in result.page {
-                let dateKey = calendar.startOfDay(for: todo.createdDate)
+                let dateKey = DateFormatterCache.startOfDay(for: todo.createdDate)
 
                 if todosByDate[dateKey] == nil {
                     todosByDate[dateKey] = []

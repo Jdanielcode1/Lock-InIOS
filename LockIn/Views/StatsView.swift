@@ -384,8 +384,8 @@ class StatsViewModel: ObservableObject {
         todoStreak = calculateTodoStreak(from: completedTodos)
 
         // Calculate weekly counts
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
+        let calendar = DateFormatterCache.calendar
+        let today = DateFormatterCache.startOfDay(for: Date())
         let thisWeekStart = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: today)) ?? today
         let lastWeekStart = calendar.date(byAdding: .day, value: -7, to: thisWeekStart) ?? today
 
@@ -408,8 +408,8 @@ class StatsViewModel: ObservableObject {
     private func calculateTodoStreak(from completedTodos: [TodoItem]) -> Int {
         guard !completedTodos.isEmpty else { return 0 }
 
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
+        let calendar = DateFormatterCache.calendar
+        let today = DateFormatterCache.startOfDay(for: Date())
 
         // Get unique days with completed todos
         var daysWithCompletions = Set<Date>()
@@ -460,8 +460,8 @@ class StatsViewModel: ObservableObject {
     private func calculateStreak(from sessions: [StudySession]) -> Int {
         guard !sessions.isEmpty else { return 0 }
 
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
+        let calendar = DateFormatterCache.calendar
+        let today = DateFormatterCache.startOfDay(for: Date())
 
         // Get unique days with sessions
         var daysWithSessions = Set<Date>()
@@ -497,8 +497,8 @@ class StatsViewModel: ObservableObject {
     }
 
     private func calculateWeeklyData(from sessions: [StudySession]) {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
+        let calendar = DateFormatterCache.calendar
+        let today = DateFormatterCache.startOfDay(for: Date())
         let weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
         // Get start of this week and last week
@@ -549,7 +549,7 @@ class StatsViewModel: ObservableObject {
             return
         }
 
-        let calendar = Calendar.current
+        let calendar = DateFormatterCache.calendar
         let weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
         var hoursByWeekday: [Int: Double] = [:]
 
