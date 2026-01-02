@@ -73,6 +73,7 @@ class TodoViewModel: ObservableObject {
             try await convexService.toggleGoalTodo(id: todo.id, isCompleted: !todo.isCompleted)
         } catch {
             errorMessage = "Failed to update todo: \(error.localizedDescription)"
+            ErrorAlertManager.shared.show(.saveFailed("Couldn't update todo. Please try again."))
         }
     }
 
@@ -81,6 +82,7 @@ class TodoViewModel: ObservableObject {
             try await convexService.deleteGoalTodo(id: todo.id)
         } catch {
             errorMessage = "Failed to delete todo: \(error.localizedDescription)"
+            ErrorAlertManager.shared.show(.saveFailed("Couldn't delete todo. Please try again."))
         }
     }
 
@@ -92,6 +94,7 @@ class TodoViewModel: ObservableObject {
             )
         } catch {
             errorMessage = "Failed to create todo: \(error.localizedDescription)"
+            ErrorAlertManager.shared.show(.saveFailed("Couldn't create todo. Please try again."))
         }
     }
 
@@ -100,6 +103,7 @@ class TodoViewModel: ObservableObject {
             try await convexService.toggleTodo(id: todo.id, isCompleted: !todo.isCompleted)
         } catch {
             errorMessage = "Failed to update todo: \(error.localizedDescription)"
+            ErrorAlertManager.shared.show(.saveFailed("Couldn't update todo. Please try again."))
         }
     }
 
@@ -108,6 +112,7 @@ class TodoViewModel: ObservableObject {
             try await convexService.toggleTodo(id: id, isCompleted: isCompleted)
         } catch {
             errorMessage = "Failed to update todo: \(error.localizedDescription)"
+            ErrorAlertManager.shared.show(.saveFailed("Couldn't update todo. Please try again."))
         }
     }
 
@@ -122,6 +127,7 @@ class TodoViewModel: ObservableObject {
             )
         } catch {
             errorMessage = "Failed to attach video: \(error.localizedDescription)"
+            ErrorAlertManager.shared.show(.videoError("Couldn't save the video. Please try again."))
         }
     }
 
@@ -136,6 +142,7 @@ class TodoViewModel: ObservableObject {
             )
         } catch {
             errorMessage = "Failed to attach video: \(error.localizedDescription)"
+            ErrorAlertManager.shared.show(.videoError("Couldn't save the video. Please try again."))
         }
     }
 
@@ -148,6 +155,7 @@ class TodoViewModel: ObservableObject {
             )
         } catch {
             errorMessage = "Failed to delete todo: \(error.localizedDescription)"
+            ErrorAlertManager.shared.show(.saveFailed("Couldn't delete todo. Please try again."))
         }
     }
 
@@ -156,6 +164,7 @@ class TodoViewModel: ObservableObject {
             try await convexService.archiveTodo(id: todo.id)
         } catch {
             errorMessage = "Failed to archive todo: \(error.localizedDescription)"
+            ErrorAlertManager.shared.show(.saveFailed("Couldn't archive todo. Please try again."))
         }
     }
 }

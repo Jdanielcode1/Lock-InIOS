@@ -41,6 +41,7 @@ struct RootView: View {
                     .environmentObject(authModel)
             }
         }
+        .withErrorAlerts()  // Global error alert handling
         .preferredColorScheme(appearanceMode.colorScheme)
         .onChange(of: scenePhase) { oldPhase, newPhase in
             if newPhase == .active && oldPhase == .background {

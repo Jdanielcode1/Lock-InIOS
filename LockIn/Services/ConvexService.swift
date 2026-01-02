@@ -541,6 +541,14 @@ class ConvexService: ObservableObject {
             ])
         }
     }
+
+    // MARK: - Account Management
+
+    /// Deletes all user data from Convex (goals, sessions, todos)
+    /// This should be called before deleting the Firebase user account
+    func deleteAllUserData() async throws {
+        let _: String? = try await convexClient.mutation("users:deleteAllData", with: [:])
+    }
 }
 
 enum ConvexServiceError: Error {

@@ -64,6 +64,7 @@ class GoalsViewModel: ObservableObject {
             )
         } catch {
             errorMessage = "Failed to create goal: \(error.localizedDescription)"
+            ErrorAlertManager.shared.show(.saveFailed("Couldn't create goal. Please try again."))
         }
     }
 
@@ -72,6 +73,7 @@ class GoalsViewModel: ObservableObject {
             try await convexService.deleteGoal(id: goal.id)
         } catch {
             errorMessage = "Failed to delete goal: \(error.localizedDescription)"
+            ErrorAlertManager.shared.show(.saveFailed("Couldn't delete goal. Please try again."))
         }
     }
 
@@ -80,6 +82,7 @@ class GoalsViewModel: ObservableObject {
             try await convexService.updateGoalStatus(id: goal.id, status: status)
         } catch {
             errorMessage = "Failed to update goal: \(error.localizedDescription)"
+            ErrorAlertManager.shared.show(.saveFailed("Couldn't update goal status. Please try again."))
         }
     }
 
@@ -92,6 +95,7 @@ class GoalsViewModel: ObservableObject {
             try await convexService.archiveGoal(id: goal.id)
         } catch {
             errorMessage = "Failed to archive goal: \(error.localizedDescription)"
+            ErrorAlertManager.shared.show(.saveFailed("Couldn't archive goal. Please try again."))
         }
     }
 }
