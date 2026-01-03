@@ -549,6 +549,159 @@ class ConvexService: ObservableObject {
     func deleteAllUserData() async throws {
         let _: String? = try await convexClient.mutation("users:deleteAllData", with: [:])
     }
+
+    // MARK: - Accountability Partners
+
+    func listPartners() -> AnyPublisher<[Partner], Never> {
+        convexClient.subscribe(to: "partners:list", yielding: [Partner].self)
+            .replaceError(with: [])
+            .eraseToAnyPublisher()
+    }
+
+    func listSentInvites() -> AnyPublisher<[PartnerInvite], Never> {
+        convexClient.subscribe(to: "partners:listSentInvites", yielding: [PartnerInvite].self)
+            .replaceError(with: [])
+            .eraseToAnyPublisher()
+    }
+
+    func listReceivedInvites() -> AnyPublisher<[PartnerInvite], Never> {
+        convexClient.subscribe(to: "partners:listReceivedInvites", yielding: [PartnerInvite].self)
+            .replaceError(with: [])
+            .eraseToAnyPublisher()
+    }
+
+    func getPendingInviteCount() -> AnyPublisher<Int, Never> {
+        convexClient.subscribe(to: "partners:getPendingInviteCount", yielding: Int.self)
+            .replaceError(with: 0)
+            .eraseToAnyPublisher()
+    }
+
+    func sendPartnerInvite(email: String) async throws -> String {
+        return try await convexClient.mutation("partners:sendInvite", with: [
+            "email": email
+        ])
+    }
+
+    func acceptPartnerInvite(inviteId: String) async throws {
+        let _: String? = try await convexClient.mutation("partners:acceptInvite", with: [
+            "inviteId": inviteId
+        ])
+    }
+
+    func declinePartnerInvite(inviteId: String) async throws {
+        let _: String? = try await convexClient.mutation("partners:declineInvite", with: [
+            "inviteId": inviteId
+        ])
+    }
+
+    func cancelPartnerInvite(inviteId: String) async throws {
+        let _: String? = try await convexClient.mutation("partners:cancelInvite", with: [
+            "inviteId": inviteId
+        ])
+    }
+
+    func removePartner(partnerId: String) async throws {
+        let _: String? = try await convexClient.mutation("partners:removePartner", with: [
+            "partnerId": partnerId
+        ])
+    }
+
+    // MARK: - Shared Videos
+
+    func listSharedWithMe() -> AnyPublisher<[SharedVideo], Never> {
+        convexClient.subscribe(to: "sharedVideos:listSharedWithMe", yielding: [SharedVideo].self)
+            .replaceError(with: [])
+            .eraseToAnyPublisher()
+    }
+
+    func getPartnerActivity(partnerId: String) -> AnyPublisher<[SharedVideo], Never> {
+        convexClient.subscribe(to: "partners:getPartnerActivity", with: ["partnerId": partnerId], yielding: [SharedVideo].self)
+            .replaceError(with: [])
+            .eraseToAnyPublisher()
+    }
+
+    func listMySharedVideos() -> AnyPublisher<[SharedVideo], Never> {
+        convexClient.subscribe(to: "sharedVideos:listMyShared", yielding: [SharedVideo].self)
+            .replaceError(with: [])
+            .eraseToAnyPublisher()
+    }
+
+    func shareVideo(
+        r2Key: String,
+        thumbnailR2Key: String?,
+        durationMinutes: Double,
+        goalTitle: String?,
+        todoTitle: String?,
+        notes: String?,
+        partnerIds: [String]
+    ) async throws -> String {
+        // Convert partnerIds array to JSON string since ConvexMobile doesn't support arrays directly
+        let partnerIdsJSON = try JSONEncoder().encode(partnerIds)
+        let partnerIdsString = String(data: partnerIdsJSON, encoding: .utf8) ?? "[]"
+
+        // Build args based on what's provided
+        if let thumb = thumbnailR2Key, let goal = goalTitle, let todo = todoTitle, let notes = notes, !notes.isEmpty {
+            return try await convexClient.mutation("sharedVideos:shareVideo", with: [
+                "r2Key": r2Key,
+                "thumbnailR2Key": thumb,
+                "durationMinutes": durationMinutes,
+                "goalTitle": goal,
+                "todoTitle": todo,
+                "notes": notes,
+                "partnerIdsJSON": partnerIdsString
+            ])
+        } else if let thumb = thumbnailR2Key, let goal = goalTitle {
+            return try await convexClient.mutation("sharedVideos:shareVideo", with: [
+                "r2Key": r2Key,
+                "thumbnailR2Key": thumb,
+                "durationMinutes": durationMinutes,
+                "goalTitle": goal,
+                "partnerIdsJSON": partnerIdsString
+            ])
+        } else if let thumb = thumbnailR2Key {
+            return try await convexClient.mutation("sharedVideos:shareVideo", with: [
+                "r2Key": r2Key,
+                "thumbnailR2Key": thumb,
+                "durationMinutes": durationMinutes,
+                "partnerIdsJSON": partnerIdsString
+            ])
+        } else {
+            return try await convexClient.mutation("sharedVideos:shareVideo", with: [
+                "r2Key": r2Key,
+                "durationMinutes": durationMinutes,
+                "partnerIdsJSON": partnerIdsString
+            ])
+        }
+    }
+
+    func getSharedVideoUrl(videoId: String) async throws -> String {
+        return try await convexClient.action("sharedVideos:getViewUrl", with: [
+            "videoId": videoId
+        ])
+    }
+
+    func deleteSharedVideo(videoId: String) async throws {
+        let _: String? = try await convexClient.mutation("sharedVideos:remove", with: [
+            "videoId": videoId
+        ])
+    }
+
+    // MARK: - R2 Upload URLs
+
+    struct R2UploadResponse: Decodable {
+        let key: String
+        let url: String
+    }
+
+    func generateUploadUrl() async throws -> R2UploadResponse {
+        return try await convexClient.mutation("r2:generateUploadUrl", with: [:])
+    }
+
+    func syncR2Metadata(key: String) async throws {
+        let _: String? = try await convexClient.mutation("r2:syncMetadata", with: [
+            "key": key
+        ])
+    }
 }
 
 enum ConvexServiceError: Error {

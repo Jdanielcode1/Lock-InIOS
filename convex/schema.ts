@@ -81,4 +81,56 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_completed", ["userId", "isCompleted"])
     .index("by_user_archived", ["userId", "isArchived"]),
+
+  // Accountability Partners - bidirectional partnership records
+  accountabilityPartners: defineTable({
+    userId: v.string(), // The user who has this partner
+    partnerId: v.string(), // The partner's userId (tokenIdentifier)
+    partnerEmail: v.string(), // For display purposes
+    partnerName: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"), // Invite sent, waiting
+      v.literal("active"), // Both accepted
+      v.literal("declined") // Partner declined
+    ),
+    createdAt: v.float64(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_partner", ["partnerId"])
+    .index("by_user_status", ["userId", "status"]),
+
+  // Partner Invites - for inviting users by email (may not exist yet)
+  partnerInvites: defineTable({
+    fromUserId: v.string(),
+    fromUserEmail: v.string(),
+    fromUserName: v.optional(v.string()),
+    toEmail: v.string(), // Email to invite (may not exist as user yet)
+    toUserId: v.optional(v.string()), // Filled when user signs up/matches
+    status: v.union(
+      v.literal("pending"),
+      v.literal("accepted"),
+      v.literal("declined"),
+      v.literal("expired")
+    ),
+    createdAt: v.float64(),
+    expiresAt: v.float64(), // 7 days from creation
+  })
+    .index("by_from_user", ["fromUserId"])
+    .index("by_to_email", ["toEmail"])
+    .index("by_to_user", ["toUserId"]),
+
+  // Shared Videos - videos uploaded to R2 and shared with partners
+  sharedVideos: defineTable({
+    userId: v.string(), // Who shared
+    r2Key: v.string(), // R2 storage key
+    thumbnailR2Key: v.optional(v.string()),
+    durationMinutes: v.float64(),
+    goalTitle: v.optional(v.string()),
+    todoTitle: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    sharedWithPartnerIds: v.array(v.string()), // Partner userIds who can view
+    createdAt: v.float64(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_created", ["createdAt"]),
 });

@@ -35,6 +35,10 @@ struct GoalsListView: View {
     @State private var selectedTodoIdsForSession: Set<String> = []
     @State private var showTodoSessionRecorder = false
 
+    // Partners
+    @State private var showingPartners = false
+    @StateObject private var partnersViewModel = PartnersViewModel()
+
     // iPad adaptation
     @Environment(\.horizontalSizeClass) var sizeClass
     private var sizing: AdaptiveSizing {
@@ -64,6 +68,28 @@ struct GoalsListView: View {
             .background(Color(UIColor.systemGroupedBackground))
             .navigationTitle(listMode == .goals ? "Goals" : "To Do")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showingPartners = true
+                    } label: {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "person.2")
+
+                            // Badge for pending invites
+                            if partnersViewModel.pendingInviteCount > 0 {
+                                Circle()
+                                    .fill(.red)
+                                    .frame(width: 8, height: 8)
+                                    .offset(x: 2, y: -2)
+                            }
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $showingPartners) {
+                PartnersView()
+            }
             .sheet(isPresented: $showingCreateGoal) {
                 CreateGoalView(viewModel: goalsViewModel)
             }

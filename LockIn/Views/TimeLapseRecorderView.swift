@@ -93,6 +93,12 @@ struct TimeLapseRecorderView: View {
     @State private var pendingNotes: String = ""
     @State private var showNotesSheet: Bool = false
 
+    // Partner sharing state
+    @State private var showShareWithPartners = false
+    @State private var savedVideoPath: String?
+    @State private var savedDurationMinutes: Double = 0
+    @StateObject private var partnersViewModel = PartnersViewModel()
+
     // Privacy mode
     @StateObject private var privacyManager = PrivacyModeManager()
 
@@ -279,6 +285,75 @@ struct TimeLapseRecorderView: View {
             )
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showShareWithPartners) {
+            if let videoURL = recorder.recordedVideoURL {
+                ShareWithPartnersSheet(
+                    videoURL: videoURL,
+                    durationMinutes: recorder.recordingDuration / 60.0,
+                    goalTitle: nil,
+                    todoTitle: nil
+                ) { partnerIds in
+                    Task {
+                        await shareWithPartners(partnerIds: partnerIds)
+                    }
+                } onSkip: {
+                    showShareWithPartners = false
+                }
+            }
+        }
+    }
+
+    private func shareWithPartners(partnerIds: [String]) async {
+        guard let videoURL = recorder.recordedVideoURL else {
+            showShareWithPartners = false
+            return
+        }
+
+        do {
+            // Get upload URL and key from Convex
+            let uploadResponse = try await ConvexService.shared.generateUploadUrl()
+
+            // Upload video to R2
+            let videoData = try Data(contentsOf: videoURL)
+            var request = URLRequest(url: URL(string: uploadResponse.url)!)
+            request.httpMethod = "PUT"
+            request.setValue("video/quicktime", forHTTPHeaderField: "Content-Type")
+            request.httpBody = videoData
+
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Upload failed"])
+            }
+
+            // Use the key from the response
+            let r2Key = uploadResponse.key
+
+            // Sync metadata with Convex
+            try await ConvexService.shared.syncR2Metadata(key: r2Key)
+
+            // Create shared video record
+            _ = try await ConvexService.shared.shareVideo(
+                r2Key: r2Key,
+                thumbnailR2Key: nil,
+                durationMinutes: recorder.recordingDuration / 60.0,
+                goalTitle: nil,
+                todoTitle: nil,
+                notes: pendingNotes.isEmpty ? nil : pendingNotes,
+                partnerIds: partnerIds
+            )
+
+            await MainActor.run {
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
+                showShareWithPartners = false
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = "Failed to share: \(error.localizedDescription)"
+                showShareWithPartners = false
+            }
         }
     }
 
@@ -1134,6 +1209,25 @@ struct TimeLapseRecorderView: View {
                         .cornerRadius(16)
                     }
 
+                    // Share with Partners button (only if user has partners)
+                    if !partnersViewModel.partners.isEmpty {
+                        Button {
+                            showShareWithPartners = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "person.2.fill")
+                                    .font(.system(size: 18, weight: .semibold))
+                                Text("Share with Partners")
+                                    .font(.system(size: 17, weight: .semibold))
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 56)
+                            .background(Color.green)
+                            .cornerRadius(16)
+                        }
+                    }
+
                     // Bottom row: Voiceover and Share
                     HStack(spacing: 16) {
                         // Voiceover button
@@ -1518,6 +1612,10 @@ struct TimeLapseRecorderView: View {
 
             // Clean up temp file
             try? FileManager.default.removeItem(at: videoURL)
+
+            // Store for potential partner sharing
+            savedVideoPath = localVideoPath
+            savedDurationMinutes = studyTimeMinutes
 
             dismiss()
 
