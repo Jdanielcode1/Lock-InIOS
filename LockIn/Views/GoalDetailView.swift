@@ -44,77 +44,187 @@ struct GoalDetailView: View {
         if goal.isCompleted {
             return "Goal completed!"
         } else if progress == 0 {
-            return "Ready to lock in?"
+            return "Ready to start?"
         } else if progress < 25 {
-            return "Great start! Keep going!"
+            return "Great start!"
         } else if progress < 50 {
-            return "You're making progress!"
+            return "Making progress!"
         } else if progress < 75 {
             return "Halfway there!"
         } else {
-            return "Almost there!"
-        }
-    }
-
-    private var motivationalIcon: String {
-        let progress = goal.progressPercentage
-        if goal.isCompleted {
-            return "checkmark.circle.fill"
-        } else if progress == 0 {
-            return "target"
-        } else if progress < 50 {
-            return "flame.fill"
-        } else {
-            return "bolt.fill"
+            return "Almost done!"
         }
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                // Motivational Header
-                motivationalHeader
-                    .frame(maxWidth: sizing.maxContentWidth)
+        List {
+            // Progress Section
+            Section {
+                progressHeader
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+            }
 
-                // Primary CTA - Start Session
-                if !goal.isCompleted {
-                    startSessionButton
-                        .frame(maxWidth: sizing.maxContentWidth)
-                }
-
-                // iPad: Side-by-side layout for tasks and sessions
-                if sizing.isIPad {
-                    HStack(alignment: .top, spacing: sizing.cardSpacing) {
-                        // Tasks column
-                        VStack(alignment: .leading, spacing: 12) {
-                            goalTodosSection
+            // Start Session Button
+            if !goal.isCompleted {
+                Section {
+                    Button {
+                        goalSessionPresenter.presentSession(
+                            goalId: goal.id,
+                            availableTodos: viewModel.goalTodos.filter { !$0.isCompleted }
+                        )
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Label("Start Session", systemImage: "play.fill")
+                                .font(.headline)
+                            Spacer()
                         }
-                        .frame(maxWidth: .infinity)
-
-                        // Sessions column
-                        VStack(alignment: .leading, spacing: 12) {
-                            sessionsSection
-                        }
-                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 4)
                     }
-                    .frame(maxWidth: sizing.maxContentWidth)
-                    .padding(.horizontal, sizing.horizontalPadding)
-                } else {
-                    // iPhone: Vertical stack
-                    goalTodosSection
-                    sessionsSection
+                    .listRowBackground(Color.accentColor)
+                    .foregroundStyle(.white)
+                }
+            }
 
-                    // Add task button if empty
-                    if viewModel.goalTodos.isEmpty {
-                        addGoalTodoButton
+            // Tasks Section
+            Section {
+                if viewModel.goalTodos.isEmpty {
+                    tasksEmptyState
+                } else {
+                    ForEach(viewModel.goalTodos) { todo in
+                        GoalTodoRow(
+                            todo: todo,
+                            onToggle: {
+                                Task {
+                                    try? await ConvexService.shared.toggleGoalTodo(
+                                        id: todo.id,
+                                        isCompleted: !todo.isCompleted
+                                    )
+                                }
+                            },
+                            onTap: {
+                                if todo.hasVideo {
+                                    selectedGoalTodo = todo
+                                    showingVideoPlayer = true
+                                } else {
+                                    goalSessionPresenter.presentSession(
+                                        goalId: goal.id,
+                                        goalTodoId: todo.id,
+                                        availableTodos: viewModel.goalTodos.filter { !$0.isCompleted }
+                                    )
+                                }
+                            }
+                        )
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                Task {
+                                    try? await ConvexService.shared.deleteGoalTodo(id: todo.id)
+                                }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+
+                            Button {
+                                recentlyArchivedTodo = todo
+                                Task {
+                                    try? await ConvexService.shared.archiveGoalTodo(id: todo.id)
+                                    await MainActor.run {
+                                        withAnimation(.spring(response: 0.3)) {
+                                            showUndoToast = true
+                                        }
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                                            withAnimation(.spring(response: 0.3)) {
+                                                showUndoToast = false
+                                            }
+                                        }
+                                    }
+                                }
+                            } label: {
+                                Label("Archive", systemImage: "archivebox")
+                            }
+                            .tint(.orange)
+                        }
+                        .swipeActions(edge: .leading) {
+                            Button {
+                                Task {
+                                    try? await ConvexService.shared.toggleGoalTodo(
+                                        id: todo.id,
+                                        isCompleted: !todo.isCompleted
+                                    )
+                                }
+                            } label: {
+                                Label(
+                                    todo.isCompleted ? "Undo" : "Done",
+                                    systemImage: todo.isCompleted ? "arrow.uturn.backward" : "checkmark"
+                                )
+                            }
+                            .tint(todo.isCompleted ? .orange : .green)
+                        }
+                    }
+                }
+            } header: {
+                HStack {
+                    Text("Tasks")
+                    Spacer()
+                    Button {
+                        showingAddGoalTodo = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.body.weight(.medium))
                     }
                 }
             }
-            .padding(.vertical)
-            .padding(.bottom, 40)
-            .frame(maxWidth: .infinity)
+
+            // Recent Sessions Section
+            Section {
+                if viewModel.isLoadingSessions && viewModel.studySessions.isEmpty {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .padding()
+                        Spacer()
+                    }
+                } else if viewModel.studySessions.isEmpty {
+                    sessionsEmptyState
+                } else {
+                    ForEach(viewModel.studySessions) { session in
+                        NavigationLink(destination: VideoPlayerView(session: session)) {
+                            SessionRow(session: session, goalTodos: viewModel.goalTodos)
+                        }
+                    }
+
+                    if viewModel.canLoadMoreSessions {
+                        Button {
+                            Task { await viewModel.loadMoreSessions() }
+                        } label: {
+                            HStack {
+                                Spacer()
+                                if viewModel.isLoadingSessions {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                } else {
+                                    Text("Load More")
+                                }
+                                Spacer()
+                            }
+                        }
+                        .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                HStack {
+                    Text("Recent Sessions")
+                    Spacer()
+                    if !viewModel.studySessions.isEmpty {
+                        Text("\(viewModel.studySessions.count)")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
         }
-        .background(Color(UIColor.systemGroupedBackground))
+        .listStyle(.insetGrouped)
         .navigationTitle(goal.title)
         .navigationBarTitleDisplayMode(.large)
         .onAppear { tabBarVisibility.hide() }
@@ -123,15 +233,15 @@ struct GoalDetailView: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
                     Button {
-                        showingVideoPicker = true
-                    } label: {
-                        Label("Upload Video", systemImage: "square.and.arrow.up")
-                    }
-
-                    Button {
                         showingAddGoalTodo = true
                     } label: {
                         Label("Add Task", systemImage: "checklist")
+                    }
+
+                    Button {
+                        showingVideoPicker = true
+                    } label: {
+                        Label("Upload Video", systemImage: "square.and.arrow.up")
                     }
 
                     Divider()
@@ -175,342 +285,220 @@ struct GoalDetailView: View {
             }
         }
         .task {
-            // Check and reset recurring todos on view appear
             try? await ConvexService.shared.checkAndResetRecurringTodos(goalId: goal.id)
         }
         .overlay(alignment: .bottom) {
             if showUndoToast, let archivedTodo = recentlyArchivedTodo {
-                HStack(spacing: 12) {
-                    Text("\"\(archivedTodo.title)\" archived")
-                        .font(.subheadline)
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-
-                    Button {
-                        Task {
-                            try? await ConvexService.shared.unarchiveGoalTodo(id: archivedTodo.id)
-                            await MainActor.run {
-                                withAnimation(.spring(response: 0.3)) {
-                                    showUndoToast = false
-                                }
-                            }
-                        }
-                    } label: {
-                        Text("Undo")
-                            .font(.subheadline.bold())
-                            .foregroundStyle(Color.accentColor)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(Color(UIColor.systemGray6).opacity(0.95))
-                .background(.ultraThinMaterial)
-                .cornerRadius(12)
-                .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 20)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                undoToast(for: archivedTodo)
             }
         }
     }
 
-    // MARK: - Motivational Header
-    private var motivationalHeader: some View {
+    // MARK: - Progress Header
+    private var progressHeader: some View {
         VStack(spacing: 16) {
-            // Icon and message
-            VStack(spacing: 8) {
-                Image(systemName: motivationalIcon)
-                    .font(.system(size: 40, weight: .light))
-                    .foregroundStyle(goal.isCompleted ? .green : .accentColor)
-
-                Text(motivationalMessage)
-                    .font(.title3.bold())
-            }
-            .padding(.top, 4)
-
-            // Progress section
-            VStack(spacing: 8) {
-                // Hours text
-                HStack {
-                    Text(goal.completedHours.formattedProgress(of: goal.targetHours))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-
-                    Spacer()
-
-                    Text("\(Int(goal.progressPercentage))%")
-                        .font(.headline)
-                        .foregroundStyle(goal.progressPercentage > 0 ? .primary : .secondary)
-                }
-
-                // Native progress bar
-                ProgressView(value: goal.progressPercentage, total: 100)
-                    .tint(goal.isCompleted ? .green : .accentColor)
-            }
-        }
-        .padding(16)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
-        .cornerRadius(12)
-        .padding(.horizontal, sizing.horizontalPadding)
-    }
-
-    // MARK: - Start Session Button
-    private var startSessionButton: some View {
-        Button {
-            goalSessionPresenter.presentSession(
-                goalId: goal.id,
-                availableTodos: viewModel.goalTodos.filter { !$0.isCompleted }
+            // Circular Progress Ring
+            CircularProgressRing(
+                progress: goal.progressPercentage,
+                completedHours: goal.completedHours,
+                targetHours: goal.targetHours,
+                isCompleted: goal.isCompleted
             )
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "play.fill")
-                Text("Start Session")
+            .padding(.top, 8)
+
+            // Motivational message
+            Text(motivationalMessage)
+                .font(.headline)
+                .foregroundStyle(goal.isCompleted ? .green : .primary)
+
+            // Stats row
+            HStack(spacing: 32) {
+                StatItem(
+                    value: goal.completedHours.formattedDurationCompact,
+                    label: "Completed"
+                )
+
+                StatItem(
+                    value: goal.hoursRemaining.formattedDurationCompact,
+                    label: "Remaining"
+                )
+
+                StatItem(
+                    value: "\(viewModel.studySessions.count)",
+                    label: "Sessions"
+                )
             }
-            .appleFilledButton()
+            .padding(.bottom, 8)
         }
-        .padding(.horizontal, sizing.horizontalPadding)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
     }
 
-    // MARK: - Goal Todos Section
-    @ViewBuilder
-    private var goalTodosSection: some View {
-        if !viewModel.goalTodos.isEmpty || sizing.isIPad {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Tasks")
-                        .font(.headline)
+    // MARK: - Empty States
+    private var tasksEmptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "checklist")
+                .font(.system(size: 32, weight: .light))
+                .foregroundStyle(.secondary)
 
-                    Spacer()
+            Text("No tasks yet")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
 
-                    Button {
-                        showingAddGoalTodo = true
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title2)
-                            .foregroundStyle(Color.accentColor)
-                    }
-                }
-                .padding(.horizontal, sizing.isIPad ? 0 : 16)
-
-                if viewModel.goalTodos.isEmpty {
-                    // Empty state for iPad
-                    VStack(spacing: 12) {
-                        Image(systemName: "checklist")
-                            .font(.system(size: 32, weight: .light))
-                            .foregroundStyle(.secondary)
-                        Text("No tasks yet")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Button("Add Task") {
-                            showingAddGoalTodo = true
-                        }
-                        .font(.subheadline)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
-                    .background(Color(UIColor.secondarySystemGroupedBackground))
-                    .cornerRadius(12)
-                    .padding(.horizontal, sizing.isIPad ? 0 : 16)
-                } else {
-                    List {
-                        ForEach(viewModel.goalTodos) { todo in
-                            GoalTodoCard(
-                                todo: todo,
-                                onToggle: {
-                                    Task {
-                                        try? await ConvexService.shared.toggleGoalTodo(
-                                            id: todo.id,
-                                            isCompleted: !todo.isCompleted
-                                        )
-                                    }
-                                },
-                                onTap: {
-                                    goalSessionPresenter.presentSession(
-                                        goalId: goal.id,
-                                        goalTodoId: todo.id,
-                                        availableTodos: viewModel.goalTodos.filter { !$0.isCompleted }
-                                    )
-                                },
-                                onRecord: {
-                                    if todo.hasVideo {
-                                        selectedGoalTodo = todo
-                                        showingVideoPlayer = true
-                                    } else {
-                                        goalSessionPresenter.presentSession(
-                                            goalId: goal.id,
-                                            goalTodoId: todo.id,
-                                            availableTodos: viewModel.goalTodos.filter { !$0.isCompleted }
-                                        )
-                                    }
-                                }
-                            )
-                            .listRowInsets(EdgeInsets())
-                            .listRowBackground(Color(UIColor.secondarySystemGroupedBackground))
-                            .listRowSeparator(.visible)
-                            .listRowSeparatorTint(Color(UIColor.separator))
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
-                                    Task {
-                                        try? await ConvexService.shared.deleteGoalTodo(id: todo.id)
-                                    }
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-
-                                Button {
-                                    recentlyArchivedTodo = todo
-                                    Task {
-                                        try? await ConvexService.shared.archiveGoalTodo(id: todo.id)
-                                        await MainActor.run {
-                                            withAnimation(.spring(response: 0.3)) {
-                                                showUndoToast = true
-                                            }
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
-                                                withAnimation(.spring(response: 0.3)) {
-                                                    showUndoToast = false
-                                                }
-                                            }
-                                        }
-                                    }
-                                } label: {
-                                    Label("Archive", systemImage: "archivebox")
-                                }
-                                .tint(.orange)
-                            }
-                        }
-                    }
-                    .listStyle(.plain)
-                    .scrollDisabled(true)
-                    .scrollContentBackground(.hidden)
-                    .frame(height: CGFloat(viewModel.goalTodos.count) * 70)
-                    .background(Color(UIColor.secondarySystemGroupedBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .padding(.horizontal, sizing.isIPad ? 0 : 16)
-                }
+            Button {
+                showingAddGoalTodo = true
+            } label: {
+                Text("Add Task")
+                    .font(.subheadline.bold())
             }
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
     }
 
-    // MARK: - Sessions Section
-    private var sessionsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Recent Sessions")
-                    .font(.headline)
+    private var sessionsEmptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "video.badge.plus")
+                .font(.system(size: 32, weight: .light))
+                .foregroundStyle(.secondary)
 
-                Spacer()
+            VStack(spacing: 4) {
+                Text("No sessions yet")
+                    .font(.subheadline.bold())
 
-                if !viewModel.studySessions.isEmpty {
-                    Text("\(viewModel.studySessions.count)\(viewModel.canLoadMoreSessions ? "+" : "")")
-                        .font(.caption.bold())
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.accentColor)
-                        .cornerRadius(8)
-                }
-            }
-            .padding(.horizontal, sizing.isIPad ? 0 : 16)
-
-            if viewModel.isLoadingSessions && viewModel.studySessions.isEmpty {
-                // Loading state
-                VStack(spacing: 12) {
-                    ProgressView()
-                    Text("Loading sessions...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
-                .background(Color(UIColor.secondarySystemGroupedBackground))
-                .cornerRadius(12)
-                .padding(.horizontal, sizing.isIPad ? 0 : 16)
-            } else if viewModel.studySessions.isEmpty {
-                // Friendly empty state
-                VStack(spacing: 12) {
-                    Image(systemName: "video.badge.plus")
-                        .font(.system(size: 36, weight: .light))
-                        .foregroundStyle(.secondary)
-
-                    VStack(spacing: 4) {
-                        Text("No sessions yet")
-                            .font(.subheadline.bold())
-
-                        Text("Start your first study session\nand it will appear here!")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
-                .background(Color(UIColor.secondarySystemGroupedBackground))
-                .cornerRadius(12)
-                .padding(.horizontal, sizing.isIPad ? 0 : 16)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(viewModel.studySessions.enumerated()), id: \.element.id) { index, session in
-                        NavigationLink(destination: VideoPlayerView(session: session)) {
-                            StudySessionCard(session: session, goalTodos: viewModel.goalTodos, isIPad: sizing.isIPad)
-                        }
-
-                        if index < viewModel.studySessions.count - 1 {
-                            Divider()
-                                .padding(.leading, 96)
-                        }
-                    }
-
-                    // Load more indicator
-                    if viewModel.canLoadMoreSessions {
-                        Button {
-                            Task { await viewModel.loadMoreSessions() }
-                        } label: {
-                            HStack {
-                                if viewModel.isLoadingSessions {
-                                    ProgressView()
-                                        .scaleEffect(0.8)
-                                } else {
-                                    Text("Load More")
-                                        .font(.subheadline)
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .foregroundStyle(Color.accentColor)
-                        }
-                    }
-                }
-                .background(Color(UIColor.secondarySystemGroupedBackground))
-                .cornerRadius(12)
-                .padding(.horizontal, sizing.isIPad ? 0 : 16)
+                Text("Record yourself studying to track progress")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
     }
 
-    // MARK: - Add Goal Todo Button
-    private var addGoalTodoButton: some View {
-        Button {
-            showingAddGoalTodo = true
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "plus.circle")
-                Text("Add tasks to break down your goal")
+    // MARK: - Undo Toast
+    private func undoToast(for todo: GoalTodo) -> some View {
+        HStack(spacing: 12) {
+            Text("\"\(todo.title)\" archived")
+                .font(.subheadline)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+
+            Spacer()
+
+            Button {
+                Task {
+                    try? await ConvexService.shared.unarchiveGoalTodo(id: todo.id)
+                    await MainActor.run {
+                        withAnimation(.spring(response: 0.3)) {
+                            showUndoToast = false
+                        }
+                    }
+                }
+            } label: {
+                Text("Undo")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(Color.accentColor)
             }
-            .font(.subheadline)
-            .foregroundStyle(Color.accentColor)
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(Color.accentColor.opacity(0.1))
-            .cornerRadius(10)
         }
-        .padding(.horizontal)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(.regularMaterial)
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 20)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 }
 
-struct StudySessionCard: View {
+// MARK: - Stat Item
+struct StatItem: View {
+    let value: String
+    let label: String
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.system(.title3, design: .rounded, weight: .bold))
+                .foregroundStyle(.primary)
+
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - Goal Todo Row (Native iOS Style)
+struct GoalTodoRow: View {
+    let todo: GoalTodo
+    let onToggle: () -> Void
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                // Checkbox
+                Button(action: onToggle) {
+                    Image(systemName: todo.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .font(.title2)
+                        .foregroundStyle(todo.isCompleted ? .green : Color(UIColor.tertiaryLabel))
+                }
+                .buttonStyle(.plain)
+
+                // Content
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(todo.title)
+                        .font(.body)
+                        .foregroundStyle(todo.isCompleted ? .secondary : .primary)
+                        .strikethrough(todo.isCompleted)
+
+                    HStack(spacing: 8) {
+                        // Recurring badge
+                        if todo.isRecurring {
+                            Label(todo.frequency.displayName, systemImage: todo.frequency.icon)
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                        }
+
+                        // Hours progress for hours-based todos
+                        if todo.todoType == .hours, let estimated = todo.estimatedHours {
+                            let completed = todo.completedHours ?? 0
+                            Text(completed.formattedProgressCompact(of: estimated))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                Spacer()
+
+                // Video indicator
+                if todo.hasVideo {
+                    Image(systemName: "video.fill")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                } else if !todo.isCompleted {
+                    Image(systemName: "video.badge.plus")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Session Row
+struct SessionRow: View {
     let session: StudySession
     let goalTodos: [GoalTodo]
-    var isIPad: Bool = false
 
     @State private var thumbnail: UIImage?
 
@@ -521,66 +509,52 @@ struct StudySessionCard: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Video thumbnail
+            // Thumbnail
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color(UIColor.systemGray5))
-                    .frame(width: 80, height: 60)
+                    .frame(width: 64, height: 48)
 
                 if let thumbnail = thumbnail {
                     Image(uiImage: thumbnail)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                        .frame(width: 80, height: 60)
+                        .frame(width: 64, height: 48)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
 
-                // Play button overlay
                 Image(systemName: "play.circle.fill")
-                    .font(.title2)
+                    .font(.body)
                     .foregroundStyle(.white)
                     .shadow(color: .black.opacity(0.3), radius: 2)
             }
             .onAppear {
-                Task {
-                    await loadThumbnail()
-                }
+                Task { await loadThumbnail() }
             }
 
-            // Session info
+            // Info
             VStack(alignment: .leading, spacing: 2) {
-                Text(session.formattedDuration)
+                Text(session.durationHours.formattedDuration)
                     .font(.subheadline.bold())
-                    .foregroundStyle(.primary)
 
-                // Show goal todo name if available
                 if let todoName = goalTodoName {
-                    Label(todoName, systemImage: "checklist")
+                    Text(todoName)
                         .font(.caption)
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
 
-                Text(session.createdDate, style: .date)
+                Text(session.createdDate, style: .relative)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.tertiary)
             }
 
             Spacer()
-
-            // Duration badge
-            Text(session.durationHours.formattedDurationCompact)
-                .font(.caption.bold())
-                .foregroundStyle(.secondary)
-
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
         }
-        .padding(12)
+        .padding(.vertical, 4)
     }
 
     private func loadThumbnail() async {
-        // Try to load cached thumbnail first
         if let thumbnailURL = session.thumbnailURL {
             if let image = await ThumbnailCache.shared.thumbnail(for: thumbnailURL) {
                 await MainActor.run { self.thumbnail = image }
@@ -588,7 +562,6 @@ struct StudySessionCard: View {
             }
         }
 
-        // Fallback: generate from video if no cached thumbnail
         guard let videoURL = session.videoURL,
               FileManager.default.fileExists(atPath: videoURL.path) else {
             return
@@ -603,7 +576,7 @@ struct StudySessionCard: View {
     }
 }
 
-// ViewModel for GoalDetailView
+// MARK: - ViewModel
 @MainActor
 class GoalDetailViewModel: ObservableObject {
     @Published var goal: Goal?
@@ -624,7 +597,6 @@ class GoalDetailViewModel: ObservableObject {
     }
 
     private func subscribeToData() {
-        // Subscribe to goal updates
         convexService.subscribeToGoal(id: goalId)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] goal in
@@ -634,7 +606,6 @@ class GoalDetailViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Subscribe to goal todos (keep real-time for todos since they're usually small)
         convexService.listGoalTodos(goalId: goalId)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] todos in
@@ -642,7 +613,6 @@ class GoalDetailViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Load initial sessions with pagination
         Task { await loadMoreSessions() }
     }
 
@@ -659,7 +629,6 @@ class GoalDetailViewModel: ObservableObject {
                 numItems: 10
             )
 
-            // Avoid duplicates
             for session in result.page {
                 if !studySessions.contains(where: { $0.id == session.id }) {
                     studySessions.append(session)
