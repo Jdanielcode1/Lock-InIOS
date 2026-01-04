@@ -87,11 +87,19 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     private var frameInterval: TimeInterval = 0.5 // Default: timelapse speed (2 fps)
     private var manualSpeedOverride: Bool = false // User manually set speed
     private let outputFPS: Int32 = 30 // Playback at 30 fps
-    private let maxRecordingDuration: TimeInterval = 4 * 60 * 60 // 4 hours in seconds
-    private let maxNormalModeDuration: TimeInterval = 10 * 60 // 10 minutes for Normal mode (high frame rate)
+    // Frame-based limits (more meaningful than time-based)
+    private let warningFrameCount = 50_000       // Show warning to user
+    private let softLimitFrameCount = 100_000    // Strong warning (~10GB storage, long compile)
+    private let hardLimitFrameCount = 200_000    // Force stop to prevent crashes/issues
 
-    // Track if recording started in timelapse mode (to allow switching to Normal without triggering 10-min limit)
-    private var startedInTimelapseMode: Bool = false
+    // Published warning state for UI
+    @Published var frameCountWarning: FrameCountWarning = .none
+
+    enum FrameCountWarning {
+        case none
+        case approaching      // 50k+ frames
+        case high             // 100k+ frames
+    }
 
     // Disk space constants
     private let minRequiredDiskSpaceMB: Int64 = 500 // 500 MB minimum
@@ -194,19 +202,44 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         }
     }
 
-    /// Get the maximum recording duration for current mode
-    func getMaxDurationForCurrentMode() -> TimeInterval {
-        // If recording started in timelapse mode, always allow the full 4 hours
-        // even if user temporarily switches to Normal mode
-        if startedInTimelapseMode {
-            return maxRecordingDuration
+    /// Check frame count and update warning state, returns true if should stop
+    private func checkFrameCountLimits() -> Bool {
+        if frameCount >= hardLimitFrameCount {
+            // Hard stop - too many frames could crash during compilation
+            print("🛑 Hard frame limit reached (\(frameCount) frames). Stopping to prevent issues.")
+            return true
         }
 
-        if frameInterval <= 0 {
-            // Normal mode - limit to 10 minutes due to high frame rate
-            return maxNormalModeDuration
+        // Update warning state for UI
+        if frameCount >= softLimitFrameCount {
+            if frameCountWarning != .high {
+                frameCountWarning = .high
+                print("⚠️ High frame count warning: \(frameCount) frames (~\(frameCount / 10)MB)")
+            }
+        } else if frameCount >= warningFrameCount {
+            if frameCountWarning != .approaching {
+                frameCountWarning = .approaching
+                print("⚠️ Frame count warning: \(frameCount) frames")
+            }
         }
-        return maxRecordingDuration
+
+        return false
+    }
+
+    /// Estimate remaining recording capacity based on storage
+    func getEstimatedRemainingMinutes() -> Int? {
+        let availableMB = getAvailableDiskSpaceMB()
+        let estimatedFramesRemaining = (availableMB * 1024) / estimatedFrameSizeKB
+
+        // Estimate based on current capture rate
+        let framesPerMinute: Double
+        if frameInterval <= 0 {
+            framesPerMinute = 30 * 60  // Normal mode: 30fps
+        } else {
+            framesPerMinute = 60 / frameInterval  // Timelapse: depends on interval
+        }
+
+        return Int(Double(estimatedFramesRemaining) / framesPerMinute)
     }
 
     /// Get the speed segments for this recording (for accurate stopwatch in recaps)
@@ -576,9 +609,6 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         startTime = Date()
         lastCaptureTime = nil
 
-        // Track if we started in timelapse mode (allows 4-hour limit even if switching to Normal later)
-        startedInTimelapseMode = frameInterval > 0
-
         // Reset segment tracking
         speedSegments.removeAll()
         audioSegments.removeAll()
@@ -632,25 +662,21 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
                 self.updateFrameInterval()
 
-                // Check disk space every 10 seconds (100 timer ticks)
+                // Check disk space and frame count every 10 seconds (100 timer ticks)
                 diskCheckCounter += 1
                 if diskCheckCounter >= 100 {
                     diskCheckCounter = 0
                     self.checkDiskSpaceDuringRecording()
-                }
 
-                // Check if max duration reached (mode-dependent)
-                let maxDuration = self.getMaxDurationForCurrentMode()
-                if self.recordingDuration >= maxDuration {
-                    let durationStr = self.frameInterval <= 0 ? "10 minutes (Normal mode)" : "4 hours"
-                    print("⏰ Maximum recording duration reached (\(durationStr)). Stopping recording...")
-                    self.stopRecording()
+                    // Check frame count limits (only stop at hard limit)
+                    if self.checkFrameCountLimits() {
+                        self.stopRecording()
+                    }
                 }
             }
         }
 
-        let maxDurationStr = frameInterval <= 0 ? "10 min" : "4 hours"
-        print("🎬 Started timelapse recording at \(currentCaptureRate) (max \(maxDurationStr))")
+        print("🎬 Started recording at \(currentCaptureRate) (no time limit, storage-based)")
     }
 
     private func updateFrameInterval() {
@@ -695,7 +721,7 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         isRecording = false
         isPaused = false
         isIphoneMode = false  // Reset iPhone Mode state
-        startedInTimelapseMode = false  // Reset for next recording
+        frameCountWarning = .none  // Reset warning state
         recordingTimer?.invalidate()
         recordingTimer = nil
 
