@@ -50,6 +50,8 @@ struct TodoRecorderView: View {
     @State private var voiceoverTotalDuration: TimeInterval = 0
     @State private var voiceoverTimeObserver: Any?
     @State private var hasVoiceoverAdded = false
+    @State private var voiceoverCountdownTimer: Timer?
+    @State private var videoEndObserver: Any?
     @State private var showShareSheet = false
 
     // Video notes state
@@ -169,6 +171,13 @@ struct TodoRecorderView: View {
 
             recorder.cleanup()
             dismissAlarm()
+
+            // Cleanup voiceover state
+            cancelVoiceoverCountdown()
+            if isRecordingVoiceover {
+                cleanupVoiceoverRecording()
+            }
+
             // Lock back to portrait when leaving
             OrientationManager.shared.lockToPortrait()
         }
@@ -442,20 +451,35 @@ struct TodoRecorderView: View {
                 .frame(height: 8)
                 .padding(.horizontal, 20)
 
-                // Stop button
-                Button {
-                    stopVoiceoverRecording()
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "stop.fill")
+                // Buttons row
+                HStack(spacing: 16) {
+                    // Discard button
+                    Button {
+                        discardVoiceoverRecording()
+                    } label: {
+                        Image(systemName: "xmark")
                             .font(.system(size: 18, weight: .semibold))
-                        Text("Stop Recording")
-                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 56, height: 56)
+                            .background(Color.white.opacity(0.2))
+                            .cornerRadius(28)
                     }
-                    .foregroundColor(.white)
-                    .frame(width: 220, height: 56)
-                    .background(Color.red)
-                    .cornerRadius(28)
+
+                    // Stop & save button
+                    Button {
+                        stopVoiceoverRecording()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 18, weight: .semibold))
+                            Text("Done")
+                                .font(.system(size: 17, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(width: 160, height: 56)
+                        .background(Color.orange)
+                        .cornerRadius(28)
+                    }
                 }
             }
             .padding(.bottom, 40)
@@ -481,6 +505,19 @@ struct TodoRecorderView: View {
                 Text("Get ready to narrate...")
                     .font(.system(size: 18))
                     .foregroundColor(.white.opacity(0.7))
+
+                Button {
+                    cancelVoiceoverCountdown()
+                } label: {
+                    Text("Cancel")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundColor(.white.opacity(0.8))
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(Color.white.opacity(0.2))
+                        .cornerRadius(20)
+                }
+                .padding(.top, 20)
             }
         }
     }
@@ -491,14 +528,22 @@ struct TodoRecorderView: View {
         showVoiceoverCountdown = true
         voiceoverCountdownNumber = 3
 
-        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
+        voiceoverCountdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
             voiceoverCountdownNumber -= 1
             if voiceoverCountdownNumber == 0 {
                 timer.invalidate()
+                voiceoverCountdownTimer = nil
                 showVoiceoverCountdown = false
                 beginVoiceoverCapture()
             }
         }
+    }
+
+    private func cancelVoiceoverCountdown() {
+        voiceoverCountdownTimer?.invalidate()
+        voiceoverCountdownTimer = nil
+        showVoiceoverCountdown = false
+        voiceoverCountdownNumber = 3
     }
 
     private func beginVoiceoverCapture() {
@@ -541,6 +586,17 @@ struct TodoRecorderView: View {
                 }
             }
 
+            // Add observer for when video ends - auto stop recording
+            videoEndObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: player?.currentItem,
+                queue: .main
+            ) { [self] _ in
+                if isRecordingVoiceover {
+                    stopVoiceoverRecording()
+                }
+            }
+
             // Reset and play video from start
             player?.seek(to: .zero)
             player?.play()
@@ -553,10 +609,39 @@ struct TodoRecorderView: View {
     }
 
     private func stopVoiceoverRecording() {
+        cleanupVoiceoverRecording()
+
+        print("🎙️ Stopped voiceover recording")
+
+        // Compile video with voiceover
+        Task {
+            await compileWithVoiceover()
+        }
+    }
+
+    private func discardVoiceoverRecording() {
+        cleanupVoiceoverRecording()
+
+        // Clean up the recorded audio file
+        if let url = voiceoverURL {
+            try? FileManager.default.removeItem(at: url)
+        }
+        voiceoverURL = nil
+
+        print("🎙️ Discarded voiceover recording")
+    }
+
+    private func cleanupVoiceoverRecording() {
         // Remove time observer
         if let observer = voiceoverTimeObserver {
             player?.removeTimeObserver(observer)
             voiceoverTimeObserver = nil
+        }
+
+        // Remove video end observer
+        if let observer = videoEndObserver {
+            NotificationCenter.default.removeObserver(observer)
+            videoEndObserver = nil
         }
 
         // Reset progress
@@ -567,13 +652,6 @@ struct TodoRecorderView: View {
         voiceoverRecorder = nil
         player?.pause()
         isRecordingVoiceover = false
-
-        print("🎙️ Stopped voiceover recording")
-
-        // Compile video with voiceover
-        Task {
-            await compileWithVoiceover()
-        }
     }
 
     private func compileWithVoiceover() async {
@@ -906,8 +984,8 @@ struct TodoRecorderView: View {
 
                             // Voiceover
                             todoActionIconButton(
-                                icon: hasVoiceoverAdded ? "mic.badge.checkmark" : "mic.fill",
-                                label: "Voice",
+                                icon: hasVoiceoverAdded ? "waveform" : "mic.fill",
+                                label: hasVoiceoverAdded ? "Re-record" : "Voice",
                                 isActive: hasVoiceoverAdded
                             ) {
                                 startVoiceoverCountdown()
