@@ -93,6 +93,13 @@ struct TimeLapseRecorderView: View {
     @State private var pendingNotes: String = ""
     @State private var showNotesSheet: Bool = false
 
+    // Continue mode state
+    @State private var isContinueMode = false
+    @State private var existingVideoURL: URL?
+    @State private var existingSpeedSegmentsJSON: String?
+    @State private var existingDuration: TimeInterval = 0
+    @State private var existingNotes: String?
+
     // Partner sharing state
     @State private var showShareWithPartners = false
     @State private var savedVideoPath: String?
@@ -302,6 +309,56 @@ struct TimeLapseRecorderView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Continue Recording
+
+    private func startContinueFromPreview() {
+        guard let videoURL = recorder.recordedVideoURL else { return }
+
+        // Store current video as the one to continue from
+        existingVideoURL = videoURL
+        existingSpeedSegmentsJSON = isContinueMode ? recorder.getMergedSpeedSegmentsJSON() : recorder.getSpeedSegmentsJSON()
+        existingDuration = isContinueMode ? recorder.getTotalRecordingDuration() : recorder.recordingDuration
+
+        // Keep any notes we've added in this session
+        if !pendingNotes.isEmpty {
+            existingNotes = getMergedNotes()
+            pendingNotes = ""  // Clear for new notes
+        }
+
+        isContinueMode = true
+
+        // Clear preview state
+        player?.pause()
+        player = nil
+        previewThumbnail = nil
+        voiceoverURL = nil
+        hasVoiceoverAdded = false
+
+        // Start continue recording
+        recorder.startContinueRecording(
+            fromVideoURL: videoURL,
+            previousSpeedSegmentsJSON: existingSpeedSegmentsJSON,
+            previousDuration: existingDuration
+        )
+
+        print("🔄 Continue from preview: continuing from \(existingDuration)s video")
+    }
+
+    private func getMergedNotes() -> String? {
+        guard isContinueMode else {
+            return pendingNotes.isEmpty ? nil : pendingNotes
+        }
+
+        if let existing = existingNotes, !existing.isEmpty, !pendingNotes.isEmpty {
+            return existing + "\n\n---\n\n" + pendingNotes
+        } else if let existing = existingNotes, !existing.isEmpty {
+            return existing
+        } else if !pendingNotes.isEmpty {
+            return pendingNotes
+        }
+        return nil
     }
 
     private func shareWithPartners(partnerIds: [String]) async {
@@ -1142,8 +1199,8 @@ struct TimeLapseRecorderView: View {
                 }
             } else {
                 VStack(spacing: 12) {
-                    // Top row: Retake and Save
-                    HStack(spacing: 16) {
+                    // Top row: Retake, Continue, and Save
+                    HStack(spacing: 12) {
                         // Retake button
                         Button {
                             player?.pause()
@@ -1152,18 +1209,36 @@ struct TimeLapseRecorderView: View {
                             voiceoverURL = nil
                             hasVoiceoverAdded = false
                             pendingNotes = ""
+                            isContinueMode = false
                             recorder.clearFrames()
                         } label: {
-                            HStack(spacing: 8) {
+                            VStack(spacing: 4) {
                                 Image(systemName: "arrow.counterclockwise")
-                                    .font(.system(size: 18, weight: .semibold))
+                                    .font(.system(size: 20, weight: .semibold))
                                 Text("Retake")
-                                    .font(.system(size: 17, weight: .semibold))
+                                    .font(.system(size: 12, weight: .medium))
                             }
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: 56)
                             .background(Color.white.opacity(0.15))
+                            .cornerRadius(16)
+                        }
+
+                        // Continue button
+                        Button {
+                            startContinueFromPreview()
+                        } label: {
+                            VStack(spacing: 4) {
+                                Image(systemName: "plus.circle")
+                                    .font(.system(size: 20, weight: .semibold))
+                                Text("Continue")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 56)
+                            .background(Color.green)
                             .cornerRadius(16)
                         }
 
@@ -1173,11 +1248,11 @@ struct TimeLapseRecorderView: View {
                                 await saveVideo()
                             }
                         } label: {
-                            HStack(spacing: 8) {
+                            VStack(spacing: 4) {
                                 Image(systemName: "checkmark")
-                                    .font(.system(size: 18, weight: .semibold))
+                                    .font(.system(size: 20, weight: .semibold))
                                 Text("Save")
-                                    .font(.system(size: 17, weight: .semibold))
+                                    .font(.system(size: 12, weight: .medium))
                             }
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -1549,8 +1624,8 @@ struct TimeLapseRecorderView: View {
         uploadProgress = 0
 
         do {
-            // Use actual recording duration for study time
-            let studyTimeMinutes = recorder.recordingDuration / 60.0
+            // Use total duration for continue mode, otherwise just current recording
+            let studyTimeMinutes = (isContinueMode ? recorder.getTotalRecordingDuration() : recorder.recordingDuration) / 60.0
             uploadProgress = 0.2
 
             // Save video to local storage
@@ -1566,8 +1641,8 @@ struct TimeLapseRecorderView: View {
             }
             uploadProgress = 0.7
 
-            // Create study session with local path and notes
-            let notesToSave = pendingNotes.isEmpty ? nil : pendingNotes
+            // Create study session with local path and notes (use merged notes for continue mode)
+            let notesToSave = getMergedNotes()
             _ = try await ConvexService.shared.createStudySession(
                 goalId: goalId,
                 goalTodoId: goalTodoId,
@@ -1616,6 +1691,9 @@ struct TimeLapseRecorderView: View {
             // Store for potential partner sharing
             savedVideoPath = localVideoPath
             savedDurationMinutes = studyTimeMinutes
+
+            // Reset continue mode
+            isContinueMode = false
 
             dismiss()
 

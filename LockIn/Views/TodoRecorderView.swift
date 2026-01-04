@@ -58,6 +58,13 @@ struct TodoRecorderView: View {
     @State private var pendingNotes: String = ""
     @State private var showNotesSheet: Bool = false
 
+    // Continue mode state
+    @State private var isContinueMode = false
+    @State private var existingVideoURL: URL?
+    @State private var existingSpeedSegmentsJSON: String?
+    @State private var existingDuration: TimeInterval = 0
+    @State private var existingNotes: String?
+
     // Partner sharing state
     @State private var showShareWithPartners = false
     @State private var savedVideoPath: String?
@@ -848,6 +855,25 @@ struct TodoRecorderView: View {
 
             // Bottom controls
             VStack(spacing: 24) {
+                // Continue button (when todo already has video and not recording)
+                if todo.hasVideo && !recorder.isRecording && !isContinueMode {
+                    Button {
+                        startContinueRecording()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                            Text("Continue Recording")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .background(Color.green)
+                        .cornerRadius(24)
+                    }
+                }
+
                 // Speed selector
                 speedSelector
 
@@ -973,7 +999,17 @@ struct TodoRecorderView: View {
                                 voiceoverURL = nil
                                 hasVoiceoverAdded = false
                                 pendingNotes = ""
+                                isContinueMode = false
                                 recorder.clearFrames()
+                            }
+
+                            // Continue More
+                            todoActionIconButton(
+                                icon: "plus.circle",
+                                label: "Continue",
+                                isActive: false
+                            ) {
+                                startContinueFromPreview()
                             }
 
                             // Notes
@@ -1349,8 +1385,9 @@ struct TodoRecorderView: View {
             uploadProgress = 0.7
 
             // Attach video to todo (this also marks it as completed)
-            let notesToSave = pendingNotes.isEmpty ? nil : pendingNotes
-            let speedSegmentsJSON = recorder.getSpeedSegmentsJSON()
+            // Use merged notes and speed segments if in continue mode
+            let notesToSave = getMergedNotes()
+            let speedSegmentsJSON = isContinueMode ? recorder.getMergedSpeedSegmentsJSON() : recorder.getSpeedSegmentsJSON()
             await viewModel.attachVideo(
                 to: todo,
                 videoPath: localVideoPath,
@@ -1358,6 +1395,9 @@ struct TodoRecorderView: View {
                 videoNotes: notesToSave,
                 speedSegmentsJSON: speedSegmentsJSON
             )
+
+            // Reset continue mode state after save
+            isContinueMode = false
 
             uploadProgress = 1.0
 
@@ -1371,6 +1411,89 @@ struct TodoRecorderView: View {
             isUploading = false
             uploadProgress = 0
         }
+    }
+
+    // MARK: - Continue Recording
+
+    private func startContinueRecording() {
+        guard let videoURL = todo.videoURL else { return }
+
+        // Store existing data for continue mode
+        existingVideoURL = videoURL
+        existingSpeedSegmentsJSON = todo.speedSegmentsJSON
+        existingNotes = todo.videoNotes
+        isContinueMode = true
+
+        // Calculate existing duration from speed segments or estimate from video
+        if let segments = todo.speedSegments, let lastSegment = segments.last {
+            existingDuration = lastSegment.endRealTime
+        } else {
+            // Fallback: estimate from video asset duration
+            Task {
+                let asset = AVURLAsset(url: videoURL)
+                if let duration = try? await asset.load(.duration) {
+                    await MainActor.run {
+                        existingDuration = CMTimeGetSeconds(duration)
+                    }
+                }
+            }
+        }
+
+        // Start continue recording
+        recorder.startContinueRecording(
+            fromVideoURL: videoURL,
+            previousSpeedSegmentsJSON: existingSpeedSegmentsJSON,
+            previousDuration: existingDuration
+        )
+
+        print("🔄 Continue recording started for todo: \(todo.title)")
+    }
+
+    private func startContinueFromPreview() {
+        guard let videoURL = recorder.recordedVideoURL else { return }
+
+        // Store current video as the one to continue from
+        existingVideoURL = videoURL
+        existingSpeedSegmentsJSON = isContinueMode ? recorder.getMergedSpeedSegmentsJSON() : recorder.getSpeedSegmentsJSON()
+        existingDuration = isContinueMode ? recorder.getTotalRecordingDuration() : recorder.recordingDuration
+
+        // Keep any notes we've added in this session
+        if !pendingNotes.isEmpty {
+            existingNotes = getMergedNotes()
+            pendingNotes = ""  // Clear for new notes
+        }
+
+        isContinueMode = true
+
+        // Clear preview state
+        player?.pause()
+        player = nil
+        voiceoverURL = nil
+        hasVoiceoverAdded = false
+
+        // Start continue recording
+        recorder.startContinueRecording(
+            fromVideoURL: videoURL,
+            previousSpeedSegmentsJSON: existingSpeedSegmentsJSON,
+            previousDuration: existingDuration
+        )
+
+        print("🔄 Continue from preview: continuing from \(existingDuration)s video")
+    }
+
+    private func getMergedNotes() -> String? {
+        guard isContinueMode else {
+            return pendingNotes.isEmpty ? nil : pendingNotes
+        }
+
+        if let existing = existingNotes, !existing.isEmpty, !pendingNotes.isEmpty {
+            return existing + "\n\n---\n\n" + pendingNotes
+        } else if let existing = existingNotes, !existing.isEmpty {
+            return existing
+        } else if !pendingNotes.isEmpty {
+            return pendingNotes
+        }
+        return nil
     }
 
     private func shareWithPartners(partnerIds: [String]) async {

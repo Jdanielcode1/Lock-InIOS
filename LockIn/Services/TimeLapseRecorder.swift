@@ -119,6 +119,13 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     // Background task for compilation
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
+    // Continue mode - for resuming previous recordings
+    private var continueFromVideoURL: URL?
+    private var previousSpeedSegments: [SpeedSegment] = []
+    private var previousFrameCount: Int = 0
+    private var previousDuration: TimeInterval = 0
+    @Published var isContinueMode: Bool = false
+
     private var recordingTimer: Timer?
     private let videoQueue = DispatchQueue(label: "com.lockin.timelapse.video")
     @Published var recordingOrientation: UIDeviceOrientation = .portrait
@@ -608,6 +615,7 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         pauseStartTime = nil
         startTime = Date()
         lastCaptureTime = nil
+        recordedVideoURL = nil  // Clear so UI shows camera preview
 
         // Reset segment tracking
         speedSegments.removeAll()
@@ -677,6 +685,40 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         }
 
         print("🎬 Started recording at \(currentCaptureRate) (no time limit, storage-based)")
+    }
+
+    /// Start recording in continue mode - will concatenate with existing video
+    func startContinueRecording(
+        fromVideoURL: URL,
+        previousSpeedSegmentsJSON: String?,
+        previousDuration: TimeInterval
+    ) {
+        // Parse previous speed segments
+        if let json = previousSpeedSegmentsJSON {
+            previousSpeedSegments = Self.parseSpeedSegments(from: json) ?? []
+            previousFrameCount = previousSpeedSegments.last?.endFrameIndex ?? 0
+        } else {
+            previousSpeedSegments = []
+            previousFrameCount = 0
+        }
+
+        self.continueFromVideoURL = fromVideoURL
+        self.previousDuration = previousDuration
+        self.isContinueMode = true
+
+        print("🔄 Continue mode: from \(fromVideoURL.lastPathComponent), previous duration: \(previousDuration)s, previous frames: \(previousFrameCount)")
+
+        // Start normal recording - concatenation happens on stop
+        startRecording()
+    }
+
+    /// Reset continue mode state
+    private func resetContinueMode() {
+        continueFromVideoURL = nil
+        previousSpeedSegments = []
+        previousFrameCount = 0
+        previousDuration = 0
+        isContinueMode = false
     }
 
     private func updateFrameInterval() {
@@ -795,20 +837,21 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             }
 
             // If we have audio segments, merge them with the video using proper sync
+            var newVideoURL = videoOnlyURL
             if !audioSegments.isEmpty {
                 print("🔊 Merging \(audioSegments.count) audio segment(s) with video using segment-based sync...")
-                let finalURL = FileManager.default.temporaryDirectory
+                let audioMergedURL = FileManager.default.temporaryDirectory
                     .appendingPathComponent(UUID().uuidString)
                     .appendingPathExtension("mov")
 
                 try await mergeVideoWithAudioSegments(
                     videoURL: videoOnlyURL,
                     audioSegments: audioSegments,
-                    outputURL: finalURL
+                    outputURL: audioMergedURL
                 )
 
                 await MainActor.run {
-                    self.compilationProgress = 0.95
+                    self.compilationProgress = 0.85
                 }
 
                 // Clean up intermediate files
@@ -817,19 +860,45 @@ class TimeLapseRecorder: NSObject, ObservableObject {
                     try? FileManager.default.removeItem(at: segment.audioFileURL)
                 }
 
+                newVideoURL = audioMergedURL
+                print("✅ Audio merged successfully")
+            }
+
+            // If in continue mode, concatenate with existing video
+            let continueURL = await MainActor.run { self.continueFromVideoURL }
+            if let existingVideoURL = continueURL {
+                print("🔗 Continue mode: concatenating with existing video...")
                 await MainActor.run {
-                    self.recordedVideoURL = finalURL
+                    self.compilationProgress = 0.9
+                }
+
+                let concatenatedURL = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(UUID().uuidString)
+                    .appendingPathExtension("mov")
+
+                try await concatenateVideos(
+                    firstURL: existingVideoURL,
+                    secondURL: newVideoURL,
+                    outputURL: concatenatedURL
+                )
+
+                // Clean up intermediate new video
+                try? FileManager.default.removeItem(at: newVideoURL)
+
+                await MainActor.run {
+                    self.recordedVideoURL = concatenatedURL
                     self.isCompilingVideo = false
                     self.compilationProgress = 1.0
+                    self.resetContinueMode()
                 }
-                print("✅ Timelapse video with synced audio created at: \(finalURL)")
+                print("✅ Concatenated video created at: \(concatenatedURL)")
             } else {
                 await MainActor.run {
-                    self.recordedVideoURL = videoOnlyURL
+                    self.recordedVideoURL = newVideoURL
                     self.isCompilingVideo = false
                     self.compilationProgress = 1.0
                 }
-                print("✅ Timelapse video created at: \(videoOnlyURL)")
+                print("✅ Timelapse video created at: \(newVideoURL)")
             }
 
             // Clean up temporary frame files
@@ -848,6 +917,160 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
         // End background task
         endBackgroundTask()
+    }
+
+    /// Concatenate two videos into one
+    nonisolated func concatenateVideos(
+        firstURL: URL,
+        secondURL: URL,
+        outputURL: URL
+    ) async throws {
+        print("🔗 Concatenating videos: \(firstURL.lastPathComponent) + \(secondURL.lastPathComponent)")
+
+        let firstAsset = AVURLAsset(url: firstURL)
+        let secondAsset = AVURLAsset(url: secondURL)
+        let composition = AVMutableComposition()
+
+        // Load video tracks from both assets
+        guard let firstVideoTrack = try await firstAsset.loadTracks(withMediaType: .video).first else {
+            throw NSError(domain: "TimeLapseRecorder", code: -30,
+                          userInfo: [NSLocalizedDescriptionKey: "First video has no video track"])
+        }
+
+        guard let secondVideoTrack = try await secondAsset.loadTracks(withMediaType: .video).first else {
+            throw NSError(domain: "TimeLapseRecorder", code: -31,
+                          userInfo: [NSLocalizedDescriptionKey: "Second video has no video track"])
+        }
+
+        // Create composition video track
+        guard let compositionVideoTrack = composition.addMutableTrack(
+            withMediaType: .video,
+            preferredTrackID: kCMPersistentTrackID_Invalid
+        ) else {
+            throw NSError(domain: "TimeLapseRecorder", code: -32,
+                          userInfo: [NSLocalizedDescriptionKey: "Failed to create video track"])
+        }
+
+        // Get durations
+        let firstDuration = try await firstAsset.load(.duration)
+        let secondDuration = try await secondAsset.load(.duration)
+
+        // Insert first video
+        try compositionVideoTrack.insertTimeRange(
+            CMTimeRange(start: .zero, duration: firstDuration),
+            of: firstVideoTrack,
+            at: .zero
+        )
+
+        // Insert second video after first
+        try compositionVideoTrack.insertTimeRange(
+            CMTimeRange(start: .zero, duration: secondDuration),
+            of: secondVideoTrack,
+            at: firstDuration
+        )
+
+        // Use transform from first video
+        let firstTransform = try await firstVideoTrack.load(.preferredTransform)
+        compositionVideoTrack.preferredTransform = firstTransform
+
+        print("🔗 First video: \(CMTimeGetSeconds(firstDuration))s, Second: \(CMTimeGetSeconds(secondDuration))s")
+
+        // Handle audio tracks if present
+        let firstAudioTracks = try await firstAsset.loadTracks(withMediaType: .audio)
+        let secondAudioTracks = try await secondAsset.loadTracks(withMediaType: .audio)
+
+        if !firstAudioTracks.isEmpty || !secondAudioTracks.isEmpty {
+            guard let compositionAudioTrack = composition.addMutableTrack(
+                withMediaType: .audio,
+                preferredTrackID: kCMPersistentTrackID_Invalid
+            ) else {
+                throw NSError(domain: "TimeLapseRecorder", code: -33,
+                              userInfo: [NSLocalizedDescriptionKey: "Failed to create audio track"])
+            }
+
+            // Insert first audio if present
+            if let firstAudioTrack = firstAudioTracks.first {
+                try? compositionAudioTrack.insertTimeRange(
+                    CMTimeRange(start: .zero, duration: firstDuration),
+                    of: firstAudioTrack,
+                    at: .zero
+                )
+            }
+
+            // Insert second audio after first duration
+            if let secondAudioTrack = secondAudioTracks.first {
+                try? compositionAudioTrack.insertTimeRange(
+                    CMTimeRange(start: .zero, duration: secondDuration),
+                    of: secondAudioTrack,
+                    at: firstDuration
+                )
+            }
+        }
+
+        // Export
+        guard let exportSession = AVAssetExportSession(
+            asset: composition,
+            presetName: AVAssetExportPresetHighestQuality
+        ) else {
+            throw NSError(domain: "TimeLapseRecorder", code: -34,
+                          userInfo: [NSLocalizedDescriptionKey: "Failed to create export session"])
+        }
+
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = .mov
+
+        print("🔗 Starting concatenation export...")
+        await exportSession.export()
+
+        switch exportSession.status {
+        case .completed:
+            let totalDuration = CMTimeGetSeconds(firstDuration) + CMTimeGetSeconds(secondDuration)
+            print("✅ Concatenation completed: \(totalDuration)s total")
+        case .failed:
+            let errorMessage = exportSession.error?.localizedDescription ?? "Unknown error"
+            print("❌ Concatenation failed: \(errorMessage)")
+            throw exportSession.error ?? NSError(domain: "TimeLapseRecorder", code: -35,
+                          userInfo: [NSLocalizedDescriptionKey: "Export failed: \(errorMessage)"])
+        case .cancelled:
+            throw NSError(domain: "TimeLapseRecorder", code: -36,
+                          userInfo: [NSLocalizedDescriptionKey: "Export was cancelled"])
+        default:
+            throw NSError(domain: "TimeLapseRecorder", code: -37,
+                          userInfo: [NSLocalizedDescriptionKey: "Export ended with status: \(exportSession.status.rawValue)"])
+        }
+    }
+
+    /// Merge speed segments from continue recording, applying proper offsets
+    func getMergedSpeedSegmentsJSON() -> String? {
+        guard isContinueMode else {
+            return getSpeedSegmentsJSON()
+        }
+
+        // Offset new segments by previous totals
+        let offsetSegments = speedSegments.map { segment in
+            SpeedSegment(
+                startFrameIndex: segment.startFrameIndex + previousFrameCount,
+                endFrameIndex: segment.endFrameIndex + previousFrameCount,
+                startRealTime: segment.startRealTime + previousDuration,
+                endRealTime: segment.endRealTime + previousDuration,
+                frameInterval: segment.frameInterval
+            )
+        }
+
+        let mergedSegments = previousSpeedSegments + offsetSegments
+
+        guard !mergedSegments.isEmpty else { return nil }
+        let encoder = JSONEncoder()
+        if let data = try? encoder.encode(mergedSegments),
+           let json = String(data: data, encoding: .utf8) {
+            return json
+        }
+        return nil
+    }
+
+    /// Get total duration including previous recording (for continue mode)
+    func getTotalRecordingDuration() -> TimeInterval {
+        return previousDuration + recordingDuration
     }
 
     /// Pre-process audio file to target duration using AVAssetExportSession
@@ -1344,6 +1567,7 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         frameCount = 0
         recordedVideoURL = nil
         isIphoneMode = false  // Reset iPhone Mode state
+        resetContinueMode()   // Reset continue mode state
 
         // Clean up temporary frame storage
         if let storageDir = frameStorageDirectory {
