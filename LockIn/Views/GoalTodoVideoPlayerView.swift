@@ -12,6 +12,7 @@ import Photos
 
 struct GoalTodoVideoPlayerView: View {
     let goalTodo: GoalTodo
+    var onResume: (() -> Void)?  // Callback when Resume is tapped
 
     @Environment(\.dismiss) var dismiss
     @State private var currentVideoURL: URL
@@ -43,8 +44,9 @@ struct GoalTodoVideoPlayerView: View {
 
     private let recorder = TimeLapseRecorder()
 
-    init(videoURL: URL, goalTodo: GoalTodo) {
+    init(videoURL: URL, goalTodo: GoalTodo, onResume: (() -> Void)? = nil) {
         self.goalTodo = goalTodo
+        self.onResume = onResume
         _currentVideoURL = State(initialValue: videoURL)
     }
 
@@ -183,6 +185,27 @@ struct GoalTodoVideoPlayerView: View {
 
                 // Action bar
                 HStack(spacing: 12) {
+                    // Resume button
+                    if onResume != nil {
+                        Button {
+                            cleanupPlayer()
+                            dismiss()
+                            onResume?()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 13, weight: .semibold))
+                                Text("Resume")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundColor(.black)
+                            .frame(height: 38)
+                            .padding(.horizontal, 16)
+                            .background(Color.green)
+                            .clipShape(Capsule())
+                        }
+                    }
+
                     // Notes button
                     Button {
                         editingNotes = goalTodo.videoNotes ?? ""

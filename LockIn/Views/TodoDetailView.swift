@@ -239,7 +239,10 @@ struct TodoDetailView: View {
             }
             .fullScreenCover(isPresented: $showingVideoPlayer) {
                 if let videoURL = todo.videoURL {
-                    TodoVideoPlayerView(videoURL: videoURL, todo: todo)
+                    TodoVideoPlayerView(videoURL: videoURL, todo: todo) {
+                        // onResume: Open recorder when Resume is tapped
+                        showingRecorder = true
+                    }
                 }
             }
             .onChange(of: todo.isCompleted) { _, newValue in

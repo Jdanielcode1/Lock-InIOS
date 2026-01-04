@@ -855,7 +855,7 @@ struct TodoRecorderView: View {
 
             // Bottom controls
             VStack(spacing: 24) {
-                // Continue button (when todo already has video and not recording)
+                // Resume button (when todo already has video and not recording)
                 if todo.hasVideo && !recorder.isRecording && !isContinueMode {
                     Button {
                         startContinueRecording()
@@ -863,7 +863,7 @@ struct TodoRecorderView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "plus.circle.fill")
                                 .font(.system(size: 18, weight: .semibold))
-                            Text("Continue Recording")
+                            Text("Resume Recording")
                                 .font(.system(size: 16, weight: .semibold))
                         }
                         .foregroundColor(.white)
@@ -1003,10 +1003,10 @@ struct TodoRecorderView: View {
                                 recorder.clearFrames()
                             }
 
-                            // Continue More
+                            // Resume More
                             todoActionIconButton(
                                 icon: "plus.circle",
-                                label: "Continue",
+                                label: "Resume",
                                 isActive: false
                             ) {
                                 startContinueFromPreview()

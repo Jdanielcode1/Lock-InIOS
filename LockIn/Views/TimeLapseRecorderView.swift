@@ -1199,7 +1199,7 @@ struct TimeLapseRecorderView: View {
                 }
             } else {
                 VStack(spacing: 12) {
-                    // Top row: Retake, Continue, and Save
+                    // Top row: Retake, Resume, and Save
                     HStack(spacing: 12) {
                         // Retake button
                         Button {
@@ -1225,14 +1225,14 @@ struct TimeLapseRecorderView: View {
                             .cornerRadius(16)
                         }
 
-                        // Continue button
+                        // Resume button
                         Button {
                             startContinueFromPreview()
                         } label: {
                             VStack(spacing: 4) {
                                 Image(systemName: "plus.circle")
                                     .font(.system(size: 20, weight: .semibold))
-                                Text("Continue")
+                                Text("Resume")
                                     .font(.system(size: 12, weight: .medium))
                             }
                             .foregroundColor(.white)

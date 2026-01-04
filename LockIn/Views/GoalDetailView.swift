@@ -16,6 +16,7 @@ struct GoalDetailView: View {
     @State private var showingAddGoalTodo = false
     @State private var selectedGoalTodo: GoalTodo?
     @State private var showingVideoPlayer = false
+    @State private var shouldOpenRecorderAfterDismiss = false
     @State private var recentlyArchivedTodo: GoalTodo?
     @State private var showUndoToast = false
     @State private var isEditingTitle = false
@@ -192,7 +193,10 @@ struct GoalDetailView: View {
                     sessionsEmptyState
                 } else {
                     ForEach(viewModel.studySessions) { session in
-                        NavigationLink(destination: VideoPlayerView(session: session)) {
+                        NavigationLink(destination: VideoPlayerView(session: session) {
+                            // onResume: Open recorder when Resume is tapped
+                            shouldOpenRecorderAfterDismiss = true
+                        }) {
                             SessionRow(session: session, goalTodos: viewModel.goalTodos)
                         }
                     }
@@ -275,7 +279,10 @@ struct GoalDetailView: View {
         }
         .fullScreenCover(isPresented: $showingVideoPlayer) {
             if let goalTodo = selectedGoalTodo, let videoURL = goalTodo.videoURL {
-                GoalTodoVideoPlayerView(videoURL: videoURL, goalTodo: goalTodo)
+                GoalTodoVideoPlayerView(videoURL: videoURL, goalTodo: goalTodo) {
+                    // onResume: Open recorder when Resume is tapped
+                    showingVideoPicker = true
+                }
             }
         }
         .sheet(isPresented: $showingAddGoalTodo) {
@@ -284,6 +291,15 @@ struct GoalDetailView: View {
         .onChange(of: showingVideoPicker) { _, isShowing in
             if !isShowing {
                 selectedGoalTodo = nil
+            }
+        }
+        .onChange(of: shouldOpenRecorderAfterDismiss) { _, shouldOpen in
+            if shouldOpen {
+                shouldOpenRecorderAfterDismiss = false
+                // Delay slightly to allow navigation to complete
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    showingVideoPicker = true
+                }
             }
         }
         .task {

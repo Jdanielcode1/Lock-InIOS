@@ -12,6 +12,7 @@ import Photos
 
 struct TodoVideoPlayerView: View {
     let todo: TodoItem
+    var onResume: (() -> Void)?  // Callback when Resume is tapped
 
     @Environment(\.dismiss) var dismiss
     @State private var currentVideoURL: URL
@@ -43,8 +44,9 @@ struct TodoVideoPlayerView: View {
 
     private let recorder = TimeLapseRecorder()
 
-    init(videoURL: URL, todo: TodoItem) {
+    init(videoURL: URL, todo: TodoItem, onResume: (() -> Void)? = nil) {
         self.todo = todo
+        self.onResume = onResume
         _currentVideoURL = State(initialValue: videoURL)
     }
 
@@ -183,6 +185,27 @@ struct TodoVideoPlayerView: View {
 
                 // Action bar
                 HStack(spacing: 12) {
+                    // Resume button
+                    if onResume != nil {
+                        Button {
+                            cleanupPlayer()
+                            dismiss()
+                            onResume?()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 13, weight: .semibold))
+                                Text("Resume")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundColor(.black)
+                            .frame(height: 38)
+                            .padding(.horizontal, 16)
+                            .background(Color.green)
+                            .clipShape(Capsule())
+                        }
+                    }
+
                     // Notes button
                     Button {
                         editingNotes = todo.videoNotes ?? ""

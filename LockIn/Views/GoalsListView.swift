@@ -101,7 +101,10 @@ struct GoalsListView: View {
             }
             .fullScreenCover(item: $selectedTodoForPlayback) { todo in
                 if let videoURL = todo.videoURL {
-                    TodoVideoPlayerView(videoURL: videoURL, todo: todo)
+                    TodoVideoPlayerView(videoURL: videoURL, todo: todo) {
+                        // onResume: Open recorder when Resume is tapped
+                        selectedTodoForRecording = todo
+                    }
                 }
             }
             .fullScreenCover(isPresented: $showTodoSessionRecorder) {
@@ -129,7 +132,11 @@ struct GoalsListView: View {
             }
             .fullScreenCover(item: $selectedGoalTodoForPlayback) { goalTodo in
                 if let videoURL = goalTodo.videoURL {
-                    GoalTodoVideoPlayerView(videoURL: videoURL, goalTodo: goalTodo)
+                    GoalTodoVideoPlayerView(videoURL: videoURL, goalTodo: goalTodo) {
+                        // onResume: Open recorder when Resume is tapped
+                        selectedGoalTodoForRecording = goalTodo
+                        showingGoalTodoRecorder = true
+                    }
                 }
             }
             .sheet(item: $selectedTodoForEditing) { todo in
