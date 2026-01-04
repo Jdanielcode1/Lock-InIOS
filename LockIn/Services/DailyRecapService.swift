@@ -309,15 +309,16 @@ class DailyRecapService: ObservableObject {
         }
         print("   ⏱️ Pre-rendered \(cumulativeCache.count) cumulative timer images (total \(Int(totalCumulativeRealTime))s)")
 
-        // Build clip time ranges with cumulative offset
-        var clipRanges: [(startTime: Double, endTime: Double, speedSegments: [SpeedSegment]?, cumulativeOffset: Double)] = []
+        // Build clip time ranges with cumulative offset and clip duration
+        var clipRanges: [(startTime: Double, endTime: Double, speedSegments: [SpeedSegment]?, cumulativeOffset: Double, clipDuration: Double)] = []
         var cumulativeOffset: Double = 0
         for (index, data) in overlayData.enumerated() {
             clipRanges.append((
                 startTime: data.startTime,
                 endTime: data.startTime + data.duration,
                 speedSegments: data.speedSegments,
-                cumulativeOffset: cumulativeOffset
+                cumulativeOffset: cumulativeOffset,
+                clipDuration: data.duration  // The trimmed clip duration (max 12s)
             ))
             cumulativeOffset += clipRealDurations[index]
         }
@@ -381,9 +382,11 @@ class DailyRecapService: ObservableObject {
                     let videoTimeInClip = currentTime - clip.startTime
 
                     // Calculate real elapsed time using speed segments
+                    // The stopwatch is scaled to show the FULL recording duration within the trimmed clip
                     let realElapsedTime = calculateRealTimeFunc(
                         videoTimeInClip,
-                        clip.speedSegments
+                        clip.speedSegments,
+                        clip.clipDuration  // Pass the actual trimmed clip duration
                     )
 
                     let scale = min(request.renderSize.width, request.renderSize.height) / 1280.0
@@ -877,43 +880,56 @@ class DailyRecapService: ObservableObject {
 
     /// Calculate real elapsed time from video position using speed segments
     /// Returns the actual recording time at a given video playback position
+    ///
+    /// IMPORTANT: This function now scales the real time to fit within the visible clip duration.
+    /// Since recap clips are trimmed to 12 seconds, we scale the stopwatch so it shows
+    /// the FULL recording duration within those 12 seconds of video.
     private func calculateRealTime(
         videoTimeInClip: Double,
-        speedSegments: [SpeedSegment]?
+        speedSegments: [SpeedSegment]?,
+        clipVideoDuration: Double = 12.0  // The trimmed clip duration (default 12s)
     ) -> Double {
         // If no segments, assume 1x speed (video time = real time)
         guard let segments = speedSegments, !segments.isEmpty else {
             return videoTimeInClip
         }
 
-        // Video plays at 30fps, so we need to find what frame we're at
-        // and use the speed segments to calculate real elapsed time
-        let currentFrame = Int(videoTimeInClip * 30)
+        // Get the total real recording duration from speed segments
+        guard let lastSegment = segments.last else {
+            return videoTimeInClip
+        }
+        let totalRealDuration = lastSegment.endRealTime
 
-        // Find the segment this frame falls into and calculate real time
-        for segment in segments {
-            if currentFrame >= segment.startFrameIndex && currentFrame < segment.endFrameIndex {
-                // We're in this segment
-                let framesIntoSegment = currentFrame - segment.startFrameIndex
-                let totalFramesInSegment = segment.endFrameIndex - segment.startFrameIndex
+        // Get the total video duration (all frames at 30fps)
+        let totalFrames = lastSegment.endFrameIndex
+        let totalVideoDuration = Double(totalFrames) / 30.0
 
-                // Calculate how far through this segment we are (0.0 to 1.0)
-                let progress = totalFramesInSegment > 0 ?
-                    Double(framesIntoSegment) / Double(totalFramesInSegment) : 0.0
+        // If the full video is shorter than clip duration, no scaling needed
+        if totalVideoDuration <= clipVideoDuration {
+            // Use the original frame-based calculation
+            let currentFrame = Int(videoTimeInClip * 30)
 
-                // Interpolate real time within this segment
-                let segmentRealDuration = segment.endRealTime - segment.startRealTime
-                return segment.startRealTime + (progress * segmentRealDuration)
+            for segment in segments {
+                if currentFrame >= segment.startFrameIndex && currentFrame < segment.endFrameIndex {
+                    let framesIntoSegment = currentFrame - segment.startFrameIndex
+                    let totalFramesInSegment = segment.endFrameIndex - segment.startFrameIndex
+                    let progress = totalFramesInSegment > 0 ?
+                        Double(framesIntoSegment) / Double(totalFramesInSegment) : 0.0
+                    let segmentRealDuration = segment.endRealTime - segment.startRealTime
+                    return segment.startRealTime + (progress * segmentRealDuration)
+                }
             }
+
+            if currentFrame >= lastSegment.endFrameIndex {
+                return lastSegment.endRealTime
+            }
+            return videoTimeInClip
         }
 
-        // If we're past all segments, use the last segment's end time
-        if let lastSegment = segments.last, currentFrame >= lastSegment.endFrameIndex {
-            return lastSegment.endRealTime
-        }
-
-        // Fallback: assume 1x speed
-        return videoTimeInClip
+        // Scale the stopwatch to show full recording duration within the trimmed clip
+        // This makes the stopwatch count from 0 to totalRealDuration over clipVideoDuration seconds
+        let progress = min(videoTimeInClip / clipVideoDuration, 1.0)
+        return progress * totalRealDuration
     }
 
     /// Creates a text overlay image using Core Graphics
