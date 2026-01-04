@@ -719,18 +719,20 @@ struct TodoRecorderView: View {
                         .cornerRadius(20)
                 }
 
-                // Privacy mode toggle
-                PrivacyModeToggle(privacyManager: privacyManager)
+                // Privacy mode toggle (hide during recording to save space)
+                if !recorder.isRecording {
+                    PrivacyModeToggle(privacyManager: privacyManager)
 
-                // Todo title indicator (always visible)
-                Text(todo.title)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.black.opacity(0.5))
-                    .cornerRadius(12)
+                    // Todo title indicator
+                    Text(todo.title)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.black.opacity(0.5))
+                        .cornerRadius(12)
+                }
 
                 Spacer()
 
@@ -793,7 +795,7 @@ struct TodoRecorderView: View {
 
                 // Recording info
                 if recorder.isRecording {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         if recorder.isPaused {
                             Image(systemName: "pause.fill")
                                 .font(.system(size: 10, weight: .bold))
@@ -809,27 +811,28 @@ struct TodoRecorderView: View {
                         } else {
                             Circle()
                                 .fill(Color.red)
-                                .frame(width: 10, height: 10)
+                                .frame(width: 8, height: 8)
                         }
 
                         Text(timerDisplayText)
-                            .font(.system(size: 17, weight: .bold))
+                            .font(.system(size: 15, weight: .bold, design: .monospaced))
                             .foregroundColor(isOvertime ? .red : .white)
 
                         if recorder.isPaused {
                             Text("PAUSED")
-                                .font(.system(size: 12, weight: .bold))
+                                .font(.system(size: 11, weight: .bold))
                                 .foregroundColor(.orange)
                         } else {
-                            Text("• \(recorder.frameCount) frames")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.white.opacity(0.8))
+                            Text("\(recorder.frameCount)f")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white.opacity(0.7))
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.black.opacity(0.5))
-                    .cornerRadius(20)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.black.opacity(0.6))
+                    .cornerRadius(16)
+                    .fixedSize()
                 }
             }
             .padding(.horizontal)
