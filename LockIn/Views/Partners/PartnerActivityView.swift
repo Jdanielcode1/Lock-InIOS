@@ -189,24 +189,30 @@ private struct SharedVideoCard: View {
     let onTap: () -> Void
 
     @State private var isPressed = false
+    @State private var thumbnailUrl: URL?
 
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 0) {
                 // Thumbnail with 16:9 aspect ratio
                 ZStack {
-                    // Background gradient (simulating video thumbnail)
-                    RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusMedium)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(UIColor.tertiarySystemFill),
-                                    Color(UIColor.quaternarySystemFill)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                    // Background - either thumbnail image or gradient fallback
+                    if let thumbnailUrl = thumbnailUrl {
+                        AsyncImage(url: thumbnailUrl) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            case .failure(_), .empty:
+                                thumbnailPlaceholder
+                            @unknown default:
+                                thumbnailPlaceholder
+                            }
+                        }
+                    } else {
+                        thumbnailPlaceholder
+                    }
 
                     // Gradient overlay at bottom
                     VStack {
@@ -283,6 +289,39 @@ private struct SharedVideoCard: View {
             }
         }
         .buttonStyle(PressButtonStyle(scale: 0.98, enableHaptic: false))
+        .onAppear {
+            loadThumbnail()
+        }
+    }
+
+    private var thumbnailPlaceholder: some View {
+        RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusMedium)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color(UIColor.tertiarySystemFill),
+                        Color(UIColor.quaternarySystemFill)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+    }
+
+    private func loadThumbnail() {
+        Task {
+            do {
+                if let urlString = try await ConvexService.shared.getSharedVideoThumbnailUrl(videoId: video._id),
+                   let url = URL(string: urlString) {
+                    await MainActor.run {
+                        thumbnailUrl = url
+                    }
+                }
+            } catch {
+                // Silently fail - will show placeholder
+                print("Failed to load thumbnail: \(error)")
+            }
+        }
     }
 }
 

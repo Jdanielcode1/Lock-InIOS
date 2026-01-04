@@ -687,6 +687,12 @@ class ConvexService: ObservableObject {
         ])
     }
 
+    func getSharedVideoThumbnailUrl(videoId: String) async throws -> String? {
+        return try await convexClient.action("sharedVideos:getThumbnailUrl", with: [
+            "videoId": videoId
+        ])
+    }
+
     func deleteSharedVideo(videoId: String) async throws {
         let _: String? = try await convexClient.mutation("sharedVideos:remove", with: [
             "videoId": videoId

@@ -1380,6 +1380,26 @@ struct TodoRecorderView: View {
         }
 
         do {
+            // Generate thumbnail from first frame
+            var thumbnailR2Key: String? = nil
+            if let thumbnail = try? await videoService.generateThumbnail(from: videoURL),
+               let thumbnailData = thumbnail.jpegData(compressionQuality: 0.8) {
+                // Get upload URL for thumbnail
+                let thumbUploadResponse = try await ConvexService.shared.generateUploadUrl()
+
+                var thumbRequest = URLRequest(url: URL(string: thumbUploadResponse.url)!)
+                thumbRequest.httpMethod = "PUT"
+                thumbRequest.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+                thumbRequest.httpBody = thumbnailData
+
+                let (_, thumbResponse) = try await URLSession.shared.data(for: thumbRequest)
+                if let httpResponse = thumbResponse as? HTTPURLResponse,
+                   httpResponse.statusCode == 200 {
+                    thumbnailR2Key = thumbUploadResponse.key
+                    try? await ConvexService.shared.syncR2Metadata(key: thumbUploadResponse.key)
+                }
+            }
+
             // Get upload URL and key from Convex
             let uploadResponse = try await ConvexService.shared.generateUploadUrl()
 
@@ -1405,7 +1425,7 @@ struct TodoRecorderView: View {
             // Create shared video record
             _ = try await ConvexService.shared.shareVideo(
                 r2Key: r2Key,
-                thumbnailR2Key: nil,
+                thumbnailR2Key: thumbnailR2Key,
                 durationMinutes: recorder.recordingDuration / 60.0,
                 goalTitle: nil,
                 todoTitle: todo.title,
