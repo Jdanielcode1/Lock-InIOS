@@ -90,6 +90,9 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     private let maxRecordingDuration: TimeInterval = 4 * 60 * 60 // 4 hours in seconds
     private let maxNormalModeDuration: TimeInterval = 10 * 60 // 10 minutes for Normal mode (high frame rate)
 
+    // Track if recording started in timelapse mode (to allow switching to Normal without triggering 10-min limit)
+    private var startedInTimelapseMode: Bool = false
+
     // Disk space constants
     private let minRequiredDiskSpaceMB: Int64 = 500 // 500 MB minimum
     private let estimatedFrameSizeKB: Int64 = 100 // ~100 KB per JPEG frame
@@ -193,6 +196,12 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
     /// Get the maximum recording duration for current mode
     func getMaxDurationForCurrentMode() -> TimeInterval {
+        // If recording started in timelapse mode, always allow the full 4 hours
+        // even if user temporarily switches to Normal mode
+        if startedInTimelapseMode {
+            return maxRecordingDuration
+        }
+
         if frameInterval <= 0 {
             // Normal mode - limit to 10 minutes due to high frame rate
             return maxNormalModeDuration
@@ -567,6 +576,9 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         startTime = Date()
         lastCaptureTime = nil
 
+        // Track if we started in timelapse mode (allows 4-hour limit even if switching to Normal later)
+        startedInTimelapseMode = frameInterval > 0
+
         // Reset segment tracking
         speedSegments.removeAll()
         audioSegments.removeAll()
@@ -683,6 +695,7 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         isRecording = false
         isPaused = false
         isIphoneMode = false  // Reset iPhone Mode state
+        startedInTimelapseMode = false  // Reset for next recording
         recordingTimer?.invalidate()
         recordingTimer = nil
 
