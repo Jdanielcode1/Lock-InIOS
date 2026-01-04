@@ -815,12 +815,12 @@ struct TodoRecorderView: View {
 
             Spacer()
 
-            // Video player in a contained box
+            // Video player
             if let player = player {
                 VideoPlayer(player: player)
                     .aspectRatio(recordedInLandscape ? 16/9 : 9/16, contentMode: .fit)
-                    .frame(maxHeight: UIScreen.main.bounds.height * (recordedInLandscape ? 0.35 : 0.5))
                     .cornerRadius(16)
+                    .frame(maxHeight: UIScreen.main.bounds.height * (recordedInLandscape ? 0.4 : 0.55))
                     .padding(.horizontal, 20)
                     .onAppear {
                         player.play()
@@ -829,7 +829,7 @@ struct TodoRecorderView: View {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Color.white.opacity(0.1))
                     .aspectRatio(recordedInLandscape ? 16/9 : 9/16, contentMode: .fit)
-                    .frame(maxHeight: UIScreen.main.bounds.height * (recordedInLandscape ? 0.35 : 0.5))
+                    .frame(maxHeight: UIScreen.main.bounds.height * (recordedInLandscape ? 0.4 : 0.55))
                     .overlay(
                         ProgressView()
                             .tint(.white)
@@ -837,73 +837,107 @@ struct TodoRecorderView: View {
                     .padding(.horizontal, 20)
             }
 
-            // Todo info card
-            VStack(spacing: 12) {
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(.green)
+                // Todo info card
+                VStack(spacing: 12) {
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.green)
 
-                    Text(todo.title)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(2)
+                        Text(todo.title)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+                            .lineLimit(2)
 
-                    Spacer()
+                        Spacer()
+                    }
+
+                    if let description = todo.description, !description.isEmpty {
+                        Text(description)
+                            .font(.system(size: 14))
+                            .foregroundColor(.white.opacity(0.7))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .lineLimit(2)
+                    }
                 }
-
-                if let description = todo.description, !description.isEmpty {
-                    Text(description)
-                        .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.7))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .lineLimit(2)
-                }
-            }
-            .padding(20)
-            .background(Color.white.opacity(0.1))
-            .cornerRadius(16)
-            .padding(.horizontal, 20)
-            .padding(.top, 24)
+                .padding(20)
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(16)
+                .padding(.horizontal, 20)
+                .padding(.top, 24)
 
             Spacer()
 
-            // Action buttons
-            if isUploading || isCompilingVoiceover {
-                if isCompilingVoiceover {
-                    voiceoverCompilingView
-                        .padding(.bottom, 40)
+                // Action buttons
+                if isUploading || isCompilingVoiceover {
+                    if isCompilingVoiceover {
+                        voiceoverCompilingView
+                            .padding(.bottom, 40)
+                    } else {
+                        uploadProgressView
+                            .padding(.bottom, 40)
+                    }
                 } else {
-                    uploadProgressView
-                        .padding(.bottom, 40)
-                }
-            } else {
-                VStack(spacing: 12) {
-                    // Top row: Retake and Complete
-                    HStack(spacing: 16) {
-                        // Retake button
-                        Button {
-                            player?.pause()
-                            player = nil
-                            voiceoverURL = nil
-                            hasVoiceoverAdded = false
-                            pendingNotes = ""
-                            recorder.clearFrames()
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "arrow.counterclockwise")
-                                    .font(.system(size: 18, weight: .semibold))
-                                Text("Retake")
-                                    .font(.system(size: 17, weight: .semibold))
+                    VStack(spacing: 16) {
+                        // Icon action row
+                        HStack(spacing: 0) {
+                            // Retake
+                            todoActionIconButton(
+                                icon: "arrow.counterclockwise",
+                                label: "Retake",
+                                isActive: false
+                            ) {
+                                player?.pause()
+                                player = nil
+                                voiceoverURL = nil
+                                hasVoiceoverAdded = false
+                                pendingNotes = ""
+                                recorder.clearFrames()
                             }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .background(Color.white.opacity(0.15))
-                            .cornerRadius(16)
-                        }
 
-                        // Save button
+                            // Notes
+                            todoActionIconButton(
+                                icon: pendingNotes.isEmpty ? "note.text" : "note.text.badge.checkmark",
+                                label: "Notes",
+                                isActive: !pendingNotes.isEmpty
+                            ) {
+                                showNotesSheet = true
+                            }
+
+                            // Voiceover
+                            todoActionIconButton(
+                                icon: hasVoiceoverAdded ? "mic.badge.checkmark" : "mic.fill",
+                                label: "Voice",
+                                isActive: hasVoiceoverAdded
+                            ) {
+                                startVoiceoverCountdown()
+                            }
+
+                            // Share
+                            todoActionIconButton(
+                                icon: "square.and.arrow.up",
+                                label: "Share",
+                                isActive: false
+                            ) {
+                                showShareSheet = true
+                            }
+
+                            // Partners (if available)
+                            if !partnersViewModel.partners.isEmpty {
+                                todoActionIconButton(
+                                    icon: "person.2.fill",
+                                    label: "Partners",
+                                    isActive: false
+                                ) {
+                                    showShareWithPartners = true
+                                }
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        .background(Color.white.opacity(0.08))
+                        .cornerRadius(14)
+
+                        // Primary complete button
                         Button {
                             Task {
                                 await saveVideoAndCompleteTodo()
@@ -918,93 +952,9 @@ struct TodoRecorderView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: 56)
-                            .background(.green)
-                            .cornerRadius(16)
-                        }
-                    }
-
-                    // Middle row: Notes button
-                    Button {
-                        showNotesSheet = true
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: pendingNotes.isEmpty ? "note.text.badge.plus" : "note.text")
-                                .font(.system(size: 18, weight: .semibold))
-                            Text(pendingNotes.isEmpty ? "Add Notes" : "Edit Notes")
-                                .font(.system(size: 17, weight: .semibold))
-                            if !pendingNotes.isEmpty {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.white.opacity(0.8))
-                            }
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .background(pendingNotes.isEmpty ? Color.white.opacity(0.15) : Color.accentColor.opacity(0.8))
-                        .cornerRadius(16)
-                    }
-
-                    // Share with Partners button (only if user has partners)
-                    if !partnersViewModel.partners.isEmpty {
-                        Button {
-                            showShareWithPartners = true
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "person.2.fill")
-                                    .font(.system(size: 18, weight: .semibold))
-                                Text("Share with Partners")
-                                    .font(.system(size: 17, weight: .semibold))
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
                             .background(Color.green)
-                            .cornerRadius(16)
+                            .cornerRadius(14)
                         }
-                    }
-
-                    // Bottom row: Voiceover and Share
-                    HStack(spacing: 16) {
-                        // Voiceover button
-                        Button {
-                            startVoiceoverCountdown()
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: hasVoiceoverAdded ? "arrow.counterclockwise" : "mic.fill")
-                                    .font(.system(size: 18, weight: .semibold))
-                                Text(hasVoiceoverAdded ? "Re-record" : "Voiceover")
-                                    .font(.system(size: 17, weight: .semibold))
-                                if hasVoiceoverAdded {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.white.opacity(0.8))
-                                }
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .background(hasVoiceoverAdded ? Color.orange.opacity(0.8) : Color.orange)
-                            .cornerRadius(16)
-                        }
-
-                        // Share button
-                        Button {
-                            showShareSheet = true
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "square.and.arrow.up")
-                                    .font(.system(size: 18, weight: .semibold))
-                                Text("Share")
-                                    .font(.system(size: 17, weight: .semibold))
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .background(Color.white.opacity(0.2))
-                            .cornerRadius(16)
-                        }
-                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 40)
@@ -1022,6 +972,34 @@ struct TodoRecorderView: View {
         }
         .onAppear {
             setupPlayer()
+        }
+    }
+
+    // MARK: - Action Icon Button Helper
+
+    @ViewBuilder
+    private func todoActionIconButton(icon: String, label: String, isActive: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                ZStack {
+                    Image(systemName: icon)
+                        .font(.system(size: 22))
+                        .foregroundColor(isActive ? Color.accentColor : .white)
+
+                    if isActive {
+                        Circle()
+                            .fill(Color.accentColor)
+                            .frame(width: 8, height: 8)
+                            .offset(x: 12, y: -10)
+                    }
+                }
+
+                Text(label)
+                    .font(.system(size: 11))
+                    .foregroundColor(isActive ? Color.accentColor : .white.opacity(0.7))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
         }
     }
 

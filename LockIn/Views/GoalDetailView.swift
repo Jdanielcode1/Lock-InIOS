@@ -18,6 +18,9 @@ struct GoalDetailView: View {
     @State private var showingVideoPlayer = false
     @State private var recentlyArchivedTodo: GoalTodo?
     @State private var showUndoToast = false
+    @State private var isEditingTitle = false
+    @State private var editedTitle = ""
+    @FocusState private var isTitleFocused: Bool
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tabBarVisibility: TabBarVisibility
     @EnvironmentObject private var goalSessionPresenter: GoalSessionPresenter
@@ -225,8 +228,7 @@ struct GoalDetailView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle(goal.title)
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .onAppear { tabBarVisibility.hide() }
         .onDisappear { tabBarVisibility.show() }
         .toolbar {
@@ -297,6 +299,10 @@ struct GoalDetailView: View {
     // MARK: - Progress Header
     private var progressHeader: some View {
         VStack(spacing: 16) {
+            // Editable Title
+            editableTitleView
+                .padding(.top, 8)
+
             // Circular Progress Ring
             CircularProgressRing(
                 progress: goal.progressPercentage,
@@ -304,7 +310,6 @@ struct GoalDetailView: View {
                 targetHours: goal.targetHours,
                 isCompleted: goal.isCompleted
             )
-            .padding(.top, 8)
 
             // Motivational message
             Text(motivationalMessage)
@@ -332,6 +337,53 @@ struct GoalDetailView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
+    }
+
+    // MARK: - Editable Title
+    @ViewBuilder
+    private var editableTitleView: some View {
+        if isEditingTitle {
+            TextField("Goal title", text: $editedTitle)
+                .font(.title.bold())
+                .multilineTextAlignment(.center)
+                .focused($isTitleFocused)
+                .submitLabel(.done)
+                .onSubmit(saveTitle)
+                .onChange(of: isTitleFocused) { _, focused in
+                    if !focused {
+                        saveTitle()
+                    }
+                }
+                .padding(.horizontal, 16)
+        } else {
+            HStack(spacing: 6) {
+                Text(goal.title)
+                    .font(.title.bold())
+
+                Image(systemName: "pencil")
+                    .font(.subheadline)
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                editedTitle = goal.title
+                isEditingTitle = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    isTitleFocused = true
+                }
+            }
+        }
+    }
+
+    private func saveTitle() {
+        let trimmedTitle = editedTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        isEditingTitle = false
+
+        guard !trimmedTitle.isEmpty, trimmedTitle != goal.title else { return }
+
+        Task {
+            try? await ConvexService.shared.updateGoalTitle(id: goal.id, title: trimmedTitle)
+        }
     }
 
     // MARK: - Empty States

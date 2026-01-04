@@ -57,6 +57,13 @@ class ConvexService: ObservableObject {
         ])
     }
 
+    func updateGoalTitle(id: String, title: String) async throws {
+        let _: String? = try await convexClient.mutation("goals:updateTitle", with: [
+            "id": id,
+            "title": title
+        ])
+    }
+
     func deleteGoal(id: String) async throws {
         let _: String? = try await convexClient.mutation("goals:remove", with: ["id": id])
     }

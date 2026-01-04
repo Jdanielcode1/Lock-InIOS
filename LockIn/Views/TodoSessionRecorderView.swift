@@ -55,6 +55,7 @@ struct TodoSessionRecorderView: View {
     @State private var voiceoverTimeObserver: Any?
     @State private var hasVoiceoverAdded = false
     @State private var showShareSheet = false
+    @State private var isFullscreen = false
 
     // Video notes state
     @State private var pendingNotes: String = ""
@@ -866,135 +867,163 @@ struct TodoSessionRecorderView: View {
     // MARK: - Preview Completed View
 
     var previewCompletedView: some View {
-        VStack(spacing: 0) {
-            // Close button at top
-            HStack {
-                Button {
-                    recorder.cleanup()
-                    onDismiss()
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.title2)
-                        .foregroundColor(.white)
-                        .padding(12)
-                        .background(Color.white.opacity(0.15))
-                        .clipShape(Circle())
-                }
-                Spacer()
-            }
-            .padding(.horizontal)
-            .padding(.top, 60)
-
-            Spacer()
-
-            // Video player
-            if let player = player {
-                VideoPlayer(player: player)
-                    .aspectRatio(recordedInLandscape ? 16/9 : 9/16, contentMode: .fit)
-                    .frame(maxHeight: UIScreen.main.bounds.height * (recordedInLandscape ? 0.35 : 0.5))
-                    .cornerRadius(16)
-                    .padding(.horizontal, 20)
-                    .onAppear {
-                        player.play()
-                    }
-            } else {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.white.opacity(0.1))
-                    .aspectRatio(recordedInLandscape ? 16/9 : 9/16, contentMode: .fit)
-                    .frame(maxHeight: UIScreen.main.bounds.height * (recordedInLandscape ? 0.35 : 0.5))
-                    .overlay(
-                        ProgressView()
-                            .tint(.white)
-                    )
-                    .padding(.horizontal, 20)
-            }
-
-            // Session summary card
-            VStack(spacing: 12) {
+        ZStack {
+            // Main content
+            VStack(spacing: 0) {
+                // Close button at top
                 HStack {
-                    Image(systemName: "checklist")
-                        .font(.system(size: 24))
-                        .foregroundStyle(Color.accentColor)
-
-                    Text("Session Complete")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
-
-                    Spacer()
-
-                    Text("\(completedCount)/\(totalCount) done")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(completedCount == totalCount ? .green : Color.accentColor)
-                }
-
-                if !checkedTodoIds.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(selectedTodos.filter { checkedTodoIds.contains($0.id) }.prefix(3)) { todo in
-                            HStack(spacing: 8) {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundColor(.green)
-                                Text(todo.title)
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.white.opacity(0.8))
-                                    .lineLimit(1)
-                            }
-                        }
-                        if checkedTodoIds.count > 3 {
-                            Text("+\(checkedTodoIds.count - 3) more")
-                                .font(.system(size: 12))
-                                .foregroundColor(.white.opacity(0.5))
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            .padding(20)
-            .background(Color.white.opacity(0.1))
-            .cornerRadius(16)
-            .padding(.horizontal, 20)
-            .padding(.top, 24)
-
-            Spacer()
-
-            // Action buttons
-            if isUploading || isCompilingVoiceover {
-                if isCompilingVoiceover {
-                    voiceoverCompilingView
-                        .padding(.bottom, 40)
-                } else {
-                    uploadProgressView
-                        .padding(.bottom, 40)
-                }
-            } else {
-                VStack(spacing: 12) {
-                    // Top row: Retake and Save
-                    HStack(spacing: 16) {
-                        // Retake button
-                        Button {
-                            player?.pause()
-                            player = nil
-                            checkedTodoIds.removeAll()
-                            voiceoverURL = nil
-                            hasVoiceoverAdded = false
-                            pendingNotes = ""
-                            recorder.clearFrames()
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "arrow.counterclockwise")
-                                    .font(.system(size: 18, weight: .semibold))
-                                Text("Retake")
-                                    .font(.system(size: 17, weight: .semibold))
-                            }
+                    Button {
+                        recorder.cleanup()
+                        onDismiss()
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.title2)
                             .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
+                            .padding(12)
                             .background(Color.white.opacity(0.15))
-                            .cornerRadius(16)
-                        }
+                            .clipShape(Circle())
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal)
+                .padding(.top, 60)
+                .opacity(isFullscreen ? 0 : 1)
 
-                        // Save button
+                Spacer()
+
+                // Video player (hidden when fullscreen)
+                if !isFullscreen {
+                    if let player = player {
+                        CustomVideoPlayerView(
+                            player: player,
+                            aspectRatio: recordedInLandscape ? 16/9 : 9/16,
+                            isFullscreen: $isFullscreen
+                        )
+                        .frame(maxHeight: UIScreen.main.bounds.height * (recordedInLandscape ? 0.4 : 0.55))
+                        .padding(.horizontal, 20)
+                    } else {
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.white.opacity(0.1))
+                            .aspectRatio(recordedInLandscape ? 16/9 : 9/16, contentMode: .fit)
+                            .frame(maxHeight: UIScreen.main.bounds.height * (recordedInLandscape ? 0.4 : 0.55))
+                            .overlay(
+                                ProgressView()
+                                    .tint(.white)
+                            )
+                            .padding(.horizontal, 20)
+                    }
+                }
+
+                // Session summary card
+                VStack(spacing: 12) {
+                    HStack {
+                        Image(systemName: "checklist")
+                            .font(.system(size: 24))
+                            .foregroundStyle(Color.accentColor)
+
+                        Text("Session Complete")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+
+                        Spacer()
+
+                        Text("\(completedCount)/\(totalCount) done")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(completedCount == totalCount ? .green : Color.accentColor)
+                    }
+
+                    if !checkedTodoIds.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(selectedTodos.filter { checkedTodoIds.contains($0.id) }.prefix(3)) { todo in
+                                HStack(spacing: 8) {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(.green)
+                                    Text(todo.title)
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.white.opacity(0.8))
+                                        .lineLimit(1)
+                                }
+                            }
+                            if checkedTodoIds.count > 3 {
+                                Text("+\(checkedTodoIds.count - 3) more")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(20)
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(16)
+                .padding(.horizontal, 20)
+                .padding(.top, 24)
+                .opacity(isFullscreen ? 0 : 1)
+
+                Spacer()
+
+                // Action buttons
+                if isUploading || isCompilingVoiceover {
+                    if isCompilingVoiceover {
+                        voiceoverCompilingView
+                            .padding(.bottom, 40)
+                    } else {
+                        uploadProgressView
+                            .padding(.bottom, 40)
+                    }
+                } else {
+                    VStack(spacing: 16) {
+                        // Icon action row
+                        HStack(spacing: 0) {
+                            // Retake
+                            actionIconButton(
+                                icon: "arrow.counterclockwise",
+                                label: "Retake",
+                                isActive: false
+                            ) {
+                                player?.pause()
+                                player = nil
+                                checkedTodoIds.removeAll()
+                                voiceoverURL = nil
+                                hasVoiceoverAdded = false
+                                pendingNotes = ""
+                                recorder.clearFrames()
+                            }
+
+                            // Notes
+                            actionIconButton(
+                                icon: pendingNotes.isEmpty ? "note.text" : "note.text.badge.checkmark",
+                                label: "Notes",
+                                isActive: !pendingNotes.isEmpty
+                            ) {
+                                showNotesSheet = true
+                            }
+
+                            // Voiceover
+                            actionIconButton(
+                                icon: hasVoiceoverAdded ? "mic.badge.checkmark" : "mic.fill",
+                                label: "Voice",
+                                isActive: hasVoiceoverAdded
+                            ) {
+                                startVoiceoverCountdown()
+                            }
+
+                            // Share
+                            actionIconButton(
+                                icon: "square.and.arrow.up",
+                                label: "Share",
+                                isActive: false
+                            ) {
+                                showShareSheet = true
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        .background(Color.white.opacity(0.08))
+                        .cornerRadius(14)
+
+                        // Primary save button
                         Button {
                             Task {
                                 await saveSession()
@@ -1010,90 +1039,77 @@ struct TodoSessionRecorderView: View {
                             .frame(maxWidth: .infinity)
                             .frame(height: 56)
                             .background(Color.accentColor)
-                            .cornerRadius(16)
+                            .cornerRadius(14)
                         }
                     }
-
-                    // Middle row: Notes button
-                    Button {
-                        showNotesSheet = true
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: pendingNotes.isEmpty ? "note.text.badge.plus" : "note.text")
-                                .font(.system(size: 18, weight: .semibold))
-                            Text(pendingNotes.isEmpty ? "Add Notes" : "Edit Notes")
-                                .font(.system(size: 17, weight: .semibold))
-                            if !pendingNotes.isEmpty {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.white.opacity(0.8))
-                            }
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .background(pendingNotes.isEmpty ? Color.white.opacity(0.15) : Color.accentColor.opacity(0.8))
-                        .cornerRadius(16)
-                    }
-
-                    // Bottom row: Voiceover and Share
-                    HStack(spacing: 16) {
-                        // Voiceover button
-                        Button {
-                            startVoiceoverCountdown()
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: hasVoiceoverAdded ? "arrow.counterclockwise" : "mic.fill")
-                                    .font(.system(size: 18, weight: .semibold))
-                                Text(hasVoiceoverAdded ? "Re-record" : "Voiceover")
-                                    .font(.system(size: 17, weight: .semibold))
-                                if hasVoiceoverAdded {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.white.opacity(0.8))
-                                }
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .background(hasVoiceoverAdded ? Color.orange.opacity(0.8) : Color.orange)
-                            .cornerRadius(16)
-                        }
-
-                        // Share button
-                        Button {
-                            showShareSheet = true
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "square.and.arrow.up")
-                                    .font(.system(size: 18, weight: .semibold))
-                                Text("Share")
-                                    .font(.system(size: 17, weight: .semibold))
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .background(Color.white.opacity(0.2))
-                            .cornerRadius(16)
-                        }
-                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 40)
+                    .opacity(isFullscreen ? 0 : 1)
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 40)
+
+                // Voiceover recording overlay
+                if isRecordingVoiceover {
+                    voiceoverRecordingOverlay
+                }
+
+                // Voiceover countdown overlay
+                if showVoiceoverCountdown {
+                    voiceoverCountdownOverlay
+                }
             }
 
-            // Voiceover recording overlay
-            if isRecordingVoiceover {
-                voiceoverRecordingOverlay
-            }
-
-            // Voiceover countdown overlay
-            if showVoiceoverCountdown {
-                voiceoverCountdownOverlay
+            // Fullscreen video overlay
+            if isFullscreen, let player = player {
+                fullscreenVideoOverlay(player: player)
             }
         }
         .onAppear {
             setupPlayer()
+        }
+    }
+
+    // MARK: - Fullscreen Video Overlay
+
+    private func fullscreenVideoOverlay(player: AVPlayer) -> some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            CustomVideoPlayerView(
+                player: player,
+                aspectRatio: recordedInLandscape ? 16/9 : 9/16,
+                isFullscreen: $isFullscreen
+            )
+            .ignoresSafeArea()
+        }
+        .transition(.opacity)
+    }
+
+    // MARK: - Action Icon Button Helper
+
+    @ViewBuilder
+    private func actionIconButton(icon: String, label: String, isActive: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                ZStack {
+                    Image(systemName: icon)
+                        .font(.system(size: 22))
+                        .foregroundColor(isActive ? Color.accentColor : .white)
+
+                    // Badge indicator for active state
+                    if isActive {
+                        Circle()
+                            .fill(Color.accentColor)
+                            .frame(width: 8, height: 8)
+                            .offset(x: 12, y: -10)
+                    }
+                }
+
+                Text(label)
+                    .font(.system(size: 11))
+                    .foregroundColor(isActive ? Color.accentColor : .white.opacity(0.7))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
         }
     }
 
@@ -1496,6 +1512,156 @@ struct PulsingModifier: ViewModifier {
             .onAppear {
                 isPulsing = true
             }
+    }
+}
+
+// MARK: - Custom Video Player (No AVKit Controls)
+
+struct VideoLayerView: UIViewRepresentable {
+    let player: AVPlayer
+
+    func makeUIView(context: Context) -> PlayerUIView {
+        let view = PlayerUIView()
+        view.player = player
+        return view
+    }
+
+    func updateUIView(_ uiView: PlayerUIView, context: Context) {
+        uiView.player = player
+    }
+}
+
+class PlayerUIView: UIView {
+    var player: AVPlayer? {
+        didSet {
+            playerLayer.player = player
+        }
+    }
+
+    override class var layerClass: AnyClass { AVPlayerLayer.self }
+
+    private var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        playerLayer.videoGravity = .resizeAspect
+        backgroundColor = .clear
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+}
+
+struct CustomVideoPlayerView: View {
+    let player: AVPlayer
+    let aspectRatio: CGFloat
+    @Binding var isFullscreen: Bool
+
+    @State private var isPlaying = true
+    @State private var showControls = true
+    @State private var hideControlsTask: Task<Void, Never>?
+
+    var body: some View {
+        ZStack {
+            // Video layer
+            VideoLayerView(player: player)
+                .aspectRatio(aspectRatio, contentMode: .fit)
+                .cornerRadius(isFullscreen ? 0 : 16)
+                .clipped()
+
+            // Gesture layer
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) {
+                    toggleFullscreen()
+                }
+                .onTapGesture(count: 1) {
+                    togglePlayPause()
+                }
+
+            // Controls overlay
+            if showControls {
+                videoControlsOverlay
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: showControls)
+        .onAppear {
+            player.play()
+            isPlaying = true
+            scheduleHideControls()
+        }
+    }
+
+    private var videoControlsOverlay: some View {
+        ZStack {
+            // Semi-transparent gradient for visibility
+            LinearGradient(
+                colors: [.black.opacity(0.4), .clear, .clear, .black.opacity(0.3)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .cornerRadius(isFullscreen ? 0 : 16)
+
+            // Fullscreen button (top-right)
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        toggleFullscreen()
+                    } label: {
+                        Image(systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(10)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
+                    }
+                    .padding(12)
+                }
+                Spacer()
+            }
+
+            // Center play/pause indicator (shows briefly on tap)
+            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                .font(.system(size: 44))
+                .foregroundColor(.white)
+                .padding(20)
+                .background(.black.opacity(0.5))
+                .clipShape(Circle())
+        }
+    }
+
+    private func togglePlayPause() {
+        if isPlaying {
+            player.pause()
+        } else {
+            player.play()
+        }
+        isPlaying.toggle()
+
+        // Show controls briefly
+        showControls = true
+        scheduleHideControls()
+    }
+
+    private func toggleFullscreen() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            isFullscreen.toggle()
+        }
+        showControls = true
+        scheduleHideControls()
+    }
+
+    private func scheduleHideControls() {
+        hideControlsTask?.cancel()
+        hideControlsTask = Task {
+            try? await Task.sleep(nanoseconds: 2_500_000_000) // 2.5 seconds
+            if !Task.isCancelled {
+                await MainActor.run {
+                    showControls = false
+                }
+            }
+        }
     }
 }
 

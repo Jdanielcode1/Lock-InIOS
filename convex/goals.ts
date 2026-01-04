@@ -133,6 +133,24 @@ export const updateStatus = userMutation({
   },
 });
 
+// Mutation: Update goal title
+export const updateTitle = userMutation({
+  args: {
+    id: v.id("goals"),
+    title: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = ctx.identity.tokenIdentifier;
+    const goal = await ctx.db.get(args.id);
+    if (!goal) throw new Error("Goal not found");
+    if (goal.userId !== userId) throw new Error("Not authorized");
+
+    await ctx.db.patch(args.id, {
+      title: args.title,
+    });
+  },
+});
+
 // Mutation: Archive a goal
 export const archive = userMutation({
   args: { id: v.id("goals") },
