@@ -719,11 +719,11 @@ struct TodoRecorderView: View {
                         .cornerRadius(20)
                 }
 
-                // Privacy mode toggle (hide during recording to save space)
-                if !recorder.isRecording {
-                    PrivacyModeToggle(privacyManager: privacyManager)
+                // Privacy mode toggle (always visible)
+                PrivacyModeToggle(privacyManager: privacyManager)
 
-                    // Todo title indicator
+                // Todo title indicator (hide during recording to save space)
+                if !recorder.isRecording {
                     Text(todo.title)
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.white)
