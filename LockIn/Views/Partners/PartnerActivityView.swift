@@ -18,82 +18,63 @@ struct PartnerActivityView: View {
     @State private var videoURL: URL?
     @State private var isLoadingVideo = false
     @State private var showVideoPlayer = false
+    @State private var isPresented = false
 
     var body: some View {
-        List {
-            // Partner header
-            Section {
-                HStack(spacing: 16) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.accentColor.opacity(0.15))
-                            .frame(width: 60, height: 60)
+        ScrollView {
+            VStack(spacing: 20) {
+                // Partner header card
+                PartnerHeaderCard(partner: partner, videoCount: partnerVideos.count)
+                    .scaleUp(isPresented: isPresented)
 
-                        Text(partner.initials)
-                            .font(.system(size: 22, weight: .semibold))
-                            .foregroundStyle(Color.accentColor)
-                    }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(partner.displayName)
-                            .font(.title3.bold())
-
-                        Text(partner.partnerEmail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.vertical, 8)
-                .listRowBackground(Color.clear)
-            }
-
-            // Shared videos
-            Section {
+                // Videos section
                 if isLoading {
-                    HStack {
-                        Spacer()
+                    VStack {
                         ProgressView()
-                        Spacer()
+                            .padding(.vertical, 60)
                     }
-                    .padding(.vertical, 32)
-                    .listRowBackground(Color.clear)
                 } else if partnerVideos.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "video.slash")
-                            .font(.system(size: 32, weight: .light))
-                            .foregroundStyle(.secondary)
-
-                        Text("No Shared Videos")
-                            .font(.headline)
-
-                        Text("\(partner.displayName) hasn't shared any videos with you yet")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 32)
-                    .listRowBackground(Color.clear)
+                    ActivityEmptyState(partnerName: partner.displayName)
+                        .slideUp(isPresented: isPresented, delay: 0.2)
                 } else {
-                    ForEach(partnerVideos) { video in
-                        Button {
-                            playVideo(video)
-                        } label: {
-                            SharedVideoRow(video: video, isLoading: isLoadingVideo && selectedVideo?.id == video.id)
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Section header
+                        HStack {
+                            Text("Shared Videos")
+                                .font(.headline)
+                            Spacer()
+                            Text("\(partnerVideos.count) session\(partnerVideos.count == 1 ? "" : "s")")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
-                        .buttonStyle(.plain)
+                        .padding(.horizontal, 20)
+
+                        // Video cards
+                        LazyVStack(spacing: 16) {
+                            ForEach(Array(partnerVideos.enumerated()), id: \.element.id) { index, video in
+                                SharedVideoCard(
+                                    video: video,
+                                    isLoading: isLoadingVideo && selectedVideo?.id == video.id
+                                ) {
+                                    playVideo(video)
+                                }
+                                .slideUp(isPresented: isPresented, delay: 0.1 + Double(index) * 0.05)
+                            }
+                        }
+                        .padding(.horizontal, 20)
                     }
-                }
-            } header: {
-                if !partnerVideos.isEmpty {
-                    Text("Shared with you")
                 }
             }
+            .padding(.top, 16)
+            .padding(.bottom, 32)
         }
-        .listStyle(.insetGrouped)
+        .background(Color(UIColor.systemGroupedBackground))
         .navigationTitle("Partner Activity")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
+            withAnimation(.smooth.delay(0.1)) {
+                isPresented = true
+            }
             subscribeToPartnerVideos()
         }
         .fullScreenCover(isPresented: $showVideoPlayer) {
@@ -114,6 +95,7 @@ struct PartnerActivityView: View {
     }
 
     private func playVideo(_ video: SharedVideo) {
+        HapticFeedback.light()
         selectedVideo = video
         isLoadingVideo = true
 
@@ -130,12 +112,229 @@ struct PartnerActivityView: View {
             } catch {
                 await MainActor.run {
                     self.isLoadingVideo = false
+                    HapticFeedback.error()
                 }
                 print("Failed to get video URL: \(error)")
             }
         }
     }
 }
+
+// MARK: - Partner Header Card
+
+private struct PartnerHeaderCard: View {
+    let partner: Partner
+    let videoCount: Int
+
+    var body: some View {
+        VStack(spacing: 16) {
+            // Avatar
+            PartnerAvatar(partner: partner, size: 72)
+
+            // Name and email
+            VStack(spacing: 4) {
+                Text(partner.displayName)
+                    .font(.title2.weight(.bold))
+
+                Text(partner.partnerEmail)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            // Stats row
+            HStack(spacing: 32) {
+                PartnerStatItem(value: "\(videoCount)", label: "Videos", icon: "video.fill", color: .green)
+                PartnerStatItem(value: "Active", label: "Status", icon: "checkmark.circle.fill", color: .blue)
+            }
+            .padding(.top, 8)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+        .padding(.horizontal, 20)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusLarge)
+                .fill(Color(UIColor.secondarySystemGroupedBackground))
+        )
+        .padding(.horizontal, 20)
+    }
+}
+
+private struct PartnerStatItem: View {
+    let value: String
+    let label: String
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 14))
+                    .foregroundStyle(color)
+                Text(value)
+                    .font(.headline)
+            }
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - Shared Video Card (Rich)
+
+private struct SharedVideoCard: View {
+    let video: SharedVideo
+    let isLoading: Bool
+    let onTap: () -> Void
+
+    @State private var isPressed = false
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 0) {
+                // Thumbnail with 16:9 aspect ratio
+                ZStack {
+                    // Background gradient (simulating video thumbnail)
+                    RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusMedium)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(UIColor.tertiarySystemFill),
+                                    Color(UIColor.quaternarySystemFill)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+
+                    // Gradient overlay at bottom
+                    VStack {
+                        Spacer()
+                        LinearGradient(
+                            colors: [.clear, .black.opacity(0.6)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: 60)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusMedium))
+
+                    // Center play button
+                    ZStack {
+                        if isLoading {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                                .frame(width: 56, height: 56)
+
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 22))
+                                .foregroundStyle(.white)
+                                .offset(x: 2) // Visual centering
+                        }
+                    }
+
+                    // Duration badge - bottom left
+                    VStack {
+                        Spacer()
+                        HStack {
+                            HStack(spacing: 4) {
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 8))
+                                Text(video.formattedDuration)
+                                    .font(.caption2.weight(.medium))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule()
+                                    .fill(.black.opacity(0.6))
+                            )
+
+                            Spacer()
+                        }
+                        .padding(10)
+                    }
+                }
+                .aspectRatio(16/9, contentMode: .fill)
+                .clipShape(RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusMedium))
+
+                // Metadata below thumbnail
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(video.contextDescription)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+
+                    HStack(spacing: 8) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 11))
+                        Text(video.relativeTimeString)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 4)
+                .padding(.top, 12)
+            }
+        }
+        .buttonStyle(PressButtonStyle(scale: 0.98, enableHaptic: false))
+    }
+}
+
+// MARK: - Activity Empty State
+
+private struct ActivityEmptyState: View {
+    let partnerName: String
+    @State private var isAnimating = false
+
+    var body: some View {
+        VStack(spacing: 20) {
+            // Animated icon
+            ZStack {
+                Circle()
+                    .stroke(Color.secondary.opacity(0.2), lineWidth: 2)
+                    .frame(width: 80, height: 80)
+                    .scaleEffect(isAnimating ? 1.1 : 1.0)
+                    .opacity(isAnimating ? 0.3 : 0.6)
+
+                ZStack {
+                    Circle()
+                        .fill(Color(UIColor.tertiarySystemFill))
+                        .frame(width: 64, height: 64)
+
+                    Image(systemName: "video.slash")
+                        .font(.system(size: 26))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            VStack(spacing: 8) {
+                Text("No Videos Yet")
+                    .font(.headline)
+
+                Text("\(partnerName) hasn't shared any\nstudy sessions with you yet")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 60)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                isAnimating = true
+            }
+        }
+    }
+}
+
+// MARK: - Video Player
 
 struct SharedVideoPlayerView: View {
     let videoURL: URL
@@ -155,25 +354,29 @@ struct SharedVideoPlayerView: View {
                     .tint(.white)
             }
 
-            // Close button
+            // Overlay controls
             VStack {
                 HStack {
+                    // Close button
                     Button {
+                        HapticFeedback.light()
                         player?.pause()
                         dismiss()
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.title2)
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.white)
-                            .padding(12)
-                            .background(Color.black.opacity(0.5))
+                            .frame(width: 36, height: 36)
+                            .background(.ultraThinMaterial)
                             .clipShape(Circle())
                     }
-                    .padding(.leading, 20)
-                    .padding(.top, 60)
+                    .buttonStyle(PressButtonStyle())
 
                     Spacer()
                 }
+                .padding(.leading, 20)
+                .padding(.top, 60)
+
                 Spacer()
             }
         }
@@ -185,59 +388,6 @@ struct SharedVideoPlayerView: View {
             player?.pause()
             player = nil
         }
-    }
-}
-
-struct SharedVideoRow: View {
-    let video: SharedVideo
-    var isLoading: Bool = false
-
-    var body: some View {
-        HStack(spacing: 12) {
-            // Thumbnail placeholder
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(UIColor.tertiarySystemFill))
-                    .frame(width: 64, height: 48)
-
-                if isLoading {
-                    ProgressView()
-                        .tint(.white)
-                } else {
-                    Image(systemName: "play.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundStyle(.white.opacity(0.9))
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(video.contextDescription)
-                    .font(.subheadline.bold())
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-
-                HStack(spacing: 8) {
-                    Text(video.formattedDuration)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Text("•")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-
-                    Text(video.relativeTimeString)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.vertical, 4)
     }
 }
 

@@ -19,11 +19,11 @@ public struct FirebaseAuthResult {
 }
 
 /// Authentication provider for Firebase that conforms to Convex's AuthProvider protocol
+/// Simplified: Convex handles token lifecycle automatically via loginFromCache()
 public class FirebaseAuthProvider: AuthProvider {
     public typealias T = FirebaseAuthResult
 
     private var currentNonce: String?
-    private var appleSignInContinuation: CheckedContinuation<FirebaseAuthResult, Error>?
 
     public init() {}
 
@@ -38,13 +38,14 @@ public class FirebaseAuthProvider: AuthProvider {
     }
 
     /// Re-authenticate using cached Firebase session
+    /// Called by Convex when it needs a fresh token - always force refresh
     public func loginFromCache() async throws -> FirebaseAuthResult {
         guard let currentUser = Auth.auth().currentUser else {
             throw FirebaseAuthError.noUserLoggedIn
         }
 
-        // Get fresh ID token
-        let idToken = try await currentUser.getIDToken()
+        // Always force refresh - Convex calls this when it needs a valid token
+        let idToken = try await currentUser.getIDToken(forcingRefresh: true)
         return FirebaseAuthResult(user: currentUser, idToken: idToken)
     }
 

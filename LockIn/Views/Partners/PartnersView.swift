@@ -12,6 +12,7 @@ struct PartnersView: View {
     @Environment(\.dismiss) var dismiss
     @State private var showingAddPartner = false
     @State private var showingInvites = false
+    @State private var isPresented = false
 
     var body: some View {
         NavigationView {
@@ -20,20 +21,28 @@ struct PartnersView: View {
                 if !viewModel.receivedInvites.isEmpty {
                     Section {
                         Button {
+                            HapticFeedback.light()
                             showingInvites = true
                         } label: {
                             HStack(spacing: 12) {
                                 ZStack {
                                     Circle()
-                                        .fill(Color.orange.opacity(0.15))
-                                        .frame(width: 40, height: 40)
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [.orange.opacity(0.2), .orange.opacity(0.1)],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 44, height: 44)
 
-                                    Image(systemName: "envelope.badge")
+                                    Image(systemName: "envelope.badge.fill")
                                         .font(.system(size: 18))
                                         .foregroundStyle(.orange)
+                                        .symbolEffect(.pulse, options: .repeating)
                                 }
 
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: 3) {
                                     Text("\(viewModel.receivedInvites.count) Pending Invite\(viewModel.receivedInvites.count == 1 ? "" : "s")")
                                         .font(.headline)
                                         .foregroundStyle(.primary)
@@ -46,47 +55,21 @@ struct PartnersView: View {
                                 Spacer()
 
                                 Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(.tertiary)
                             }
-                            .padding(.vertical, 4)
+                            .padding(.vertical, 6)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(PressButtonStyle())
                     }
                 }
 
                 // Active partners section
                 Section {
                     if viewModel.partners.isEmpty && viewModel.sentInvites.isEmpty {
-                        VStack(spacing: 12) {
-                            Image(systemName: "person.2")
-                                .font(.system(size: 40, weight: .light))
-                                .foregroundStyle(.secondary)
-
-                            Text("No Partners Yet")
-                                .font(.headline)
-
-                            Text("Invite friends to stay accountable together")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-
-                            Button {
-                                showingAddPartner = true
-                            } label: {
-                                Text("Invite Partner")
-                                    .font(.subheadline.bold())
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 20)
-                                    .padding(.vertical, 10)
-                                    .background(Color.accentColor)
-                                    .cornerRadius(20)
-                            }
-                            .padding(.top, 4)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 24)
-                        .listRowBackground(Color.clear)
+                        PartnersEmptyState(showingAddPartner: $showingAddPartner)
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets())
                     } else {
                         ForEach(viewModel.partners) { partner in
                             NavigationLink(destination: PartnerActivityView(partner: partner)) {
@@ -94,6 +77,7 @@ struct PartnersView: View {
                             }
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) {
+                                    HapticFeedback.warning()
                                     Task {
                                         await viewModel.removePartner(partner)
                                     }
@@ -113,42 +97,17 @@ struct PartnersView: View {
                 if !viewModel.sentInvites.isEmpty {
                     Section {
                         ForEach(viewModel.sentInvites) { invite in
-                            HStack(spacing: 12) {
-                                ZStack {
-                                    Circle()
-                                        .fill(Color(UIColor.tertiarySystemFill))
-                                        .frame(width: 40, height: 40)
-
-                                    Image(systemName: "paperplane")
-                                        .font(.system(size: 16))
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(invite.toEmail)
-                                        .font(.body)
-
-                                    Text(invite.expiryDescription)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                Spacer()
-
-                                Text("Pending")
-                                    .font(.caption)
-                                    .foregroundStyle(.orange)
-                            }
-                            .padding(.vertical, 2)
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    Task {
-                                        await viewModel.cancelInvite(invite)
+                            SentInviteRow(invite: invite)
+                                .swipeActions(edge: .trailing) {
+                                    Button(role: .destructive) {
+                                        HapticFeedback.light()
+                                        Task {
+                                            await viewModel.cancelInvite(invite)
+                                        }
+                                    } label: {
+                                        Label("Cancel", systemImage: "xmark")
                                     }
-                                } label: {
-                                    Label("Cancel", systemImage: "xmark")
                                 }
-                            }
                         }
                     } header: {
                         Text("Pending Invites Sent")
@@ -167,9 +126,11 @@ struct PartnersView: View {
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
+                        HapticFeedback.light()
                         showingAddPartner = true
                     } label: {
                         Image(systemName: "plus")
+                            .fontWeight(.semibold)
                     }
                 }
             }
@@ -184,41 +145,239 @@ struct PartnersView: View {
                     ProgressView()
                 }
             }
+            .onAppear {
+                withAnimation(.smooth.delay(0.1)) {
+                    isPresented = true
+                }
+            }
         }
     }
 }
 
+// MARK: - Partner Row
+
 struct PartnerRow: View {
     let partner: Partner
 
-    var body: some View {
-        HStack(spacing: 12) {
-            // Avatar
-            ZStack {
-                Circle()
-                    .fill(Color.accentColor.opacity(0.15))
-                    .frame(width: 44, height: 44)
+    // Simulated activity data - in production, fetch from backend
+    private var isActiveToday: Bool {
+        // Simulate: ~60% chance active today
+        abs(partner.partnerId.hashValue) % 10 < 6
+    }
 
-                Text(partner.initials)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
+    private var streakDays: Int {
+        // Simulate: 0-14 day streak based on partner ID
+        abs(partner.partnerId.hashValue) % 15
+    }
+
+    var body: some View {
+        HStack(spacing: 14) {
+            // Gradient avatar
+            PartnerAvatar(partner: partner, size: 52, showOnlineIndicator: true, isOnline: isActiveToday)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(partner.displayName)
+                    .font(.body.weight(.medium))
+
+                HStack(spacing: 12) {
+                    // Activity status
+                    if isActiveToday {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(.green)
+                                .frame(width: 6, height: 6)
+                            Text("Active today")
+                                .font(.caption)
+                                .foregroundStyle(.green)
+                        }
+                    } else {
+                        Text("Partner")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    // Streak indicator
+                    if streakDays > 0 {
+                        HStack(spacing: 3) {
+                            Image(systemName: "flame.fill")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.orange)
+                            Text("\(streakDays) day\(streakDays == 1 ? "" : "s")")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
             }
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(partner.displayName)
-                    .font(.body)
+            Spacer()
+        }
+        .padding(.vertical, 6)
+    }
+}
 
-                Text("Active partner")
+// MARK: - Sent Invite Row
+
+struct SentInviteRow: View {
+    let invite: PartnerInvite
+
+    var body: some View {
+        HStack(spacing: 14) {
+            // Invite avatar with animated icon
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(UIColor.tertiarySystemFill),
+                                Color(UIColor.quaternarySystemFill)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 44, height: 44)
+
+                Image(systemName: "paperplane.fill")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(invite.toEmail)
+                    .font(.body)
+                    .lineLimit(1)
+
+                Text(invite.expiryDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Spacer()
+
+            // Status badge
+            Text("Pending")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.orange)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(Color.orange.opacity(0.12))
+                )
         }
         .padding(.vertical, 4)
     }
 }
 
+// MARK: - Empty State
+
+struct PartnersEmptyState: View {
+    @Binding var showingAddPartner: Bool
+    @State private var isAnimating = false
+
+    private let circleCount = 3
+
+    var body: some View {
+        VStack(spacing: 20) {
+            // Animated concentric circles
+            ZStack {
+                ForEach(0..<circleCount, id: \.self) { index in
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: [.accentColor.opacity(0.3), .purple.opacity(0.2)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.5
+                        )
+                        .frame(width: 60 + CGFloat(index) * 40, height: 60 + CGFloat(index) * 40)
+                        .scaleEffect(isAnimating ? 1.0 : 0.9)
+                        .opacity(isAnimating ? 0.6 - Double(index) * 0.15 : 0.3)
+                        .animation(
+                            .easeInOut(duration: 2.0)
+                            .repeatForever(autoreverses: true)
+                            .delay(Double(index) * 0.3),
+                            value: isAnimating
+                        )
+                }
+
+                // Center icon
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [.accentColor, .purple],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 56, height: 56)
+
+                    Image(systemName: "person.2.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(.white)
+                }
+                .shadow(color: .accentColor.opacity(0.3), radius: 12, y: 6)
+            }
+            .padding(.vertical, 8)
+
+            // Text content
+            VStack(spacing: 8) {
+                Text("Better Together")
+                    .font(.title3.weight(.semibold))
+
+                Text("Invite friends to stay accountable.\nShare your wins and motivate each other.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+            }
+
+            // CTA Button
+            Button {
+                HapticFeedback.medium()
+                showingAddPartner = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "person.badge.plus")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("Invite Partner")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .background(
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [.accentColor, .accentColor.opacity(0.8)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                )
+                .shadow(color: .accentColor.opacity(0.3), radius: 8, y: 4)
+            }
+            .buttonStyle(BounceButtonStyle())
+            .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+        .padding(.horizontal, 20)
+        .onAppear {
+            isAnimating = true
+        }
+    }
+}
+
 #Preview {
     PartnersView()
+}
+
+#Preview("Empty State") {
+    PartnersEmptyState(showingAddPartner: .constant(false))
+        .padding()
 }

@@ -24,8 +24,6 @@ class AuthModel: ObservableObject {
     @Published var isRefreshing: Bool = false
     @Published var errorMessage: String?
 
-    private var authStateListener: AuthStateDidChangeListenerHandle?
-
     init() {
         // Subscribe to Convex auth state
         convexClient.authState.replaceError(with: .unauthenticated)
@@ -33,14 +31,9 @@ class AuthModel: ObservableObject {
             .assign(to: &$authState)
 
         // Try to restore session from Firebase
+        // Convex handles token lifecycle automatically via AuthProvider.loginFromCache()
         Task {
             await loginFromCacheWithRetry()
-        }
-    }
-
-    deinit {
-        if let listener = authStateListener {
-            Auth.auth().removeStateDidChangeListener(listener)
         }
     }
 
