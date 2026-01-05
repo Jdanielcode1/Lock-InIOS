@@ -85,10 +85,8 @@ struct DailyRecapView: View {
         } message: {
             Text(recapService.errorMessage ?? "An unknown error occurred")
         }
-        .sheet(isPresented: $showShareSheet) {
-            if let videoURL = recapService.compiledVideoURL {
-                ShareSheetView(videoURL: videoURL)
-            }
+        .shareSheet(isPresented: $showShareSheet, videoURL: recapService.compiledVideoURL ?? URL(fileURLWithPath: "")) {
+            saveVideoToCameraRoll()
         }
         .onDisappear {
             // Don't reset here - let cleanup happen on explicit dismiss
@@ -524,21 +522,6 @@ struct TodoOverlayBadge: View {
         )
         .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
     }
-}
-
-// MARK: - Share Sheet View (simple wrapper)
-
-struct ShareSheetView: UIViewControllerRepresentable {
-    let videoURL: URL
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(
-            activityItems: [videoURL],
-            applicationActivities: nil
-        )
-    }
-
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - Preview
