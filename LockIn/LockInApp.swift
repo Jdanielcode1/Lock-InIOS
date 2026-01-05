@@ -44,17 +44,9 @@ struct RootView: View {
         .withErrorAlerts()  // Global error alert handling
         .preferredColorScheme(appearanceMode.colorScheme)
         .onChange(of: scenePhase) { oldPhase, newPhase in
-            switch newPhase {
-            case .active:
-                // App came to foreground - restart timer and refresh if needed
+            if newPhase == .active {
+                // App came to foreground - refresh auth session
                 authModel.appDidBecomeActive()
-            case .background:
-                // App going to background - stop timer
-                authModel.appDidEnterBackground()
-            case .inactive:
-                break
-            @unknown default:
-                break
             }
         }
     }

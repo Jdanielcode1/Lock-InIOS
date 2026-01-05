@@ -64,12 +64,12 @@ export const create = userMutation({
 export const listByGoal = userQuery({
   args: { goalId: v.id("goals") },
   handler: async (ctx, args) => {
+    if (!ctx.identity) return [];
     const userId = ctx.identity.tokenIdentifier;
 
     // Verify goal ownership
     const goal = await ctx.db.get(args.goalId);
-    if (!goal) throw new Error("Goal not found");
-    if (goal.userId !== userId) throw new Error("Not authorized");
+    if (!goal || goal.userId !== userId) return [];
 
     const sessions = await ctx.db
       .query("studySessions")
@@ -84,12 +84,12 @@ export const listByGoal = userQuery({
 export const listByGoalTodo = userQuery({
   args: { goalTodoId: v.id("goalTodos") },
   handler: async (ctx, args) => {
+    if (!ctx.identity) return [];
     const userId = ctx.identity.tokenIdentifier;
 
     // Verify goal todo ownership
     const goalTodo = await ctx.db.get(args.goalTodoId);
-    if (!goalTodo) throw new Error("Goal todo not found");
-    if (goalTodo.userId !== userId) throw new Error("Not authorized");
+    if (!goalTodo || goalTodo.userId !== userId) return [];
 
     const sessions = await ctx.db
       .query("studySessions")
@@ -104,6 +104,7 @@ export const listByGoalTodo = userQuery({
 export const listAll = userQuery({
   args: {},
   handler: async (ctx) => {
+    if (!ctx.identity) return [];
     const userId = ctx.identity.tokenIdentifier;
 
     const sessions = await ctx.db
@@ -119,6 +120,7 @@ export const listAll = userQuery({
 export const listAllPaginated = userQuery({
   args: { paginationOpts: paginationOptsValidator },
   handler: async (ctx, args) => {
+    if (!ctx.identity) return { page: [], isDone: true, continueCursor: null };
     const userId = ctx.identity.tokenIdentifier;
 
     return await ctx.db
@@ -136,12 +138,12 @@ export const listByGoalPaginated = userQuery({
     paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
+    if (!ctx.identity) return { page: [], isDone: true, continueCursor: null };
     const userId = ctx.identity.tokenIdentifier;
 
     // Verify goal ownership
     const goal = await ctx.db.get(args.goalId);
-    if (!goal) throw new Error("Goal not found");
-    if (goal.userId !== userId) throw new Error("Not authorized");
+    if (!goal || goal.userId !== userId) return { page: [], isDone: true, continueCursor: null };
 
     return await ctx.db
       .query("studySessions")

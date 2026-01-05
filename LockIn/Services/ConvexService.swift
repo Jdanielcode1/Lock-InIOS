@@ -18,36 +18,10 @@ let convexClient = ConvexClientWithAuth(
     authProvider: firebaseAuthProvider
 )
 
-// MARK: - Auth Retry Helper
-
-/// Errors that indicate authentication issues requiring token refresh
-private func isAuthError(_ error: Error) -> Bool {
-    let errorString = error.localizedDescription.lowercased()
-    return errorString.contains("unauthenticated") ||
-           errorString.contains("unauthorized") ||
-           errorString.contains("auth") ||
-           errorString.contains("token")
-}
-
-/// Execute a Convex operation with automatic retry on auth errors
-/// Attempts the operation, and if it fails with an auth error, refreshes the token and retries once
-func withAuthRetry<T>(_ operation: () async throws -> T) async throws -> T {
-    do {
-        return try await operation()
-    } catch {
-        // Check if this is an auth-related error
-        if isAuthError(error) {
-            print("Auth error detected, refreshing token and retrying...")
-            // Refresh the token (loginFromCache doesn't throw)
-            await convexClient.loginFromCache()
-            print("Token refreshed, retrying operation...")
-            // Retry the operation once
-            return try await operation()
-        }
-        // Not an auth error, rethrow
-        throw error
-    }
-}
+// Convex Philosophy: Keep It Simple
+// - Queries return empty when unauthenticated (handled by backend)
+// - Mutations throw when unauthenticated (security)
+// - Subscriptions auto-update when auth becomes valid
 
 @MainActor
 class ConvexService: ObservableObject {
@@ -74,22 +48,18 @@ class ConvexService: ObservableObject {
     }
 
     func createGoal(title: String, description: String, targetHours: Double) async throws -> String {
-        return try await withAuthRetry {
-            try await convexClient.mutation("goals:create", with: [
-                "title": title,
-                "description": description,
-                "targetHours": targetHours
-            ])
-        }
+        return try await convexClient.mutation("goals:create", with: [
+            "title": title,
+            "description": description,
+            "targetHours": targetHours
+        ])
     }
 
     func updateGoalStatus(id: String, status: GoalStatus) async throws {
-        try await withAuthRetry {
-            let _: String? = try await convexClient.mutation("goals:updateStatus", with: [
-                "id": id,
-                "status": status.rawValue
-            ])
-        }
+        let _: String? = try await convexClient.mutation("goals:updateStatus", with: [
+            "id": id,
+            "status": status.rawValue
+        ])
     }
 
     func updateGoalTitle(id: String, title: String) async throws {
@@ -283,69 +253,67 @@ class ConvexService: ObservableObject {
         let hasThumb = localThumbnailPath != nil
         let hasNotes = notes != nil && !notes!.isEmpty
 
-        return try await withAuthRetry {
-            switch (hasTodo, hasThumb, hasNotes) {
-            case (true, true, true):
-                return try await convexClient.mutation("studySessions:create", with: [
-                    "goalId": goalId,
-                    "goalTodoId": goalTodoId!,
-                    "localVideoPath": localVideoPath,
-                    "localThumbnailPath": localThumbnailPath!,
-                    "durationMinutes": durationMinutes,
-                    "notes": notes!
-                ])
-            case (true, true, false):
-                return try await convexClient.mutation("studySessions:create", with: [
-                    "goalId": goalId,
-                    "goalTodoId": goalTodoId!,
-                    "localVideoPath": localVideoPath,
-                    "localThumbnailPath": localThumbnailPath!,
-                    "durationMinutes": durationMinutes
-                ])
-            case (true, false, true):
-                return try await convexClient.mutation("studySessions:create", with: [
-                    "goalId": goalId,
-                    "goalTodoId": goalTodoId!,
-                    "localVideoPath": localVideoPath,
-                    "durationMinutes": durationMinutes,
-                    "notes": notes!
-                ])
-            case (true, false, false):
-                return try await convexClient.mutation("studySessions:create", with: [
-                    "goalId": goalId,
-                    "goalTodoId": goalTodoId!,
-                    "localVideoPath": localVideoPath,
-                    "durationMinutes": durationMinutes
-                ])
-            case (false, true, true):
-                return try await convexClient.mutation("studySessions:create", with: [
-                    "goalId": goalId,
-                    "localVideoPath": localVideoPath,
-                    "localThumbnailPath": localThumbnailPath!,
-                    "durationMinutes": durationMinutes,
-                    "notes": notes!
-                ])
-            case (false, true, false):
-                return try await convexClient.mutation("studySessions:create", with: [
-                    "goalId": goalId,
-                    "localVideoPath": localVideoPath,
-                    "localThumbnailPath": localThumbnailPath!,
-                    "durationMinutes": durationMinutes
-                ])
-            case (false, false, true):
-                return try await convexClient.mutation("studySessions:create", with: [
-                    "goalId": goalId,
-                    "localVideoPath": localVideoPath,
-                    "durationMinutes": durationMinutes,
-                    "notes": notes!
-                ])
-            case (false, false, false):
-                return try await convexClient.mutation("studySessions:create", with: [
-                    "goalId": goalId,
-                    "localVideoPath": localVideoPath,
-                    "durationMinutes": durationMinutes
-                ])
-            }
+        switch (hasTodo, hasThumb, hasNotes) {
+        case (true, true, true):
+            return try await convexClient.mutation("studySessions:create", with: [
+                "goalId": goalId,
+                "goalTodoId": goalTodoId!,
+                "localVideoPath": localVideoPath,
+                "localThumbnailPath": localThumbnailPath!,
+                "durationMinutes": durationMinutes,
+                "notes": notes!
+            ])
+        case (true, true, false):
+            return try await convexClient.mutation("studySessions:create", with: [
+                "goalId": goalId,
+                "goalTodoId": goalTodoId!,
+                "localVideoPath": localVideoPath,
+                "localThumbnailPath": localThumbnailPath!,
+                "durationMinutes": durationMinutes
+            ])
+        case (true, false, true):
+            return try await convexClient.mutation("studySessions:create", with: [
+                "goalId": goalId,
+                "goalTodoId": goalTodoId!,
+                "localVideoPath": localVideoPath,
+                "durationMinutes": durationMinutes,
+                "notes": notes!
+            ])
+        case (true, false, false):
+            return try await convexClient.mutation("studySessions:create", with: [
+                "goalId": goalId,
+                "goalTodoId": goalTodoId!,
+                "localVideoPath": localVideoPath,
+                "durationMinutes": durationMinutes
+            ])
+        case (false, true, true):
+            return try await convexClient.mutation("studySessions:create", with: [
+                "goalId": goalId,
+                "localVideoPath": localVideoPath,
+                "localThumbnailPath": localThumbnailPath!,
+                "durationMinutes": durationMinutes,
+                "notes": notes!
+            ])
+        case (false, true, false):
+            return try await convexClient.mutation("studySessions:create", with: [
+                "goalId": goalId,
+                "localVideoPath": localVideoPath,
+                "localThumbnailPath": localThumbnailPath!,
+                "durationMinutes": durationMinutes
+            ])
+        case (false, false, true):
+            return try await convexClient.mutation("studySessions:create", with: [
+                "goalId": goalId,
+                "localVideoPath": localVideoPath,
+                "durationMinutes": durationMinutes,
+                "notes": notes!
+            ])
+        case (false, false, false):
+            return try await convexClient.mutation("studySessions:create", with: [
+                "goalId": goalId,
+                "localVideoPath": localVideoPath,
+                "durationMinutes": durationMinutes
+            ])
         }
     }
 
@@ -409,27 +377,23 @@ class ConvexService: ObservableObject {
     }
 
     func createTodo(title: String, description: String?) async throws -> String {
-        return try await withAuthRetry {
-            if let description = description {
-                return try await convexClient.mutation("todos:create", with: [
-                    "title": title,
-                    "description": description
-                ])
-            } else {
-                return try await convexClient.mutation("todos:create", with: [
-                    "title": title
-                ])
-            }
+        if let description = description {
+            return try await convexClient.mutation("todos:create", with: [
+                "title": title,
+                "description": description
+            ])
+        } else {
+            return try await convexClient.mutation("todos:create", with: [
+                "title": title
+            ])
         }
     }
 
     func toggleTodo(id: String, isCompleted: Bool) async throws {
-        try await withAuthRetry {
-            let _: String? = try await convexClient.mutation("todos:toggle", with: [
-                "id": id,
-                "isCompleted": isCompleted
-            ])
-        }
+        let _: String? = try await convexClient.mutation("todos:toggle", with: [
+            "id": id,
+            "isCompleted": isCompleted
+        ])
     }
 
     func updateTodo(id: String, title: String, description: String?) async throws {
@@ -595,9 +559,7 @@ class ConvexService: ObservableObject {
     /// Deletes all user data from Convex (goals, sessions, todos)
     /// This should be called before deleting the Firebase user account
     func deleteAllUserData() async throws {
-        try await withAuthRetry {
-            let _: String? = try await convexClient.mutation("users:deleteAllData", with: [:])
-        }
+        let _: String? = try await convexClient.mutation("users:deleteAllData", with: [:])
     }
 
     // MARK: - Accountability Partners

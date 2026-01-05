@@ -7,6 +7,7 @@ import { userMutation, userQuery } from "./auth";
 export const list = userQuery({
   args: {},
   handler: async (ctx) => {
+    if (!ctx.identity) return [];
     const userId = ctx.identity.tokenIdentifier;
     const todos = await ctx.db
       .query("todos")
@@ -21,6 +22,7 @@ export const list = userQuery({
 export const listArchived = userQuery({
   args: {},
   handler: async (ctx) => {
+    if (!ctx.identity) return [];
     const userId = ctx.identity.tokenIdentifier;
     const todos = await ctx.db
       .query("todos")
@@ -35,6 +37,7 @@ export const listArchived = userQuery({
 export const listArchivedPaginated = userQuery({
   args: { paginationOpts: paginationOptsValidator },
   handler: async (ctx, args) => {
+    if (!ctx.identity) return { page: [], isDone: true, continueCursor: null };
     const userId = ctx.identity.tokenIdentifier;
 
     const results = await ctx.db
@@ -55,6 +58,7 @@ export const listArchivedPaginated = userQuery({
 export const listCompletedPaginated = userQuery({
   args: { paginationOpts: paginationOptsValidator },
   handler: async (ctx, args) => {
+    if (!ctx.identity) return { page: [], isDone: true, continueCursor: null };
     const userId = ctx.identity.tokenIdentifier;
 
     const results = await ctx.db
@@ -75,10 +79,11 @@ export const listCompletedPaginated = userQuery({
 export const get = userQuery({
   args: { id: v.id("todos") },
   handler: async (ctx, args) => {
+    if (!ctx.identity) return null;
     const userId = ctx.identity.tokenIdentifier;
     const todo = await ctx.db.get(args.id);
     if (todo && todo.userId !== userId) {
-      throw new Error("Not authorized");
+      return null; // Not authorized - return null instead of throwing
     }
     return todo;
   },

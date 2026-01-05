@@ -7,6 +7,8 @@ import { userMutation, userQuery } from "./auth";
 export const list = userQuery({
   args: {},
   handler: async (ctx) => {
+    // Return empty if not authenticated (graceful handling)
+    if (!ctx.identity) return [];
     const userId = ctx.identity.tokenIdentifier;
     const goals = await ctx.db
       .query("goals")
@@ -21,6 +23,7 @@ export const list = userQuery({
 export const listArchived = userQuery({
   args: {},
   handler: async (ctx) => {
+    if (!ctx.identity) return [];
     const userId = ctx.identity.tokenIdentifier;
     const goals = await ctx.db
       .query("goals")
@@ -35,6 +38,7 @@ export const listArchived = userQuery({
 export const listArchivedPaginated = userQuery({
   args: { paginationOpts: paginationOptsValidator },
   handler: async (ctx, args) => {
+    if (!ctx.identity) return { page: [], isDone: true, continueCursor: null };
     const userId = ctx.identity.tokenIdentifier;
 
     const results = await ctx.db

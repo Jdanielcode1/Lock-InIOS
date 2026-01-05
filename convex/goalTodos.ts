@@ -6,12 +6,12 @@ import { internalMutation } from "./_generated/server";
 export const listByGoal = userQuery({
   args: { goalId: v.id("goals") },
   handler: async (ctx, args) => {
+    if (!ctx.identity) return [];
     const userId = ctx.identity.tokenIdentifier;
 
     // Verify goal ownership
     const goal = await ctx.db.get(args.goalId);
-    if (!goal) throw new Error("Goal not found");
-    if (goal.userId !== userId) throw new Error("Not authorized");
+    if (!goal || goal.userId !== userId) return [];
 
     const todos = await ctx.db
       .query("goalTodos")
@@ -27,6 +27,7 @@ export const listByGoal = userQuery({
 export const listAll = userQuery({
   args: {},
   handler: async (ctx) => {
+    if (!ctx.identity) return [];
     const userId = ctx.identity.tokenIdentifier;
 
     const todos = await ctx.db
