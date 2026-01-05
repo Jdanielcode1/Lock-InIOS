@@ -358,40 +358,27 @@ struct TodoRecorderView: View {
     // MARK: - Compiling Video View
 
     var compilingVideoView: some View {
-        VStack(spacing: 32) {
-            // Animated film reel icon
-            ZStack {
-                Circle()
-                    .stroke(Color.white.opacity(0.2), lineWidth: 8)
-                    .frame(width: 120, height: 120)
+        ZStack {
+            Circle()
+                .stroke(Color.white.opacity(0.2), lineWidth: 8)
+                .frame(width: 120, height: 120)
 
-                Circle()
-                    .trim(from: 0, to: 0.7)
-                    .stroke(
-                        AngularGradient(
-                            colors: [Color.accentColor, Color.accentColor.opacity(0.3)],
-                            center: .center
-                        ),
-                        style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                    )
-                    .frame(width: 120, height: 120)
-                    .rotationEffect(.degrees(-90))
-                    .modifier(RotatingModifier())
+            Circle()
+                .trim(from: 0, to: recorder.compilationProgress)
+                .stroke(
+                    AngularGradient(
+                        colors: [Color.accentColor, .green],
+                        center: .center
+                    ),
+                    style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                )
+                .frame(width: 120, height: 120)
+                .rotationEffect(.degrees(-90))
+                .animation(.easeInOut(duration: 0.3), value: recorder.compilationProgress)
 
-                Image(systemName: "film.stack")
-                    .font(.system(size: 40))
-                    .foregroundColor(.white)
-            }
-
-            VStack(spacing: 12) {
-                Text("Creating Video")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.white)
-
-                Text("Compiling \(recorder.frameCount) frames...")
-                    .font(.system(size: 16))
-                    .foregroundColor(.white.opacity(0.7))
-            }
+            Text("\(Int(recorder.compilationProgress * 100))%")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundColor(.white)
         }
     }
 

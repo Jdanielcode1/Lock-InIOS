@@ -64,6 +64,10 @@ struct TodoSessionRecorderView: View {
     // Privacy mode
     @StateObject private var privacyManager = PrivacyModeManager()
 
+    // Partners sharing
+    @StateObject private var partnersViewModel = PartnersViewModel()
+    @State private var showShareWithPartners = false
+
     private let videoService = VideoService.shared
 
     // Computed properties
@@ -239,6 +243,22 @@ struct TodoSessionRecorderView: View {
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showShareWithPartners) {
+            if let videoURL = recorder.recordedVideoURL {
+                ShareWithPartnersSheet(
+                    videoURL: videoURL,
+                    durationMinutes: recorder.recordingDuration / 60.0,
+                    goalTitle: nil,
+                    todoTitle: nil
+                ) { partnerIds in
+                    Task {
+                        await shareWithPartners(partnerIds: partnerIds)
+                    }
+                } onSkip: {
+                    showShareWithPartners = false
+                }
+            }
+        }
     }
 
     private func triggerCountdownAlert() {
@@ -335,40 +355,27 @@ struct TodoSessionRecorderView: View {
     // MARK: - Compiling Video View
 
     var compilingVideoView: some View {
-        VStack(spacing: 32) {
-            // Animated film reel icon
-            ZStack {
-                Circle()
-                    .stroke(Color.white.opacity(0.2), lineWidth: 8)
-                    .frame(width: 120, height: 120)
+        ZStack {
+            Circle()
+                .stroke(Color.white.opacity(0.2), lineWidth: 8)
+                .frame(width: 120, height: 120)
 
-                Circle()
-                    .trim(from: 0, to: 0.7)
-                    .stroke(
-                        AngularGradient(
-                            colors: [Color.accentColor, Color.accentColor.opacity(0.3)],
-                            center: .center
-                        ),
-                        style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                    )
-                    .frame(width: 120, height: 120)
-                    .rotationEffect(.degrees(-90))
-                    .modifier(RotatingModifier())
+            Circle()
+                .trim(from: 0, to: recorder.compilationProgress)
+                .stroke(
+                    AngularGradient(
+                        colors: [Color.accentColor, .green],
+                        center: .center
+                    ),
+                    style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                )
+                .frame(width: 120, height: 120)
+                .rotationEffect(.degrees(-90))
+                .animation(.easeInOut(duration: 0.3), value: recorder.compilationProgress)
 
-                Image(systemName: "film.stack")
-                    .font(.system(size: 40))
-                    .foregroundColor(.white)
-            }
-
-            VStack(spacing: 12) {
-                Text("Creating Video")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.white)
-
-                Text("Compiling \(recorder.frameCount) frames...")
-                    .font(.system(size: 16))
-                    .foregroundColor(.white.opacity(0.7))
-            }
+            Text("\(Int(recorder.compilationProgress * 100))%")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundColor(.white)
         }
     }
 
@@ -1003,8 +1010,8 @@ struct TodoSessionRecorderView: View {
 
                             // Voiceover
                             actionIconButton(
-                                icon: hasVoiceoverAdded ? "mic.badge.checkmark" : "mic.fill",
-                                label: "Voice",
+                                icon: hasVoiceoverAdded ? "waveform" : "mic.fill",
+                                label: hasVoiceoverAdded ? "Re-record" : "Voice",
                                 isActive: hasVoiceoverAdded
                             ) {
                                 startVoiceoverCountdown()
@@ -1017,6 +1024,17 @@ struct TodoSessionRecorderView: View {
                                 isActive: false
                             ) {
                                 showShareSheet = true
+                            }
+
+                            // Partners (if available)
+                            if !partnersViewModel.partners.isEmpty {
+                                actionIconButton(
+                                    icon: "person.2.fill",
+                                    label: "Partners",
+                                    isActive: false
+                                ) {
+                                    showShareWithPartners = true
+                                }
                             }
                         }
                         .padding(.vertical, 8)
@@ -1406,6 +1424,85 @@ struct TodoSessionRecorderView: View {
             errorMessage = "Save failed: \(error.localizedDescription)"
             isUploading = false
             uploadProgress = 0
+        }
+    }
+
+    private func shareWithPartners(partnerIds: [String]) async {
+        guard let videoURL = recorder.recordedVideoURL else {
+            showShareWithPartners = false
+            return
+        }
+
+        do {
+            // Generate thumbnail from first frame
+            var thumbnailR2Key: String? = nil
+            if let thumbnail = try? await videoService.generateThumbnail(from: videoURL),
+               let thumbnailData = thumbnail.jpegData(compressionQuality: 0.8) {
+                // Get upload URL for thumbnail
+                let thumbUploadResponse = try await ConvexService.shared.generateUploadUrl()
+
+                var thumbRequest = URLRequest(url: URL(string: thumbUploadResponse.url)!)
+                thumbRequest.httpMethod = "PUT"
+                thumbRequest.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+                thumbRequest.httpBody = thumbnailData
+
+                let (_, thumbResponse) = try await URLSession.shared.data(for: thumbRequest)
+                if let httpResponse = thumbResponse as? HTTPURLResponse,
+                   httpResponse.statusCode == 200 {
+                    thumbnailR2Key = thumbUploadResponse.key
+                    try? await ConvexService.shared.syncR2Metadata(key: thumbUploadResponse.key)
+                }
+            }
+
+            // Get upload URL and key from Convex
+            let uploadResponse = try await ConvexService.shared.generateUploadUrl()
+
+            // Upload video to R2
+            let videoData = try Data(contentsOf: videoURL)
+            var request = URLRequest(url: URL(string: uploadResponse.url)!)
+            request.httpMethod = "PUT"
+            request.setValue("video/quicktime", forHTTPHeaderField: "Content-Type")
+            request.httpBody = videoData
+
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Upload failed"])
+            }
+
+            // Use the key from the response
+            let r2Key = uploadResponse.key
+
+            // Sync metadata with Convex
+            try await ConvexService.shared.syncR2Metadata(key: r2Key)
+
+            // Create combined title from completed todos
+            let completedTodoTitles = selectedTodos
+                .filter { checkedTodoIds.contains($0.id) }
+                .map { $0.title }
+            let todoTitle = completedTodoTitles.isEmpty ? nil : completedTodoTitles.joined(separator: ", ")
+
+            // Create shared video record
+            _ = try await ConvexService.shared.shareVideo(
+                r2Key: r2Key,
+                thumbnailR2Key: thumbnailR2Key,
+                durationMinutes: recorder.recordingDuration / 60.0,
+                goalTitle: nil,
+                todoTitle: todoTitle,
+                notes: pendingNotes.isEmpty ? nil : pendingNotes,
+                partnerIds: partnerIds
+            )
+
+            await MainActor.run {
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
+                showShareWithPartners = false
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = "Failed to share: \(error.localizedDescription)"
+                showShareWithPartners = false
+            }
         }
     }
 }

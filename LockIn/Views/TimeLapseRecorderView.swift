@@ -634,74 +634,27 @@ struct TimeLapseRecorderView: View {
     // MARK: - Compiling Video View
 
     var compilingVideoView: some View {
-        VStack(spacing: 32) {
-            // Progress ring with percentage
-            ZStack {
-                Circle()
-                    .stroke(Color.white.opacity(0.2), lineWidth: 8)
-                    .frame(width: 120, height: 120)
+        ZStack {
+            Circle()
+                .stroke(Color.white.opacity(0.2), lineWidth: 8)
+                .frame(width: 120, height: 120)
 
-                Circle()
-                    .trim(from: 0, to: recorder.compilationProgress)
-                    .stroke(
-                        AngularGradient(
-                            colors: [Color.accentColor, .green],
-                            center: .center
-                        ),
-                        style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                    )
-                    .frame(width: 120, height: 120)
-                    .rotationEffect(.degrees(-90))
-                    .animation(.easeInOut(duration: 0.3), value: recorder.compilationProgress)
+            Circle()
+                .trim(from: 0, to: recorder.compilationProgress)
+                .stroke(
+                    AngularGradient(
+                        colors: [Color.accentColor, .green],
+                        center: .center
+                    ),
+                    style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                )
+                .frame(width: 120, height: 120)
+                .rotationEffect(.degrees(-90))
+                .animation(.easeInOut(duration: 0.3), value: recorder.compilationProgress)
 
-                VStack(spacing: 4) {
-                    Text("\(Int(recorder.compilationProgress * 100))%")
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(.white)
-
-                    Image(systemName: "film.stack")
-                        .font(.system(size: 20))
-                        .foregroundColor(.white.opacity(0.7))
-                }
-            }
-
-            VStack(spacing: 12) {
-                Text("Creating Video")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.white)
-
-                Text("Processing \(recorder.frameCount) frames...")
-                    .font(.system(size: 16))
-                    .foregroundColor(.white.opacity(0.7))
-
-                // Show stage
-                Text(compilationStageText)
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.5))
-            }
-
-            // Warning about not closing the app
-            HStack(spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 14))
-                    .foregroundColor(.orange)
-
-                Text("Please keep the app open")
-                    .font(.system(size: 14))
-                    .foregroundColor(.orange)
-            }
-            .padding(.top, 20)
-        }
-    }
-
-    var compilationStageText: String {
-        let progress = recorder.compilationProgress
-        if progress < 0.8 {
-            return "Encoding frames..."
-        } else if progress < 0.95 {
-            return "Adding audio..."
-        } else {
-            return "Finalizing..."
+            Text("\(Int(recorder.compilationProgress * 100))%")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundColor(.white)
         }
     }
 
@@ -1198,11 +1151,15 @@ struct TimeLapseRecorderView: View {
                         .padding(.bottom, 40)
                 }
             } else {
-                VStack(spacing: 12) {
-                    // Top row: Retake, Resume, and Save
-                    HStack(spacing: 12) {
-                        // Retake button
-                        Button {
+                VStack(spacing: 16) {
+                    // Icon action row
+                    HStack(spacing: 0) {
+                        // Retake
+                        actionIconButton(
+                            icon: "arrow.counterclockwise",
+                            label: "Retake",
+                            isActive: false
+                        ) {
                             player?.pause()
                             player = nil
                             previewThumbnail = nil
@@ -1211,138 +1168,76 @@ struct TimeLapseRecorderView: View {
                             pendingNotes = ""
                             isContinueMode = false
                             recorder.clearFrames()
-                        } label: {
-                            VStack(spacing: 4) {
-                                Image(systemName: "arrow.counterclockwise")
-                                    .font(.system(size: 20, weight: .semibold))
-                                Text("Retake")
-                                    .font(.system(size: 12, weight: .medium))
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .background(Color.white.opacity(0.15))
-                            .cornerRadius(16)
                         }
 
-                        // Resume button
-                        Button {
+                        // Resume More
+                        actionIconButton(
+                            icon: "plus.circle",
+                            label: "Resume",
+                            isActive: false
+                        ) {
                             startContinueFromPreview()
-                        } label: {
-                            VStack(spacing: 4) {
-                                Image(systemName: "plus.circle")
-                                    .font(.system(size: 20, weight: .semibold))
-                                Text("Resume")
-                                    .font(.system(size: 12, weight: .medium))
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .background(Color.green)
-                            .cornerRadius(16)
                         }
 
-                        // Save button
-                        Button {
-                            Task {
-                                await saveVideo()
+                        // Notes
+                        actionIconButton(
+                            icon: pendingNotes.isEmpty ? "note.text" : "note.text.badge.checkmark",
+                            label: "Notes",
+                            isActive: !pendingNotes.isEmpty
+                        ) {
+                            showNotesSheet = true
+                        }
+
+                        // Voiceover
+                        actionIconButton(
+                            icon: hasVoiceoverAdded ? "waveform" : "mic.fill",
+                            label: hasVoiceoverAdded ? "Re-record" : "Voice",
+                            isActive: hasVoiceoverAdded
+                        ) {
+                            startVoiceoverCountdown()
+                        }
+
+                        // Share
+                        actionIconButton(
+                            icon: "square.and.arrow.up",
+                            label: "Share",
+                            isActive: false
+                        ) {
+                            showShareSheet = true
+                        }
+
+                        // Partners (if available)
+                        if !partnersViewModel.partners.isEmpty {
+                            actionIconButton(
+                                icon: "person.2.fill",
+                                label: "Partners",
+                                isActive: false
+                            ) {
+                                showShareWithPartners = true
                             }
-                        } label: {
-                            VStack(spacing: 4) {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 20, weight: .semibold))
-                                Text("Save")
-                                    .font(.system(size: 12, weight: .medium))
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .background(Color.accentColor)
-                            .cornerRadius(16)
                         }
                     }
+                    .padding(.vertical, 8)
+                    .background(Color.white.opacity(0.08))
+                    .cornerRadius(14)
 
-                    // Middle row: Notes button
+                    // Primary save button
                     Button {
-                        showNotesSheet = true
+                        Task {
+                            await saveVideo()
+                        }
                     } label: {
                         HStack(spacing: 8) {
-                            Image(systemName: pendingNotes.isEmpty ? "note.text.badge.plus" : "note.text")
+                            Image(systemName: "checkmark")
                                 .font(.system(size: 18, weight: .semibold))
-                            Text(pendingNotes.isEmpty ? "Add Notes" : "Edit Notes")
+                            Text("Save")
                                 .font(.system(size: 17, weight: .semibold))
-                            if !pendingNotes.isEmpty {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.white.opacity(0.8))
-                            }
                         }
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 56)
-                        .background(pendingNotes.isEmpty ? Color.white.opacity(0.15) : Color.accentColor.opacity(0.8))
-                        .cornerRadius(16)
-                    }
-
-                    // Share with Partners button (only if user has partners)
-                    if !partnersViewModel.partners.isEmpty {
-                        Button {
-                            showShareWithPartners = true
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "person.2.fill")
-                                    .font(.system(size: 18, weight: .semibold))
-                                Text("Share with Partners")
-                                    .font(.system(size: 17, weight: .semibold))
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .background(Color.green)
-                            .cornerRadius(16)
-                        }
-                    }
-
-                    // Bottom row: Voiceover and Share
-                    HStack(spacing: 16) {
-                        // Voiceover button
-                        Button {
-                            startVoiceoverCountdown()
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: hasVoiceoverAdded ? "arrow.counterclockwise" : "mic.fill")
-                                    .font(.system(size: 18, weight: .semibold))
-                                Text(hasVoiceoverAdded ? "Re-record" : "Voiceover")
-                                    .font(.system(size: 17, weight: .semibold))
-                                if hasVoiceoverAdded {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.white.opacity(0.8))
-                                }
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .background(hasVoiceoverAdded ? Color.orange.opacity(0.8) : Color.orange)
-                            .cornerRadius(16)
-                        }
-
-                        // Share button
-                        Button {
-                            showShareSheet = true
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "square.and.arrow.up")
-                                    .font(.system(size: 18, weight: .semibold))
-                                Text("Share")
-                                    .font(.system(size: 17, weight: .semibold))
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .background(Color.white.opacity(0.2))
-                            .cornerRadius(16)
-                        }
+                        .background(Color.accentColor)
+                        .cornerRadius(14)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -1361,6 +1256,34 @@ struct TimeLapseRecorderView: View {
         }
         .onAppear {
             setupPlayer()
+        }
+    }
+
+    // MARK: - Action Icon Button Helper
+
+    @ViewBuilder
+    private func actionIconButton(icon: String, label: String, isActive: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                ZStack {
+                    Image(systemName: icon)
+                        .font(.system(size: 22))
+                        .foregroundColor(isActive ? Color.accentColor : .white)
+
+                    if isActive {
+                        Circle()
+                            .fill(Color.accentColor)
+                            .frame(width: 8, height: 8)
+                            .offset(x: 12, y: -10)
+                    }
+                }
+
+                Text(label)
+                    .font(.system(size: 11))
+                    .foregroundColor(isActive ? Color.accentColor : .white.opacity(0.7))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
         }
     }
 
