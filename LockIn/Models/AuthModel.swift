@@ -4,10 +4,10 @@
 //
 //  Firebase Authentication model for managing user auth state
 //
-//  Convex Philosophy: Keep It Simple
-//  - Queries return empty when unauthenticated (handled by backend)
-//  - Subscriptions auto-update when auth becomes valid
-//  - No complex client-side token refresh timers needed
+//  Standard Convex Auth Pattern:
+//  - Backend throws on unauthenticated (security + clear errors)
+//  - iOS proactively refreshes token before expiration
+//  - Timer runs every 45 mins to keep token fresh
 //
 
 import FirebaseAuth
@@ -29,6 +29,10 @@ class AuthModel: ObservableObject {
     @Published var isRefreshing: Bool = false
     @Published var errorMessage: String?
 
+    // Token refresh timer (Firebase tokens expire after 1 hour)
+    private var tokenRefreshTimer: Timer?
+    private let tokenRefreshInterval: TimeInterval = 45 * 60 // 45 minutes
+
     init() {
         // Subscribe to Convex auth state
         convexClient.authState.replaceError(with: .unauthenticated)
@@ -39,13 +43,49 @@ class AuthModel: ObservableObject {
         Task {
             _ = await convexClient.loginFromCache()
         }
+
+        // Start token refresh timer
+        startTokenRefreshTimer()
     }
 
-    /// Call when app comes to foreground - refresh auth session
+    deinit {
+        tokenRefreshTimer?.invalidate()
+    }
+
+    // MARK: - Token Refresh Timer
+
+    private func startTokenRefreshTimer() {
+        tokenRefreshTimer?.invalidate()
+        tokenRefreshTimer = Timer.scheduledTimer(withTimeInterval: tokenRefreshInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                await self?.refreshTokenIfNeeded()
+            }
+        }
+    }
+
+    private func stopTokenRefreshTimer() {
+        tokenRefreshTimer?.invalidate()
+        tokenRefreshTimer = nil
+    }
+
+    private func refreshTokenIfNeeded() async {
+        guard case .authenticated = authState else { return }
+        isRefreshing = true
+        _ = await convexClient.loginFromCache()
+        isRefreshing = false
+    }
+
+    /// Call when app comes to foreground - refresh auth session and restart timer
     func appDidBecomeActive() {
         Task {
             _ = await convexClient.loginFromCache()
         }
+        startTokenRefreshTimer()
+    }
+
+    /// Call when app goes to background - stop timer to save resources
+    func appDidEnterBackground() {
+        stopTokenRefreshTimer()
     }
 
     // MARK: - Sign In Methods

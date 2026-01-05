@@ -45,8 +45,11 @@ struct RootView: View {
         .preferredColorScheme(appearanceMode.colorScheme)
         .onChange(of: scenePhase) { oldPhase, newPhase in
             if newPhase == .active {
-                // App came to foreground - refresh auth session
+                // App came to foreground - refresh auth session and restart timer
                 authModel.appDidBecomeActive()
+            } else if newPhase == .background {
+                // App went to background - stop refresh timer to save resources
+                authModel.appDidEnterBackground()
             }
         }
     }

@@ -6,7 +6,6 @@ import { internalMutation } from "./_generated/server";
 export const listByGoal = userQuery({
   args: { goalId: v.id("goals") },
   handler: async (ctx, args) => {
-    if (!ctx.identity) return [];
     const userId = ctx.identity.tokenIdentifier;
 
     // Verify goal ownership
@@ -27,7 +26,6 @@ export const listByGoal = userQuery({
 export const listAll = userQuery({
   args: {},
   handler: async (ctx) => {
-    if (!ctx.identity) return [];
     const userId = ctx.identity.tokenIdentifier;
 
     const todos = await ctx.db

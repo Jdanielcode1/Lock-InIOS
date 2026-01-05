@@ -18,10 +18,28 @@ let convexClient = ConvexClientWithAuth(
     authProvider: firebaseAuthProvider
 )
 
-// Convex Philosophy: Keep It Simple
-// - Queries return empty when unauthenticated (handled by backend)
-// - Mutations throw when unauthenticated (security)
-// - Subscriptions auto-update when auth becomes valid
+// Standard Convex Auth Pattern:
+// - Backend throws on unauthenticated calls (security + clear errors)
+// - iOS handles proactive token refresh (prevents expiration)
+// - withAuthRetry wraps critical mutations for edge cases
+
+/// Wrapper for critical mutations that may fail due to token expiration
+/// Attempts the operation, and on auth failure, refreshes the token and retries once
+@MainActor
+func withAuthRetry<T>(_ operation: @escaping () async throws -> T) async throws -> T {
+    do {
+        return try await operation()
+    } catch {
+        // Check if this is an auth error
+        let errorMessage = error.localizedDescription.lowercased()
+        if errorMessage.contains("unauthenticated") || errorMessage.contains("unauthorized") {
+            // Try to refresh auth and retry once
+            _ = await convexClient.loginFromCache()
+            return try await operation()
+        }
+        throw error
+    }
+}
 
 @MainActor
 class ConvexService: ObservableObject {

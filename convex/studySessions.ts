@@ -64,7 +64,6 @@ export const create = userMutation({
 export const listByGoal = userQuery({
   args: { goalId: v.id("goals") },
   handler: async (ctx, args) => {
-    if (!ctx.identity) return [];
     const userId = ctx.identity.tokenIdentifier;
 
     // Verify goal ownership
@@ -84,7 +83,6 @@ export const listByGoal = userQuery({
 export const listByGoalTodo = userQuery({
   args: { goalTodoId: v.id("goalTodos") },
   handler: async (ctx, args) => {
-    if (!ctx.identity) return [];
     const userId = ctx.identity.tokenIdentifier;
 
     // Verify goal todo ownership
@@ -104,7 +102,6 @@ export const listByGoalTodo = userQuery({
 export const listAll = userQuery({
   args: {},
   handler: async (ctx) => {
-    if (!ctx.identity) return [];
     const userId = ctx.identity.tokenIdentifier;
 
     const sessions = await ctx.db
@@ -120,7 +117,6 @@ export const listAll = userQuery({
 export const listAllPaginated = userQuery({
   args: { paginationOpts: paginationOptsValidator },
   handler: async (ctx, args) => {
-    if (!ctx.identity) return { page: [], isDone: true, continueCursor: null };
     const userId = ctx.identity.tokenIdentifier;
 
     return await ctx.db
@@ -138,7 +134,6 @@ export const listByGoalPaginated = userQuery({
     paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
-    if (!ctx.identity) return { page: [], isDone: true, continueCursor: null };
     const userId = ctx.identity.tokenIdentifier;
 
     // Verify goal ownership
