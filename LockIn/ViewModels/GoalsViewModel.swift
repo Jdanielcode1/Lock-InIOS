@@ -19,7 +19,21 @@ class GoalsViewModel: ObservableObject {
     private let convexService = ConvexService.shared
 
     init() {
+        // Load cached data immediately for instant UI
+        loadCachedGoals()
         waitForAuthThenSubscribe()
+    }
+
+    /// Load cached goals for instant app launch
+    private func loadCachedGoals() {
+        Task {
+            if let cached: [Goal] = await DataCacheService.shared.load(.goals) {
+                // Only set if we don't have data yet (avoid flicker)
+                if self.goals.isEmpty {
+                    self.goals = cached
+                }
+            }
+        }
     }
 
     /// Wait for authenticated state before subscribing to avoid "Unauthenticated call" errors
@@ -51,6 +65,11 @@ class GoalsViewModel: ObservableObject {
             .sink { [weak self] goals in
                 self?.goals = goals
                 self?.isLoading = false
+
+                // Update cache in background
+                Task {
+                    await DataCacheService.shared.save(goals, for: .goals)
+                }
             }
             .store(in: &cancellables)
     }

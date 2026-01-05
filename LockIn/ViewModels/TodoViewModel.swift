@@ -20,7 +20,27 @@ class TodoViewModel: ObservableObject {
     private let convexService = ConvexService.shared
 
     init() {
+        // Load cached data immediately for instant UI
+        loadCachedData()
         waitForAuthThenSubscribe()
+    }
+
+    /// Load cached todos for instant app launch
+    private func loadCachedData() {
+        Task {
+            // Load todos
+            if let cachedTodos: [TodoItem] = await DataCacheService.shared.load(.todos) {
+                if self.todos.isEmpty {
+                    self.todos = cachedTodos
+                }
+            }
+            // Load goal todos
+            if let cachedGoalTodos: [GoalTodo] = await DataCacheService.shared.load(.goalTodos) {
+                if self.goalTodos.isEmpty {
+                    self.goalTodos = cachedGoalTodos
+                }
+            }
+        }
     }
 
     /// Wait for authenticated state before subscribing to avoid "Unauthenticated call" errors
@@ -53,6 +73,11 @@ class TodoViewModel: ObservableObject {
             .sink { [weak self] todos in
                 self?.todos = todos
                 self?.isLoading = false
+
+                // Update cache in background
+                Task {
+                    await DataCacheService.shared.save(todos, for: .todos)
+                }
             }
             .store(in: &cancellables)
     }
@@ -62,6 +87,11 @@ class TodoViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] goalTodos in
                 self?.goalTodos = goalTodos
+
+                // Update cache in background
+                Task {
+                    await DataCacheService.shared.save(goalTodos, for: .goalTodos)
+                }
             }
             .store(in: &cancellables)
     }
