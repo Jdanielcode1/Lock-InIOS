@@ -699,7 +699,7 @@ class ConvexService: ObservableObject {
     }
 
     func deleteSharedVideo(videoId: String) async throws {
-        let _: String? = try await convexClient.mutation("sharedVideos:remove", with: [
+        let _: String? = try await convexClient.action("sharedVideos:remove", with: [
             "videoId": videoId
         ])
     }

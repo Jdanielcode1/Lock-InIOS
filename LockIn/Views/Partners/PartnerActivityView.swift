@@ -9,11 +9,16 @@ import SwiftUI
 import Combine
 import AVKit
 
+// Holder class for Combine cancellables to avoid @State memory issues
+private class CancellableHolder: ObservableObject {
+    var cancellables = Set<AnyCancellable>()
+}
+
 struct PartnerActivityView: View {
     let partner: Partner
     @State private var partnerVideos: [SharedVideo] = []
     @State private var isLoading = true
-    @State private var cancellables = Set<AnyCancellable>()
+    @StateObject private var cancellableHolder = CancellableHolder()
     @State private var selectedVideo: SharedVideo?
     @State private var videoURL: URL?
     @State private var isLoadingVideo = false
@@ -91,7 +96,7 @@ struct PartnerActivityView: View {
                 self.partnerVideos = videos
                 self.isLoading = false
             }
-            .store(in: &cancellables)
+            .store(in: &cancellableHolder.cancellables)
     }
 
     private func playVideo(_ video: SharedVideo) {

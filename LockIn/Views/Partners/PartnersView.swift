@@ -13,6 +13,8 @@ struct PartnersView: View {
     @State private var showingAddPartner = false
     @State private var showingInvites = false
     @State private var isPresented = false
+    @State private var partnerToRemove: Partner?
+    @State private var showingRemoveConfirmation = false
 
     var body: some View {
         NavigationView {
@@ -78,9 +80,8 @@ struct PartnersView: View {
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) {
                                     HapticFeedback.warning()
-                                    Task {
-                                        await viewModel.removePartner(partner)
-                                    }
+                                    partnerToRemove = partner
+                                    showingRemoveConfirmation = true
                                 } label: {
                                     Label("Remove", systemImage: "person.badge.minus")
                                 }
@@ -140,6 +141,19 @@ struct PartnersView: View {
             .sheet(isPresented: $showingInvites) {
                 PartnerInvitesView(viewModel: viewModel)
             }
+            .alert("Remove Partner", isPresented: $showingRemoveConfirmation, presenting: partnerToRemove) { partner in
+                Button("Cancel", role: .cancel) {
+                    partnerToRemove = nil
+                }
+                Button("Remove", role: .destructive) {
+                    Task {
+                        await viewModel.removePartner(partner)
+                        partnerToRemove = nil
+                    }
+                }
+            } message: { partner in
+                Text("Are you sure you want to remove \(partner.displayName) as your accountability partner? You won't be able to see their shared sessions anymore.")
+            }
             .overlay {
                 if viewModel.isLoading {
                     ProgressView()
@@ -159,58 +173,26 @@ struct PartnersView: View {
 struct PartnerRow: View {
     let partner: Partner
 
-    // Simulated activity data - in production, fetch from backend
-    private var isActiveToday: Bool {
-        // Simulate: ~60% chance active today
-        abs(partner.partnerId.hashValue) % 10 < 6
-    }
-
-    private var streakDays: Int {
-        // Simulate: 0-14 day streak based on partner ID
-        abs(partner.partnerId.hashValue) % 15
-    }
-
     var body: some View {
         HStack(spacing: 14) {
             // Gradient avatar
-            PartnerAvatar(partner: partner, size: 52, showOnlineIndicator: true, isOnline: isActiveToday)
+            PartnerAvatar(partner: partner, size: 52)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(partner.displayName)
                     .font(.body.weight(.medium))
 
-                HStack(spacing: 12) {
-                    // Activity status
-                    if isActiveToday {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(.green)
-                                .frame(width: 6, height: 6)
-                            Text("Active today")
-                                .font(.caption)
-                                .foregroundStyle(.green)
-                        }
-                    } else {
-                        Text("Partner")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    // Streak indicator
-                    if streakDays > 0 {
-                        HStack(spacing: 3) {
-                            Image(systemName: "flame.fill")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.orange)
-                            Text("\(streakDays) day\(streakDays == 1 ? "" : "s")")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
+                Text(partner.partnerEmail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
             Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 6)
     }
