@@ -44,9 +44,17 @@ struct RootView: View {
         .withErrorAlerts()  // Global error alert handling
         .preferredColorScheme(appearanceMode.colorScheme)
         .onChange(of: scenePhase) { oldPhase, newPhase in
-            if newPhase == .active && oldPhase == .background {
-                // App came back from background - refresh auth to handle expired tokens
-                authModel.refreshSessionIfNeeded()
+            switch newPhase {
+            case .active:
+                // App came to foreground - restart timer and refresh if needed
+                authModel.appDidBecomeActive()
+            case .background:
+                // App going to background - stop timer
+                authModel.appDidEnterBackground()
+            case .inactive:
+                break
+            @unknown default:
+                break
             }
         }
     }

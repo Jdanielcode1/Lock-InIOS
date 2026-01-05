@@ -24,6 +24,13 @@ class AuthModel: ObservableObject {
     @Published var isRefreshing: Bool = false
     @Published var errorMessage: String?
 
+    /// Timer for proactive token refresh (every 45 minutes)
+    private var tokenRefreshTimer: Timer?
+    private let tokenRefreshInterval: TimeInterval = 45 * 60 // 45 minutes
+
+    /// Track if app is in foreground for timer management
+    private var isAppActive: Bool = true
+
     init() {
         // Subscribe to Convex auth state
         convexClient.authState.replaceError(with: .unauthenticated)
@@ -35,6 +42,52 @@ class AuthModel: ObservableObject {
         Task {
             await loginFromCacheWithRetry()
         }
+
+        // Start proactive token refresh timer
+        startTokenRefreshTimer()
+    }
+
+    deinit {
+        tokenRefreshTimer?.invalidate()
+    }
+
+    // MARK: - Proactive Token Refresh Timer
+
+    /// Start the timer that refreshes tokens every 45 minutes while authenticated
+    private func startTokenRefreshTimer() {
+        tokenRefreshTimer?.invalidate()
+        tokenRefreshTimer = Timer.scheduledTimer(withTimeInterval: tokenRefreshInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                await self?.proactiveTokenRefresh()
+            }
+        }
+    }
+
+    /// Proactively refresh the token before it expires
+    private func proactiveTokenRefresh() async {
+        guard isAppActive else { return }
+        guard case .authenticated(_) = authState else { return }
+
+        print("Proactive token refresh triggered")
+        do {
+            try await convexClient.loginFromCache()
+            print("Proactive token refresh successful")
+        } catch {
+            print("Proactive token refresh failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Call when app goes to background
+    func appDidEnterBackground() {
+        isAppActive = false
+        tokenRefreshTimer?.invalidate()
+    }
+
+    /// Call when app comes to foreground
+    func appDidBecomeActive() {
+        isAppActive = true
+        startTokenRefreshTimer()
+        refreshSessionIfNeeded()
     }
 
     /// Attempts to login from cache (restore existing Firebase session)
