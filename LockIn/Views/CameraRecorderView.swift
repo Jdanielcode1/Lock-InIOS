@@ -15,9 +15,13 @@ struct CameraRecorderView: View {
     let goalTodoId: String?
 
     @Environment(\.dismiss) var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var viewModel: CameraRecorderViewModel
     @State private var previewThumbnail: UIImage?
     @State private var player: AVPlayer?
+
+    // Track intentional dismissal vs app backgrounding
+    @State private var isDismissing = false
 
     // Privacy mode
     @StateObject private var privacyManager = PrivacyModeManager()
@@ -163,6 +167,7 @@ struct CameraRecorderView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
+                        isDismissing = true
                         viewModel.cancelRecording()
                         dismiss()
                     }
@@ -185,9 +190,25 @@ struct CameraRecorderView: View {
             viewModel.setupCamera()
         }
         .onDisappear {
+            // Only cleanup if intentionally dismissing (not just app backgrounding)
+            guard isDismissing else { return }
+
             // Re-enable screen auto-lock
             UIApplication.shared.isIdleTimerDisabled = false
             viewModel.cleanup()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .background {
+                // Auto-pause when app goes to background
+                if viewModel.isRecording {
+                    viewModel.stopRecording()
+                }
+            } else if newPhase == .active {
+                // Restart camera session if needed when returning from background
+                if !viewModel.captureSession.isRunning {
+                    viewModel.setupCamera()
+                }
+            }
         }
         .onChange(of: viewModel.isRecording) { _, isRecording in
             // Activate/deactivate privacy mode when recording starts/stops
@@ -307,6 +328,7 @@ struct CameraRecorderView: View {
                 Task {
                     await viewModel.saveVideo()
                     if viewModel.uploadSuccess {
+                        isDismissing = true
                         dismiss()
                     }
                 }

@@ -15,6 +15,9 @@ struct ContentView: View {
     @StateObject private var todoViewModel = TodoViewModel()
     @StateObject private var tabBarVisibility = TabBarVisibility()
 
+    // Recording session injected from RootView
+    @EnvironmentObject private var recordingSession: RecordingSessionManager
+
     var body: some View {
         ZStack(alignment: .bottom) {
             // Tab content
@@ -56,6 +59,7 @@ struct ContentView: View {
         .sheet(isPresented: $showingCreateTodo) {
             AddTodoSheet(viewModel: todoViewModel)
         }
+        // Recording sessions are now presented at RootView level to survive auth state changes
     }
 }
 

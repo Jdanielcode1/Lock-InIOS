@@ -10,6 +10,7 @@ import Combine
 
 struct GoalDetailView: View {
     private let initialGoal: Goal
+    let onStartSession: (String, String?, [GoalTodo]) -> Void
 
     @StateObject private var viewModel: GoalDetailViewModel
     @State private var showingVideoPicker = false
@@ -24,7 +25,6 @@ struct GoalDetailView: View {
     @FocusState private var isTitleFocused: Bool
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tabBarVisibility: TabBarVisibility
-    @EnvironmentObject private var goalSessionPresenter: GoalSessionPresenter
 
     // iPad adaptation
     @Environment(\.horizontalSizeClass) var sizeClass
@@ -37,8 +37,9 @@ struct GoalDetailView: View {
         viewModel.goal ?? initialGoal
     }
 
-    init(goal: Goal) {
+    init(goal: Goal, onStartSession: @escaping (String, String?, [GoalTodo]) -> Void) {
         self.initialGoal = goal
+        self.onStartSession = onStartSession
         _viewModel = StateObject(wrappedValue: GoalDetailViewModel(goalId: goal.id, initialGoal: goal))
     }
 
@@ -73,9 +74,10 @@ struct GoalDetailView: View {
             if !goal.isCompleted {
                 Section {
                     Button {
-                        goalSessionPresenter.presentSession(
-                            goalId: goal.id,
-                            availableTodos: viewModel.goalTodos.filter { !$0.isCompleted }
+                        onStartSession(
+                            goal.id,
+                            nil,
+                            viewModel.goalTodos.filter { !$0.isCompleted }
                         )
                     } label: {
                         HStack {
@@ -112,10 +114,10 @@ struct GoalDetailView: View {
                                     selectedGoalTodo = todo
                                     showingVideoPlayer = true
                                 } else {
-                                    goalSessionPresenter.presentSession(
-                                        goalId: goal.id,
-                                        goalTodoId: todo.id,
-                                        availableTodos: viewModel.goalTodos.filter { !$0.isCompleted }
+                                    onStartSession(
+                                        goal.id,
+                                        todo.id,
+                                        viewModel.goalTodos.filter { !$0.isCompleted }
                                     )
                                 }
                             }
@@ -747,16 +749,18 @@ class GoalDetailViewModel: ObservableObject {
 
 #Preview {
     NavigationView {
-        GoalDetailView(goal: Goal(
-            _id: "1",
-            title: "Learn Swift",
-            description: "Master iOS development",
-            targetHours: 30,
-            completedHours: 15,
-            status: .active,
-            createdAt: Date().timeIntervalSince1970 * 1000
-        ))
-        .environmentObject(GoalSessionPresenter())
+        GoalDetailView(
+            goal: Goal(
+                _id: "1",
+                title: "Learn Swift",
+                description: "Master iOS development",
+                targetHours: 30,
+                completedHours: 15,
+                status: .active,
+                createdAt: Date().timeIntervalSince1970 * 1000
+            ),
+            onStartSession: { _, _, _ in }
+        )
         .environmentObject(TabBarVisibility())
     }
 }

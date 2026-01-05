@@ -47,6 +47,8 @@ struct TimeLapseRecorderView: View {
 
     @Environment(\.dismiss) var dismiss
     @Environment(\.horizontalSizeClass) var sizeClass
+    @Environment(\.scenePhase) private var scenePhase
+    @EnvironmentObject private var recordingSession: RecordingSessionManager
     private var sizing: AdaptiveSizing {
         AdaptiveSizing(horizontalSizeClass: sizeClass)
     }
@@ -108,6 +110,9 @@ struct TimeLapseRecorderView: View {
 
     // Privacy mode
     @StateObject private var privacyManager = PrivacyModeManager()
+
+    // Track intentional dismissal vs app backgrounding
+    @State private var isDismissing = false
 
     private let videoService = VideoService.shared
 
@@ -221,6 +226,9 @@ struct TimeLapseRecorderView: View {
             }
         }
         .onDisappear {
+            // Only cleanup if intentionally dismissing (not just app backgrounding)
+            guard isDismissing else { return }
+
             // Re-enable screen auto-lock
             UIApplication.shared.isIdleTimerDisabled = false
 
@@ -228,6 +236,21 @@ struct TimeLapseRecorderView: View {
             dismissAlarm()
             // Lock back to portrait when leaving
             OrientationManager.shared.lockToPortrait()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .background {
+                // Auto-pause when app goes to background
+                if recorder.isRecording && !recorder.isPaused {
+                    recorder.pauseRecording()
+                }
+            } else if newPhase == .active {
+                // Restart camera session if needed when returning from background
+                if !recorder.captureSession.isRunning {
+                    Task {
+                        await recorder.setupCamera()
+                    }
+                }
+            }
         }
         .alert("Error", isPresented: .constant(errorMessage != nil)) {
             Button("OK") {
@@ -908,8 +931,9 @@ struct TimeLapseRecorderView: View {
             HStack {
                 // Cancel button
                 Button {
+                    isDismissing = true
                     recorder.cleanup()
-                    dismiss()
+                    recordingSession.endSession()
                 } label: {
                     Text("Cancel")
                         .font(.system(size: 17, weight: .medium))
@@ -1069,8 +1093,9 @@ struct TimeLapseRecorderView: View {
             // Close button at top
             HStack {
                 Button {
+                    isDismissing = true
                     recorder.cleanup()
-                    dismiss()
+                    recordingSession.endSession()
                 } label: {
                     Image(systemName: "xmark")
                         .font(.title2)
@@ -1618,7 +1643,8 @@ struct TimeLapseRecorderView: View {
             // Reset continue mode
             isContinueMode = false
 
-            dismiss()
+            isDismissing = true
+            recordingSession.endSession()
 
         } catch {
             errorMessage = "Save failed: \(error.localizedDescription)"

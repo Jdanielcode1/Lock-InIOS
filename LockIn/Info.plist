@@ -22,6 +22,16 @@
 				<string>com.googleusercontent.apps.1083398783692-eutnfuj5e4erl38rd784ll06tk93tb9r</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>LockIn Invite Links</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>lockin</string>
+			</array>
+		</dict>
 	</array>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct AddPartnerSheet: View {
     @ObservedObject var viewModel: PartnersViewModel
@@ -14,6 +15,9 @@ struct AddPartnerSheet: View {
     @State private var email = ""
     @State private var isSending = false
     @State private var isPresented = false
+    @State private var inviteCode: String?
+    @State private var isLoadingCode = false
+    @State private var isSharing = false
     @FocusState private var isEmailFocused: Bool
 
     private var isValidEmail: Bool {
@@ -92,6 +96,64 @@ struct AddPartnerSheet: View {
                             .foregroundStyle(isValidEmail ? .green : .secondary)
                     }
                     .animation(.smooth, value: validationMessage)
+                }
+
+                // Share Link section
+                Section {
+                    Button {
+                        shareInviteLink()
+                    } label: {
+                        HStack(spacing: 14) {
+                            ZStack {
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [.orange.opacity(0.15), .yellow.opacity(0.15)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: 40, height: 40)
+
+                                if isLoadingCode || isSharing {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                } else {
+                                    Image(systemName: "link.circle.fill")
+                                        .font(.system(size: 20))
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: [.orange, .yellow],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                }
+                            }
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Share Invite Link")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.primary)
+
+                                Text("Send via iMessage, WhatsApp, or any app")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .disabled(isLoadingCode || isSharing)
+                } header: {
+                    Text("Or Share a Link")
+                } footer: {
+                    Text("Anyone with this link can become your accountability partner")
                 }
 
                 // Benefits section with icon cards
@@ -174,6 +236,88 @@ struct AddPartnerSheet: View {
                 }
             }
         }
+    }
+
+    private func shareInviteLink() {
+        HapticFeedback.medium()
+
+        // If we already have the code, share immediately
+        if let code = inviteCode {
+            presentShareSheet(code: code)
+            return
+        }
+
+        // Otherwise, fetch the code first
+        isLoadingCode = true
+
+        Task {
+            do {
+                let code = try await ConvexService.shared.getMyInviteCode()
+
+                await MainActor.run {
+                    self.inviteCode = code
+                    isLoadingCode = false
+                    presentShareSheet(code: code)
+                }
+            } catch {
+                await MainActor.run {
+                    isLoadingCode = false
+                    HapticFeedback.error()
+                    print("Failed to get invite code: \(error)")
+                }
+            }
+        }
+    }
+
+    private func presentShareSheet(code: String) {
+        isSharing = true
+
+        // Build the invite URL
+        let inviteURL = "https://lockin.app/invite/\(code)"
+
+        // Create share message
+        let shareMessage = """
+        Join me on LockIn for accountability! 💪
+
+        \(inviteURL)
+
+        We can keep each other motivated and share our study sessions.
+        """
+
+        // Present share sheet
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first,
+              let rootVC = window.rootViewController else {
+            isSharing = false
+            return
+        }
+
+        let activityVC = UIActivityViewController(
+            activityItems: [shareMessage],
+            applicationActivities: nil
+        )
+
+        // For iPad
+        if let popover = activityVC.popoverPresentationController {
+            popover.sourceView = window
+            popover.sourceRect = CGRect(x: window.bounds.midX, y: window.bounds.midY, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
+
+        activityVC.completionWithItemsHandler = { _, completed, _, _ in
+            self.isSharing = false
+            if completed {
+                HapticFeedback.success()
+            }
+        }
+
+        // Find the topmost presented controller
+        var topController = rootVC
+        while let presented = topController.presentedViewController {
+            topController = presented
+        }
+
+        topController.present(activityVC, animated: true)
     }
 }
 

@@ -636,6 +636,27 @@ class ConvexService: ObservableObject {
         ])
     }
 
+    // MARK: - Invite Links
+
+    /// Get or generate the current user's invite code
+    func getMyInviteCode() async throws -> String {
+        return try await convexClient.mutation("users:getMyInviteCode", with: [:])
+    }
+
+    /// Look up a user by their invite code (for deep linking)
+    func getUserByInviteCode(code: String) async throws -> ReferrerInfo? {
+        return try await convexClient.action("users:getUserByInviteCode", with: [
+            "code": code
+        ])
+    }
+
+    /// Register a referral when signing up with an invite code
+    func registerReferral(inviteCode: String) async throws -> ReferralResult {
+        return try await convexClient.mutation("users:registerReferral", with: [
+            "inviteCode": inviteCode
+        ])
+    }
+
     // MARK: - Shared Videos
 
     func listSharedWithMe() -> AnyPublisher<[SharedVideo], Never> {
@@ -769,4 +790,17 @@ struct PaginatedGoals: Decodable {
     let page: [Goal]
     let continueCursor: String?
     let isDone: Bool
+}
+
+// MARK: - Invite Link Models
+
+struct ReferrerInfo: Decodable {
+    let userId: String
+    let name: String?
+    let email: String?
+}
+
+struct ReferralResult: Decodable {
+    let status: String
+    let referrerName: String?
 }

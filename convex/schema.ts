@@ -9,7 +9,12 @@ export default defineSchema({
     name: v.optional(v.string()),
     pictureUrl: v.optional(v.string()),
     createdAt: v.float64(),
-  }).index("by_token", ["tokenIdentifier"]),
+    // Invite system
+    inviteCode: v.optional(v.string()), // Unique 8-char code for sharing
+    referredBy: v.optional(v.string()), // tokenIdentifier of user who referred this user
+  })
+    .index("by_token", ["tokenIdentifier"])
+    .index("by_invite_code", ["inviteCode"]),
 
   goals: defineTable({
     userId: v.string(), // User ID

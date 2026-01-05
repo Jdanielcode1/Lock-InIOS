@@ -15,25 +15,23 @@ enum ListMode: String, CaseIterable {
 struct GoalsListView: View {
     @StateObject private var goalsViewModel = GoalsViewModel()
     @StateObject private var todoViewModel = TodoViewModel()
-    @StateObject private var goalSessionPresenter = GoalSessionPresenter()
     @State private var showingCreateGoal = false
     @State private var showingCreateTodo = false
     @State private var listMode: ListMode = .goals
-    @State private var selectedTodoForRecording: TodoItem?
     @State private var showingVideoPlayer = false
     @State private var selectedTodoForPlayback: TodoItem?
 
-    // Goal todo recording/playback
-    @State private var selectedGoalTodoForRecording: GoalTodo?
+    // Recording sessions now managed at ContentView level via RecordingSessionManager
+    @EnvironmentObject private var recordingSession: RecordingSessionManager
+
+    // Goal todo playback only (recording moved to RecordingSessionManager)
     @State private var selectedGoalTodoForPlayback: GoalTodo?
-    @State private var showingGoalTodoRecorder = false
 
     // Todo editing
     @State private var selectedTodoForEditing: TodoItem?
 
-    // Multi-select for todo sessions
+    // Multi-select for todo sessions (recording moved to RecordingSessionManager)
     @State private var selectedTodoIdsForSession: Set<String> = []
-    @State private var showTodoSessionRecorder = false
 
     // Partners
     @State private var showingPartners = false
@@ -96,59 +94,33 @@ struct GoalsListView: View {
             .sheet(isPresented: $showingCreateTodo) {
                 AddTodoSheet(viewModel: todoViewModel)
             }
-            .fullScreenCover(item: $selectedTodoForRecording) { todo in
-                TodoRecorderView(todo: todo, viewModel: todoViewModel)
-            }
+            // Playback covers (these don't need to survive backgrounding)
             .fullScreenCover(item: $selectedTodoForPlayback) { todo in
                 if let videoURL = todo.videoURL {
                     TodoVideoPlayerView(videoURL: videoURL, todo: todo) {
-                        // onResume: Open recorder when Resume is tapped
-                        selectedTodoForRecording = todo
+                        // onResume: Open recorder via RecordingSessionManager
+                        recordingSession.startTodoRecording(todo: todo)
                     }
-                }
-            }
-            .fullScreenCover(isPresented: $showTodoSessionRecorder) {
-                TodoSessionRecorderView(
-                    selectedTodoIds: selectedTodoIdsForSession,
-                    viewModel: todoViewModel,
-                    onDismiss: {
-                        selectedTodoIdsForSession.removeAll()
-                    }
-                )
-            }
-            .fullScreenCover(isPresented: $showingGoalTodoRecorder) {
-                if let goalTodo = selectedGoalTodoForRecording {
-                    TimeLapseRecorderView(goalId: goalTodo.goalId, goalTodoId: goalTodo.id)
-                }
-            }
-            .fullScreenCover(isPresented: $goalSessionPresenter.isPresented) {
-                if let goalId = goalSessionPresenter.goalId {
-                    TimeLapseRecorderView(
-                        goalId: goalId,
-                        goalTodoId: goalSessionPresenter.goalTodoId,
-                        availableTodos: goalSessionPresenter.availableTodos
-                    )
                 }
             }
             .fullScreenCover(item: $selectedGoalTodoForPlayback) { goalTodo in
                 if let videoURL = goalTodo.videoURL {
                     GoalTodoVideoPlayerView(videoURL: videoURL, goalTodo: goalTodo) {
-                        // onResume: Open recorder when Resume is tapped
-                        selectedGoalTodoForRecording = goalTodo
-                        showingGoalTodoRecorder = true
+                        // onResume: Open recorder via RecordingSessionManager
+                        recordingSession.startGoalTodoRecording(goalTodo: goalTodo)
                     }
                 }
             }
             .sheet(item: $selectedTodoForEditing) { todo in
                 TodoDetailView(todo: todo)
             }
-            .onChange(of: showingGoalTodoRecorder) { _, isShowing in
-                if !isShowing {
-                    selectedGoalTodoForRecording = nil
-                }
-            }
         }
         .navigationViewStyle(.stack)
+    }
+
+    // Helper function to present goal session via RecordingSessionManager
+    private func presentGoalSession(goalId: String, goalTodoId: String? = nil, availableTodos: [GoalTodo] = []) {
+        recordingSession.startGoalSession(goalId: goalId, goalTodoId: goalTodoId, availableTodos: availableTodos)
     }
 
     // MARK: - Goals Content
@@ -168,8 +140,7 @@ struct GoalsListView: View {
                 ScrollView {
                     LazyVGrid(columns: sizing.gridItems(count: sizing.gridColumns, spacing: sizing.cardSpacing), spacing: sizing.cardSpacing) {
                         ForEach(goalsViewModel.goals) { goal in
-                            NavigationLink(destination: GoalDetailView(goal: goal)
-                                .environmentObject(goalSessionPresenter)) {
+                            NavigationLink(destination: GoalDetailView(goal: goal, onStartSession: presentGoalSession)) {
                                 GoalCard(goal: goal)
                             }
                             .buttonStyle(PlainButtonStyle())
@@ -195,8 +166,7 @@ struct GoalsListView: View {
                 // iPhone: Native insetGrouped list
                 List {
                     ForEach(goalsViewModel.goals) { goal in
-                        NavigationLink(destination: GoalDetailView(goal: goal)
-                            .environmentObject(goalSessionPresenter)) {
+                        NavigationLink(destination: GoalDetailView(goal: goal, onStartSession: presentGoalSession)) {
                             GoalCardHorizontal(goal: goal)
                         }
                         .swipeActions(edge: .leading) {
@@ -409,7 +379,7 @@ struct GoalsListView: View {
                                                 if todo.hasVideo {
                                                     selectedTodoForPlayback = todo
                                                 } else {
-                                                    selectedTodoForRecording = todo
+                                                    recordingSession.startTodoRecording(todo: todo)
                                                 }
                                             },
                                             onDetail: {
@@ -468,8 +438,7 @@ struct GoalsListView: View {
                                             if goalTodo.hasVideo {
                                                 selectedGoalTodoForPlayback = goalTodo
                                             } else {
-                                                selectedGoalTodoForRecording = goalTodo
-                                                showingGoalTodoRecorder = true
+                                                recordingSession.startGoalTodoRecording(goalTodo: goalTodo)
                                             }
                                         }
                                     )
@@ -547,7 +516,7 @@ struct GoalsListView: View {
                     if todo.hasVideo {
                         selectedTodoForPlayback = todo
                     } else {
-                        selectedTodoForRecording = todo
+                        recordingSession.startTodoRecording(todo: todo)
                     }
                 },
                 onDetail: {
@@ -592,8 +561,7 @@ struct GoalsListView: View {
                 if goalTodo.hasVideo {
                     selectedGoalTodoForPlayback = goalTodo
                 } else {
-                    selectedGoalTodoForRecording = goalTodo
-                    showingGoalTodoRecorder = true
+                    recordingSession.startGoalTodoRecording(goalTodo: goalTodo)
                 }
             }
         )
@@ -624,7 +592,7 @@ struct GoalsListView: View {
 
             // Start Session button
             Button {
-                showTodoSessionRecorder = true
+                recordingSession.startTodoSession(todoIds: selectedTodoIdsForSession)
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "video.fill")

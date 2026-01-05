@@ -17,6 +17,8 @@ struct TodoSessionRecorderView: View {
 
     @Environment(\.dismiss) var dismiss
     @Environment(\.horizontalSizeClass) var sizeClass
+    @Environment(\.scenePhase) private var scenePhase
+    @EnvironmentObject private var recordingSession: RecordingSessionManager
     private var sizing: AdaptiveSizing {
         AdaptiveSizing(horizontalSizeClass: sizeClass)
     }
@@ -67,6 +69,9 @@ struct TodoSessionRecorderView: View {
     // Partners sharing
     @StateObject private var partnersViewModel = PartnersViewModel()
     @State private var showShareWithPartners = false
+
+    // Track intentional dismissal vs app backgrounding
+    @State private var isDismissing = false
 
     private let videoService = VideoService.shared
 
@@ -178,12 +183,30 @@ struct TodoSessionRecorderView: View {
             }
         }
         .onDisappear {
+            // Only cleanup if intentionally dismissing (not just app backgrounding)
+            guard isDismissing else { return }
+
             // Re-enable screen auto-lock
             UIApplication.shared.isIdleTimerDisabled = false
 
             recorder.cleanup()
             dismissAlarm()
             OrientationManager.shared.lockToPortrait()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .background {
+                // Auto-pause when app goes to background
+                if recorder.isRecording && !recorder.isPaused {
+                    recorder.pauseRecording()
+                }
+            } else if newPhase == .active {
+                // Restart camera session if needed when returning from background
+                if !recorder.captureSession.isRunning {
+                    Task {
+                        await recorder.setupCamera()
+                    }
+                }
+            }
         }
         .alert("Error", isPresented: .constant(errorMessage != nil)) {
             Button("OK") {
@@ -630,9 +653,10 @@ struct TodoSessionRecorderView: View {
                 HStack {
                     // Cancel button
                     Button {
+                        isDismissing = true
                         recorder.cleanup()
                         onDismiss()
-                        dismiss()
+                        recordingSession.endSession()
                     } label: {
                         Text("Cancel")
                             .font(.system(size: 17, weight: .medium))
@@ -880,9 +904,10 @@ struct TodoSessionRecorderView: View {
                 // Close button at top
                 HStack {
                     Button {
+                        isDismissing = true
                         recorder.cleanup()
                         onDismiss()
-                        dismiss()
+                        recordingSession.endSession()
                     } label: {
                         Image(systemName: "xmark")
                             .font(.title2)
@@ -1417,8 +1442,9 @@ struct TodoSessionRecorderView: View {
             // Clean up temp file
             try? FileManager.default.removeItem(at: videoURL)
 
+            isDismissing = true
             onDismiss()
-            dismiss()
+            recordingSession.endSession()
 
         } catch {
             errorMessage = "Save failed: \(error.localizedDescription)"
