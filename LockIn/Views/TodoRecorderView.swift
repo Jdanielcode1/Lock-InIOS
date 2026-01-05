@@ -197,19 +197,16 @@ struct TodoRecorderView: View {
             OrientationManager.shared.lockToPortrait()
         }
         .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .background {
-                // Auto-pause when app goes to background
-                if recorder.isRecording && !recorder.isPaused {
-                    recorder.pauseRecording()
-                }
-            } else if newPhase == .active {
-                // Restart camera session if needed when returning from background
+            if newPhase == .active {
+                // Restart camera session when returning from background
+                // Recording continues without pausing
                 if !recorder.captureSession.isRunning {
                     Task {
                         await recorder.setupCamera()
                     }
                 }
             }
+            // Note: We don't auto-pause on background anymore
         }
         .alert("Error", isPresented: .constant(errorMessage != nil)) {
             Button("OK") {

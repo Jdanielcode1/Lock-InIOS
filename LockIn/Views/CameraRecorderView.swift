@@ -198,17 +198,14 @@ struct CameraRecorderView: View {
             viewModel.cleanup()
         }
         .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .background {
-                // Auto-pause when app goes to background
-                if viewModel.isRecording {
-                    viewModel.stopRecording()
-                }
-            } else if newPhase == .active {
-                // Restart camera session if needed when returning from background
+            if newPhase == .active {
+                // Restart camera session when returning from background
+                // Recording continues without stopping
                 if !viewModel.captureSession.isRunning {
                     viewModel.setupCamera()
                 }
             }
+            // Note: We don't auto-stop on background anymore
         }
         .onChange(of: viewModel.isRecording) { _, isRecording in
             // Activate/deactivate privacy mode when recording starts/stops
