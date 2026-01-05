@@ -69,12 +69,8 @@ class AuthModel: ObservableObject {
         guard case .authenticated(_) = authState else { return }
 
         print("Proactive token refresh triggered")
-        do {
-            try await convexClient.loginFromCache()
-            print("Proactive token refresh successful")
-        } catch {
-            print("Proactive token refresh failed: \(error.localizedDescription)")
-        }
+        await convexClient.loginFromCache()
+        print("Proactive token refresh completed")
     }
 
     /// Call when app goes to background
@@ -92,12 +88,8 @@ class AuthModel: ObservableObject {
 
     /// Attempts to login from cache (restore existing Firebase session)
     private func loginFromCacheWithRetry() async {
-        do {
-            try await convexClient.loginFromCache()
-        } catch {
-            print("Login from cache failed: \(error.localizedDescription)")
-            // No cached session - user needs to sign in
-        }
+        await convexClient.loginFromCache()
+        // If no cached session, authState will remain unauthenticated
     }
 
     // MARK: - Sign In Methods
@@ -109,7 +101,7 @@ class AuthModel: ObservableObject {
             do {
                 let result = try await firebaseAuthProvider.signInWithApple()
                 // Convex client will be updated automatically via authState subscription
-                try await updateConvexAuth(with: result)
+                await updateConvexAuth(with: result)
             } catch {
                 handleAuthError(error)
             }
@@ -122,7 +114,7 @@ class AuthModel: ObservableObject {
         Task {
             do {
                 let result = try await firebaseAuthProvider.signInWithGoogle()
-                try await updateConvexAuth(with: result)
+                await updateConvexAuth(with: result)
             } catch {
                 handleAuthError(error)
             }
@@ -135,7 +127,7 @@ class AuthModel: ObservableObject {
         Task {
             do {
                 let result = try await firebaseAuthProvider.signInAnonymously()
-                try await updateConvexAuth(with: result)
+                await updateConvexAuth(with: result)
             } catch {
                 handleAuthError(error)
             }
@@ -152,21 +144,17 @@ class AuthModel: ObservableObject {
     // MARK: - Session Management
 
     /// Update Convex with the Firebase auth result
-    private func updateConvexAuth(with result: FirebaseAuthResult) async throws {
+    private func updateConvexAuth(with result: FirebaseAuthResult) async {
         // The convexClient will automatically pick up the auth state change
         // We just need to trigger a cache login to sync the token
-        try await convexClient.loginFromCache()
+        await convexClient.loginFromCache()
     }
 
     /// Sign out of Firebase and Convex
     func logout() {
         Task {
-            do {
-                await convexClient.logout()
-                print("Logged out successfully")
-            } catch {
-                print("Logout error: \(error.localizedDescription)")
-            }
+            await convexClient.logout()
+            print("Logged out successfully")
         }
     }
 
@@ -174,13 +162,8 @@ class AuthModel: ObservableObject {
     func refreshSession() {
         isRefreshing = true
         Task {
-            do {
-                try await convexClient.loginFromCache()
-                isRefreshing = false
-            } catch {
-                print("Session refresh failed: \(error)")
-                isRefreshing = false
-            }
+            await convexClient.loginFromCache()
+            isRefreshing = false
         }
     }
 
@@ -189,12 +172,8 @@ class AuthModel: ObservableObject {
         if case .authenticated(_) = authState {
             print("App became active - refreshing auth session")
             Task {
-                do {
-                    try await convexClient.loginFromCache()
-                    print("Auth session refreshed successfully")
-                } catch {
-                    print("Auth refresh failed: \(error.localizedDescription)")
-                }
+                await convexClient.loginFromCache()
+                print("Auth session refreshed successfully")
             }
         }
     }

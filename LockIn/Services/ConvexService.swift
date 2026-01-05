@@ -38,17 +38,11 @@ func withAuthRetry<T>(_ operation: () async throws -> T) async throws -> T {
         // Check if this is an auth-related error
         if isAuthError(error) {
             print("Auth error detected, refreshing token and retrying...")
-            do {
-                // Refresh the token
-                try await convexClient.loginFromCache()
-                print("Token refreshed, retrying operation...")
-                // Retry the operation once
-                return try await operation()
-            } catch let refreshError {
-                print("Token refresh failed: \(refreshError.localizedDescription)")
-                // If refresh fails, throw the original error
-                throw error
-            }
+            // Refresh the token (loginFromCache doesn't throw)
+            await convexClient.loginFromCache()
+            print("Token refreshed, retrying operation...")
+            // Retry the operation once
+            return try await operation()
         }
         // Not an auth error, rethrow
         throw error
