@@ -54,7 +54,7 @@ class AuthModel: ObservableObject {
 
     // MARK: - Token Refresh Timer
 
-    private func startTokenRefreshTimer() {
+    func startTokenRefreshTimer() {
         tokenRefreshTimer?.invalidate()
         tokenRefreshTimer = Timer.scheduledTimer(withTimeInterval: tokenRefreshInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
@@ -63,7 +63,7 @@ class AuthModel: ObservableObject {
         }
     }
 
-    private func stopTokenRefreshTimer() {
+    func stopTokenRefreshTimer() {
         tokenRefreshTimer?.invalidate()
         tokenRefreshTimer = nil
     }
@@ -75,12 +75,30 @@ class AuthModel: ObservableObject {
         isRefreshing = false
     }
 
+    /// Force refresh the token and return success status
+    /// Use this when you need to ensure the token is valid before operations
+    func forceTokenRefresh() async -> Bool {
+        guard case .authenticated = authState else { return false }
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        let result = await convexClient.loginFromCache()
+        switch result {
+        case .success:
+            print("✅ Token refreshed successfully")
+            return true
+        case .failure(let error):
+            print("⚠️ Token refresh failed: \(error)")
+            return false
+        }
+    }
+
     /// Call when app comes to foreground - refresh auth session and restart timer
     func appDidBecomeActive() {
         Task {
-            _ = await convexClient.loginFromCache()
+            _ = await forceTokenRefresh()
+            startTokenRefreshTimer()
         }
-        startTokenRefreshTimer()
     }
 
     /// Call when app goes to background - stop timer to save resources
