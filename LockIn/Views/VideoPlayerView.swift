@@ -14,7 +14,6 @@ struct VideoPlayerView: View {
     let session: StudySession
     var onResume: (() -> Void)?  // Callback when Resume is tapped
     @Environment(\.dismiss) var dismiss
-    @EnvironmentObject private var tabBarVisibility: TabBarVisibility
     @EnvironmentObject private var videoPlayerSession: VideoPlayerSessionManager
     @StateObject private var viewModel: VideoPlayerViewModel
     @State private var showingSaveAlert = false
@@ -179,8 +178,6 @@ struct VideoPlayerView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarHidden(isRecordingVoiceover || showVoiceoverCountdown || isCompilingVoiceover)
-        .onAppear { tabBarVisibility.hide() }
-        .onDisappear { tabBarVisibility.show() }
         .toolbar {
             if !isRecordingVoiceover && !showVoiceoverCountdown && !isCompilingVoiceover {
                 ToolbarItem(placement: .principal) {
