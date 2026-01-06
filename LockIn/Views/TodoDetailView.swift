@@ -11,13 +11,14 @@ struct TodoDetailView: View {
     let initialTodo: TodoItem
     @Environment(\.dismiss) private var dismiss
 
+    @EnvironmentObject private var videoPlayerSession: VideoPlayerSessionManager
+    @EnvironmentObject private var recordingSession: RecordingSessionManager
+
     @State private var title: String
     @State private var description: String
     @State private var isCompleted: Bool
     @State private var isSaving = false
     @State private var showingDeleteAlert = false
-    @State private var showingRecorder = false
-    @State private var showingVideoPlayer = false
     @State private var thumbnail: UIImage?
     @FocusState private var titleFocused: Bool
     @FocusState private var descriptionFocused: Bool
@@ -97,7 +98,11 @@ struct TodoDetailView: View {
                         if todo.hasVideo {
                             // Video exists - show playback card
                             Button {
-                                showingVideoPlayer = true
+                                if let videoURL = todo.videoURL {
+                                    videoPlayerSession.playTodoVideo(todo: todo, videoURL: videoURL) {
+                                        recordingSession.startTodoRecording(todo: todo)
+                                    }
+                                }
                             } label: {
                                 HStack(spacing: 14) {
                                     // Thumbnail
@@ -155,7 +160,7 @@ struct TodoDetailView: View {
                         } else {
                             // No video - show record button
                             Button {
-                                showingRecorder = true
+                                recordingSession.startTodoRecording(todo: todo)
                             } label: {
                                 HStack(spacing: 14) {
                                     ZStack {
@@ -233,17 +238,6 @@ struct TodoDetailView: View {
                 }
             } message: {
                 Text("This can't be undone.")
-            }
-            .fullScreenCover(isPresented: $showingRecorder) {
-                TodoRecorderView(todo: todo, viewModel: todoViewModel)
-            }
-            .fullScreenCover(isPresented: $showingVideoPlayer) {
-                if let videoURL = todo.videoURL {
-                    TodoVideoPlayerView(videoURL: videoURL, todo: todo) {
-                        // onResume: Open recorder when Resume is tapped
-                        showingRecorder = true
-                    }
-                }
             }
             .onChange(of: todo.isCompleted) { _, newValue in
                 isCompleted = newValue

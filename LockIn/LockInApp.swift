@@ -149,6 +149,7 @@ struct RootView: View {
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var recordingSession = RecordingSessionManager.shared
+    @StateObject private var videoPlayerSession = VideoPlayerSessionManager.shared
 
     var body: some View {
         ZStack {
@@ -162,6 +163,7 @@ struct RootView: View {
                     ContentView()
                         .environmentObject(authModel)
                         .environmentObject(recordingSession)
+                        .environmentObject(videoPlayerSession)
                 }
             }
 
@@ -199,6 +201,10 @@ struct RootView: View {
         .fullScreenCover(isPresented: $recordingSession.isRecordingActive) {
             RecordingSessionContainer(recordingSession: recordingSession)
         }
+        // Video playback sessions presented at RootView level to survive view recreation
+        .fullScreenCover(isPresented: $videoPlayerSession.isPlaybackActive) {
+            VideoPlayerSessionContainer(videoPlayerSession: videoPlayerSession, recordingSession: recordingSession)
+        }
     }
 }
 
@@ -228,6 +234,43 @@ struct RecordingSessionContainer: View {
                 case .todoRecording(let todo):
                     TodoRecorderView(todo: todo, viewModel: todoViewModel)
                         .environmentObject(recordingSession)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Video Player Session Container
+// Presents the appropriate video player based on active playback session type
+struct VideoPlayerSessionContainer: View {
+    @ObservedObject var videoPlayerSession: VideoPlayerSessionManager
+    @ObservedObject var recordingSession: RecordingSessionManager
+
+    var body: some View {
+        Group {
+            if let session = videoPlayerSession.activeSession {
+                switch session {
+                case .studySession(let studySession, let onResume):
+                    VideoPlayerView(session: studySession) {
+                        // Close video player first, then trigger resume
+                        videoPlayerSession.endPlayback()
+                        onResume?()
+                    }
+                    .environmentObject(videoPlayerSession)
+                case .todoVideo(let todo, let videoURL, let onResume):
+                    TodoVideoPlayerView(videoURL: videoURL, todo: todo) {
+                        // Close video player first, then trigger resume recording
+                        videoPlayerSession.endPlayback()
+                        onResume?()
+                    }
+                    .environmentObject(videoPlayerSession)
+                case .goalTodoVideo(let goalTodo, let videoURL, let onResume):
+                    GoalTodoVideoPlayerView(videoURL: videoURL, goalTodo: goalTodo) {
+                        // Close video player first, then trigger resume recording
+                        videoPlayerSession.endPlayback()
+                        onResume?()
+                    }
+                    .environmentObject(videoPlayerSession)
                 }
             }
         }

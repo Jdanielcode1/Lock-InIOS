@@ -18,14 +18,10 @@ struct GoalsListView: View {
     @State private var showingCreateGoal = false
     @State private var showingCreateTodo = false
     @State private var listMode: ListMode = .goals
-    @State private var showingVideoPlayer = false
-    @State private var selectedTodoForPlayback: TodoItem?
 
-    // Recording sessions now managed at ContentView level via RecordingSessionManager
+    // Recording and video playback now managed at RootView level
     @EnvironmentObject private var recordingSession: RecordingSessionManager
-
-    // Goal todo playback only (recording moved to RecordingSessionManager)
-    @State private var selectedGoalTodoForPlayback: GoalTodo?
+    @EnvironmentObject private var videoPlayerSession: VideoPlayerSessionManager
 
     // Todo editing
     @State private var selectedTodoForEditing: TodoItem?
@@ -94,23 +90,7 @@ struct GoalsListView: View {
             .sheet(isPresented: $showingCreateTodo) {
                 AddTodoSheet(viewModel: todoViewModel)
             }
-            // Playback covers (these don't need to survive backgrounding)
-            .fullScreenCover(item: $selectedTodoForPlayback) { todo in
-                if let videoURL = todo.videoURL {
-                    TodoVideoPlayerView(videoURL: videoURL, todo: todo) {
-                        // onResume: Open recorder via RecordingSessionManager
-                        recordingSession.startTodoRecording(todo: todo)
-                    }
-                }
-            }
-            .fullScreenCover(item: $selectedGoalTodoForPlayback) { goalTodo in
-                if let videoURL = goalTodo.videoURL {
-                    GoalTodoVideoPlayerView(videoURL: videoURL, goalTodo: goalTodo) {
-                        // onResume: Open recorder via RecordingSessionManager
-                        recordingSession.startGoalTodoRecording(goalTodo: goalTodo)
-                    }
-                }
-            }
+            // Video playback now managed at RootView level via VideoPlayerSessionManager
             .sheet(item: $selectedTodoForEditing) { todo in
                 TodoDetailView(todo: todo)
             }
@@ -376,8 +356,10 @@ struct GoalsListView: View {
                                                 }
                                             },
                                             onRecord: {
-                                                if todo.hasVideo {
-                                                    selectedTodoForPlayback = todo
+                                                if todo.hasVideo, let videoURL = todo.videoURL {
+                                                    videoPlayerSession.playTodoVideo(todo: todo, videoURL: videoURL) {
+                                                        recordingSession.startTodoRecording(todo: todo)
+                                                    }
                                                 } else {
                                                     recordingSession.startTodoRecording(todo: todo)
                                                 }
@@ -435,8 +417,10 @@ struct GoalsListView: View {
                                             }
                                         },
                                         onTap: {
-                                            if goalTodo.hasVideo {
-                                                selectedGoalTodoForPlayback = goalTodo
+                                            if goalTodo.hasVideo, let videoURL = goalTodo.videoURL {
+                                                videoPlayerSession.playGoalTodoVideo(goalTodo: goalTodo, videoURL: videoURL) {
+                                                    recordingSession.startGoalTodoRecording(goalTodo: goalTodo)
+                                                }
                                             } else {
                                                 recordingSession.startGoalTodoRecording(goalTodo: goalTodo)
                                             }
@@ -513,8 +497,10 @@ struct GoalsListView: View {
                     Task { await todoViewModel.toggleTodo(todo) }
                 },
                 onRecord: {
-                    if todo.hasVideo {
-                        selectedTodoForPlayback = todo
+                    if todo.hasVideo, let videoURL = todo.videoURL {
+                        videoPlayerSession.playTodoVideo(todo: todo, videoURL: videoURL) {
+                            recordingSession.startTodoRecording(todo: todo)
+                        }
                     } else {
                         recordingSession.startTodoRecording(todo: todo)
                     }
@@ -558,8 +544,10 @@ struct GoalsListView: View {
                 Task { await todoViewModel.toggleGoalTodo(goalTodo) }
             },
             onTap: {
-                if goalTodo.hasVideo {
-                    selectedGoalTodoForPlayback = goalTodo
+                if goalTodo.hasVideo, let videoURL = goalTodo.videoURL {
+                    videoPlayerSession.playGoalTodoVideo(goalTodo: goalTodo, videoURL: videoURL) {
+                        recordingSession.startGoalTodoRecording(goalTodo: goalTodo)
+                    }
                 } else {
                     recordingSession.startGoalTodoRecording(goalTodo: goalTodo)
                 }

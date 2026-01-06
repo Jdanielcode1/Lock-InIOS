@@ -15,6 +15,7 @@ struct GoalTodoVideoPlayerView: View {
     var onResume: (() -> Void)?  // Callback when Resume is tapped
 
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject private var videoPlayerSession: VideoPlayerSessionManager
     @State private var currentVideoURL: URL
     @State private var player: AVPlayer?
     @State private var showingSaveAlert = false
@@ -127,7 +128,7 @@ struct GoalTodoVideoPlayerView: View {
             HStack(spacing: 12) {
                 Button {
                     cleanupPlayer()
-                    dismiss()
+                    videoPlayerSession.endPlayback()
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 15, weight: .semibold))
@@ -189,8 +190,7 @@ struct GoalTodoVideoPlayerView: View {
                     if onResume != nil {
                         Button {
                             cleanupPlayer()
-                            dismiss()
-                            onResume?()
+                            onResume?()  // Container handles endPlayback
                         } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "plus.circle.fill")

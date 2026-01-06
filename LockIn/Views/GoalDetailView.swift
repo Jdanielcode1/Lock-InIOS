@@ -15,9 +15,6 @@ struct GoalDetailView: View {
     @StateObject private var viewModel: GoalDetailViewModel
     @State private var showingVideoPicker = false
     @State private var showingAddGoalTodo = false
-    @State private var selectedGoalTodo: GoalTodo?
-    @State private var showingVideoPlayer = false
-    @State private var shouldOpenRecorderAfterDismiss = false
     @State private var recentlyArchivedTodo: GoalTodo?
     @State private var showUndoToast = false
     @State private var isEditingTitle = false
@@ -25,6 +22,8 @@ struct GoalDetailView: View {
     @FocusState private var isTitleFocused: Bool
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tabBarVisibility: TabBarVisibility
+    @EnvironmentObject private var videoPlayerSession: VideoPlayerSessionManager
+    @EnvironmentObject private var recordingSession: RecordingSessionManager
 
     // iPad adaptation
     @Environment(\.horizontalSizeClass) var sizeClass
@@ -110,9 +109,10 @@ struct GoalDetailView: View {
                                 }
                             },
                             onTap: {
-                                if todo.hasVideo {
-                                    selectedGoalTodo = todo
-                                    showingVideoPlayer = true
+                                if todo.hasVideo, let videoURL = todo.videoURL {
+                                    videoPlayerSession.playGoalTodoVideo(goalTodo: todo, videoURL: videoURL) {
+                                        recordingSession.startGoalTodoRecording(goalTodo: todo)
+                                    }
                                 } else {
                                     onStartSession(
                                         goal.id,
@@ -195,12 +195,19 @@ struct GoalDetailView: View {
                     sessionsEmptyState
                 } else {
                     ForEach(viewModel.studySessions) { session in
-                        NavigationLink(destination: VideoPlayerView(session: session) {
-                            // onResume: Open recorder when Resume is tapped
-                            shouldOpenRecorderAfterDismiss = true
-                        }) {
+                        Button {
+                            videoPlayerSession.playStudySession(session) {
+                                // onResume: Open recorder when Resume is tapped
+                                recordingSession.startGoalSession(
+                                    goalId: goal.id,
+                                    goalTodoId: nil,
+                                    availableTodos: viewModel.goalTodos.filter { !$0.isCompleted }
+                                )
+                            }
+                        } label: {
                             SessionRow(session: session, goalTodos: viewModel.goalTodos)
                         }
+                        .buttonStyle(.plain)
                     }
 
                     if viewModel.canLoadMoreSessions {
@@ -277,32 +284,10 @@ struct GoalDetailView: View {
             }
         }
         .fullScreenCover(isPresented: $showingVideoPicker) {
-            VideoRecorderView(goalId: goal.id, goalTodoId: selectedGoalTodo?.id)
-        }
-        .fullScreenCover(isPresented: $showingVideoPlayer) {
-            if let goalTodo = selectedGoalTodo, let videoURL = goalTodo.videoURL {
-                GoalTodoVideoPlayerView(videoURL: videoURL, goalTodo: goalTodo) {
-                    // onResume: Open recorder when Resume is tapped
-                    showingVideoPicker = true
-                }
-            }
+            VideoRecorderView(goalId: goal.id, goalTodoId: nil)
         }
         .sheet(isPresented: $showingAddGoalTodo) {
             AddGoalTodoSheet(goalId: goal.id)
-        }
-        .onChange(of: showingVideoPicker) { _, isShowing in
-            if !isShowing {
-                selectedGoalTodo = nil
-            }
-        }
-        .onChange(of: shouldOpenRecorderAfterDismiss) { _, shouldOpen in
-            if shouldOpen {
-                shouldOpenRecorderAfterDismiss = false
-                // Delay slightly to allow navigation to complete
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    showingVideoPicker = true
-                }
-            }
         }
         .task {
             try? await ConvexService.shared.checkAndResetRecurringTodos(goalId: goal.id)

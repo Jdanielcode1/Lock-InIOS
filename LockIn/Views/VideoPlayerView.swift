@@ -15,6 +15,7 @@ struct VideoPlayerView: View {
     var onResume: (() -> Void)?  // Callback when Resume is tapped
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject private var tabBarVisibility: TabBarVisibility
+    @EnvironmentObject private var videoPlayerSession: VideoPlayerSessionManager
     @StateObject private var viewModel: VideoPlayerViewModel
     @State private var showingSaveAlert = false
     @State private var saveAlertMessage = ""
@@ -86,8 +87,7 @@ struct VideoPlayerView: View {
                                     if onResume != nil {
                                         Button {
                                             cleanupPlayer()
-                                            dismiss()
-                                            onResume?()
+                                            onResume?()  // Container handles endPlayback
                                         } label: {
                                             HStack(spacing: 6) {
                                                 Image(systemName: "plus.circle.fill")
@@ -156,7 +156,7 @@ struct VideoPlayerView: View {
                         .padding()
 
                     Button("Close") {
-                        dismiss()
+                        videoPlayerSession.endPlayback()
                     }
                     .font(.headline)
                     .foregroundStyle(.white)

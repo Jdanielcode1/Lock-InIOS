@@ -16,7 +16,8 @@ enum TimelineMode: String, CaseIterable {
 struct TimelineView: View {
     @StateObject private var viewModel = TimelineViewModel()
     @State private var selectedMode: TimelineMode = .goals
-    @State private var selectedTodoForPlayback: TodoItem?
+
+    @EnvironmentObject private var videoPlayerSession: VideoPlayerSessionManager
 
     // iPad adaptation
     @Environment(\.horizontalSizeClass) var sizeClass
@@ -47,11 +48,6 @@ struct TimelineView: View {
             .background(Color(UIColor.systemGroupedBackground))
             .navigationTitle("Timeline")
             .navigationBarTitleDisplayMode(.large)
-            .fullScreenCover(item: $selectedTodoForPlayback) { todo in
-                if let videoURL = todo.videoURL {
-                    TodoVideoPlayerView(videoURL: videoURL, todo: todo)
-                }
-            }
         }
         .navigationViewStyle(.stack)
     }
@@ -79,7 +75,9 @@ struct TimelineView: View {
                             Section {
                                 VStack(spacing: 0) {
                                     ForEach(Array((viewModel.sessionsByDate[date] ?? []).enumerated()), id: \.element.id) { index, item in
-                                        NavigationLink(destination: VideoPlayerView(session: item.session)) {
+                                        Button {
+                                            videoPlayerSession.playStudySession(item.session)
+                                        } label: {
                                             TimelineCard(item: item)
                                         }
                                         .buttonStyle(.plain)
@@ -142,8 +140,8 @@ struct TimelineView: View {
                                 VStack(spacing: 0) {
                                     ForEach(Array((viewModel.todosByDate[date] ?? []).enumerated()), id: \.element.id) { index, todo in
                                         Button {
-                                            if todo.hasVideo {
-                                                selectedTodoForPlayback = todo
+                                            if todo.hasVideo, let videoURL = todo.videoURL {
+                                                videoPlayerSession.playTodoVideo(todo: todo, videoURL: videoURL)
                                             }
                                         } label: {
                                             TodoTimelineCard(todo: todo)
