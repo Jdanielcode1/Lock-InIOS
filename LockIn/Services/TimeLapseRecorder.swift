@@ -84,6 +84,7 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     private var frameStorageDirectory: URL?
     private var startTime: Date?
     private var lastCaptureTime: Date?
+    private var nextFrameNumber: Int = 0  // Separate counter for file naming to avoid collisions after frame deletion
     private var frameInterval: TimeInterval = 0.5 // Default: timelapse speed (2 fps)
     private var manualSpeedOverride: Bool = false // User manually set speed
     private let outputFPS: Int32 = 30 // Playback at 30 fps
@@ -143,6 +144,9 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     private var currentAudioStartTime: TimeInterval = 0
     private var currentAudioFrameInterval: TimeInterval = 0.5  // The frame interval when audio started
     private var currentAudioStartFrameIndex: Int = 0           // The frame index when audio started
+
+    // Synchronization flag to pause capture during tier changes
+    private var isPerformingTierChange = false
 
     // MARK: - Accurate Time Calculation
 
@@ -332,6 +336,18 @@ class TimeLapseRecorder: NSObject, ObservableObject {
 
         // Track if iPhone Mode is active (for auto-adjusting intervals)
         self.isIphoneMode = iphoneMode
+
+        // If enabling iPhone mode mid-recording, calculate correct starting tier
+        if iphoneMode && isRecording && !wasNormalMode {
+            let recordingMinutes = recordingDuration / 60.0
+            for (index, tier) in Self.iphoneModeIntervals.enumerated() {
+                if recordingMinutes < tier.maxMinutes {
+                    iphoneModeCurrentTier = index
+                    break
+                }
+            }
+            print("📱 iPhone Mode enabled mid-recording at tier \(iphoneModeCurrentTier)")
+        }
 
         // If recording, close current speed segment and start new one
         if isRecording {
@@ -625,6 +641,8 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         // Reset iPhone mode state
         iphoneModeCurrentTier = 0
         iphoneModeRealDuration = 0
+        isPerformingTierChange = false
+        nextFrameNumber = 0  // Reset frame file naming counter
 
         // Reset segment tracking
         speedSegments.removeAll()
@@ -748,6 +766,7 @@ class TimeLapseRecorder: NSObject, ObservableObject {
                 newTier = index
                 break
             }
+            newTier = index  // If we exceed all tiers, use the last one
         }
 
         // Check if we've moved to a new tier (interval needs to double)
@@ -769,21 +788,39 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             currentCaptureRate = tier.rateLabel
             iphoneModeCurrentTier = newTier
 
-            // For iPhone mode, we use a simplified single-segment approach
-            // since all frames now effectively represent the new interval
-            speedSegments.removeAll()
-            let actualTime = calculateActualRealTime()
-            let newSegment = SpeedSegment(
-                startFrameIndex: 0,
-                endFrameIndex: frameCount,
-                startRealTime: 0,
-                endRealTime: actualTime,
-                frameInterval: tier.interval
-            )
-            speedSegments.append(newSegment)
+            // Rebuild speed segment with EFFECTIVE interval (not instantaneous)
+            rebuildIphoneModeSpeedSegment()
 
             print("📱 iPhone Mode: Now at \(tier.rateLabel), \(frameCount) frames")
         }
+    }
+
+    /// Rebuild the speed segment for iPhone mode using EFFECTIVE interval
+    /// The effective interval = totalRealTime / frameCount, which gives correct playback speed
+    private func rebuildIphoneModeSpeedSegment() {
+        let actualTime = calculateActualRealTime()
+
+        // Calculate effective frame interval from real data
+        // This is the key insight: after frame deletion, all frames effectively
+        // represent a uniform speedup based on total time / frame count
+        let effectiveInterval: TimeInterval
+        if frameCount > 0 {
+            effectiveInterval = actualTime / Double(frameCount)
+        } else {
+            effectiveInterval = frameInterval
+        }
+
+        speedSegments.removeAll()
+        let segment = SpeedSegment(
+            startFrameIndex: 0,
+            endFrameIndex: frameCount,
+            startRealTime: 0,
+            endRealTime: actualTime,
+            frameInterval: effectiveInterval  // Use EFFECTIVE interval
+        )
+        speedSegments.append(segment)
+
+        print("📱 iPhone Mode segment: \(frameCount) frames, \(String(format: "%.1f", actualTime))s, effective interval: \(String(format: "%.3f", effectiveInterval))s")
     }
 
     /// Delete every other frame (Apple's timelapse algorithm)
@@ -791,6 +828,11 @@ class TimeLapseRecorder: NSObject, ObservableObject {
     private func deleteEveryOtherFrame() {
         guard frameCount > 1 else { return }
 
+        // Pause frame capture during deletion to prevent race conditions
+        isPerformingTierChange = true
+        defer { isPerformingTierChange = false }
+
+        let framesBefore = frameCount
         var newFrameURLs: [URL] = []
         var newFrameTimestamps: [FrameTimestamp] = []
 
@@ -814,19 +856,22 @@ class TimeLapseRecorder: NSObject, ObservableObject {
             }
         }
 
-        // Rename remaining files to have sequential indices (optional but cleaner)
-        // Skip this for performance - the indices in the array are what matter
-
         capturedFrameURLs = newFrameURLs
         frameTimestamps = newFrameTimestamps
         frameCount = capturedFrameURLs.count
 
-        print("🗑️ Deleted \(capturedFrameURLs.count) frames, \(frameCount) remaining")
+        // CRITICAL: Reset lastCaptureTime so next frame uses new interval correctly
+        lastCaptureTime = nil
+
+        print("🗑️ Deleted \(framesBefore - frameCount) frames, \(frameCount) remaining")
     }
 
     func stopRecording() {
         // Capture actual time before stopping timer
         let finalTime = calculateActualRealTime()
+
+        // Check if we were in iPhone mode before resetting
+        let wasIphoneMode = isIphoneMode || iphoneModeCurrentTier > 0
 
         isRecording = false
         isPaused = false
@@ -835,8 +880,13 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         recordingTimer?.invalidate()
         recordingTimer = nil
 
-        // Close current speed segment with actual time
-        closeCurrentSpeedSegment(at: finalTime)
+        // For iPhone mode, rebuild final speed segment with accurate effective interval
+        // For other modes, just close the current segment
+        if wasIphoneMode {
+            rebuildIphoneModeSpeedSegment()
+        } else {
+            closeCurrentSpeedSegment(at: finalTime)
+        }
 
         // Stop audio recording (this closes the current audio segment with actual time)
         stopAudioRecording(at: finalTime)
@@ -1633,10 +1683,12 @@ class TimeLapseRecorder: NSObject, ObservableObject {
         frameTimestamps.removeAll()
         speedSegments.removeAll()
         frameCount = 0
+        nextFrameNumber = 0  // Reset file naming counter
         recordedVideoURL = nil
         isIphoneMode = false  // Reset iPhone Mode state
         iphoneModeCurrentTier = 0  // Reset tier tracking
         iphoneModeRealDuration = 0  // Reset real duration
+        isPerformingTierChange = false  // Reset synchronization flag
         resetContinueMode()   // Reset continue mode state
 
         // Clean up temporary frame storage
@@ -1798,7 +1850,8 @@ extension TimeLapseRecorder: AVCaptureVideoDataOutputSampleBufferDelegate {
         from connection: AVCaptureConnection
     ) {
         Task { @MainActor in
-            guard isRecording && !isPaused else { return }
+            // Skip capture during tier change operations to prevent race conditions
+            guard isRecording && !isPaused && !isPerformingTierChange else { return }
             guard let storageDir = frameStorageDirectory else { return }
 
             let now = Date()
@@ -1841,12 +1894,14 @@ extension TimeLapseRecorder: AVCaptureVideoDataOutputSampleBufferDelegate {
             guard let cgImage = context.createCGImage(scaledImage, from: scaledImage.extent) else { return }
 
             // Save frame to disk as JPEG
-            let frameURL = storageDir.appendingPathComponent("frame_\(frameCount).jpg")
+            // Use nextFrameNumber for file naming to avoid collisions after frame deletion
+            let frameURL = storageDir.appendingPathComponent("frame_\(nextFrameNumber).jpg")
             let uiImage = UIImage(cgImage: cgImage)
 
             if let jpegData = uiImage.jpegData(compressionQuality: 0.8) {
                 try? jpegData.write(to: frameURL)
                 capturedFrameURLs.append(frameURL)
+                nextFrameNumber += 1  // Increment file naming counter
                 frameCount = capturedFrameURLs.count
 
                 if frameCount % 10 == 0 {
