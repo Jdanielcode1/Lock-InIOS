@@ -315,7 +315,7 @@ struct GoalsListView: View {
                         }
                         .padding(.horizontal, sizing.horizontalPadding)
                         .padding(.top, 8)
-                        .padding(.bottom, !selectedTodoIdsForSession.isEmpty ? 180 : 100)
+                        .padding(.bottom, !selectedTodoIdsForSession.isEmpty ? 100 : 20)
                     }
 
                     // Sticky Start Session button (iPad - centered and constrained)
@@ -455,7 +455,7 @@ struct GoalsListView: View {
                         // Bottom spacer for sticky button
                         if !selectedTodoIdsForSession.isEmpty {
                             Color.clear
-                                .frame(height: 100)
+                                .frame(height: 80)
                                 .listRowBackground(Color.clear)
                         }
                     }
@@ -592,7 +592,7 @@ struct GoalsListView: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.bottom, 100) // Space for tab bar
+        .padding(.bottom, 16)
         .background(
             Color(UIColor.systemGroupedBackground)
                 .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: -4)

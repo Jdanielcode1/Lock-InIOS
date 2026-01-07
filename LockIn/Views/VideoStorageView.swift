@@ -70,7 +70,6 @@ struct VideoItem: Identifiable {
 
 struct VideoStorageView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var tabBarVisibility: TabBarVisibility
 
     @State private var videos: [VideoItem] = []
     @State private var isLoading = true
@@ -201,11 +200,7 @@ struct VideoStorageView: View {
             }
         }
         .onAppear {
-            tabBarVisibility.hide()
             loadVideos()
-        }
-        .onDisappear {
-            tabBarVisibility.show()
         }
         .alert("Delete Videos?", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) { }
@@ -433,6 +428,5 @@ struct VideoRow: View {
 #Preview {
     NavigationView {
         VideoStorageView()
-            .environmentObject(TabBarVisibility())
     }
 }

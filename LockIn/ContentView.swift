@@ -30,14 +30,14 @@ struct ContentView: View {
             TimelineView()
                 .environmentObject(tabBarVisibility)
                 .tabItem {
-                    Label("Timeline", systemImage: "clock.fill")
+                    Label("History", systemImage: "clock.arrow.circlepath")
                 }
                 .tag(Tab.timeline)
 
             // Center record button placeholder
             Color.clear
                 .tabItem {
-                    Image(systemName: "plus.circle.fill")
+                    Label("Record", systemImage: "record.circle")
                 }
                 .tag(Tab.record)
 
