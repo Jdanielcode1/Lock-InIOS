@@ -195,6 +195,19 @@ class ConvexService: ObservableObject {
         }
     }
 
+    func removeGoalTodoVideo(id: String, localVideoPath: String, localThumbnailPath: String?) async throws {
+        // Remove video from Convex (clears video fields)
+        try await withAuthRetry {
+            let _: String? = try await convexClient.mutation("goalTodos:removeVideo", with: ["id": id])
+        }
+
+        // Delete local files
+        LocalStorageService.shared.deleteVideo(at: localVideoPath)
+        if let thumbnailPath = localThumbnailPath {
+            LocalStorageService.shared.deleteThumbnail(at: thumbnailPath)
+        }
+    }
+
     func attachVideoToGoalTodo(id: String, localVideoPath: String, localThumbnailPath: String?, videoDurationMinutes: Double?, videoNotes: String? = nil) async throws {
         try await withAuthRetry {
             // Handle all combinations of optional parameters explicitly

@@ -180,6 +180,24 @@ export const remove = userMutation({
   },
 });
 
+// Mutation: Remove video from a goal todo (keeps the todo, just removes video)
+export const removeVideo = userMutation({
+  args: { id: v.id("goalTodos") },
+  handler: async (ctx, args) => {
+    const userId = ctx.identity.tokenIdentifier;
+    const todo = await ctx.db.get(args.id);
+    if (!todo) throw new Error("Goal todo not found");
+    if (todo.userId !== userId) throw new Error("Not authorized");
+
+    await ctx.db.patch(args.id, {
+      localVideoPath: undefined,
+      localThumbnailPath: undefined,
+      videoDurationMinutes: undefined,
+      videoNotes: undefined,
+    });
+  },
+});
+
 // Mutation: Archive a goal todo
 export const archive = userMutation({
   args: { id: v.id("goalTodos") },

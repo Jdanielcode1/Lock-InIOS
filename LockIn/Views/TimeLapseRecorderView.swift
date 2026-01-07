@@ -44,6 +44,7 @@ struct TimeLapseRecorderView: View {
     let goalId: String
     let goalTodoId: String?
     let availableTodos: [GoalTodo]
+    let continueFrom: ContinueRecordingData?
 
     @Environment(\.dismiss) var dismiss
     @Environment(\.horizontalSizeClass) var sizeClass
@@ -116,10 +117,11 @@ struct TimeLapseRecorderView: View {
 
     private let videoService = VideoService.shared
 
-    init(goalId: String, goalTodoId: String?, availableTodos: [GoalTodo] = []) {
+    init(goalId: String, goalTodoId: String?, availableTodos: [GoalTodo] = [], continueFrom: ContinueRecordingData? = nil) {
         self.goalId = goalId
         self.goalTodoId = goalTodoId
         self.availableTodos = availableTodos
+        self.continueFrom = continueFrom
         _recorder = StateObject(wrappedValue: TimeLapseRecorder())
     }
 
@@ -223,6 +225,22 @@ struct TimeLapseRecorderView: View {
                     rateName: selectedSpeed.rateLabel,
                     iphoneMode: selectedSpeed.isDynamicInterval
                 )
+
+                // Initialize state for continue mode if resuming from existing video
+                // (Recording starts when user taps "Resume Recording" button)
+                if let continueData = continueFrom {
+                    await MainActor.run {
+                        existingVideoURL = continueData.videoURL
+                        existingSpeedSegmentsJSON = continueData.speedSegmentsJSON
+                        existingDuration = continueData.duration
+                        existingNotes = continueData.notes
+
+                        // Pre-fill notes if available
+                        if let notes = continueData.notes {
+                            pendingNotes = notes
+                        }
+                    }
+                }
             }
         }
         .onDisappear {
@@ -380,6 +398,22 @@ struct TimeLapseRecorderView: View {
             return pendingNotes
         }
         return nil
+    }
+
+    /// Start continue recording from the existing video passed via continueFrom
+    private func startContinueRecording() {
+        guard let videoURL = existingVideoURL else { return }
+
+        isContinueMode = true
+
+        // Start continue recording with the existing video
+        recorder.startContinueRecording(
+            fromVideoURL: videoURL,
+            previousSpeedSegmentsJSON: existingSpeedSegmentsJSON,
+            previousDuration: existingDuration
+        )
+
+        print("🔄 Continue recording started from existing video: \(existingDuration)s")
     }
 
     private func shareWithPartners(partnerIds: [String]) async {
@@ -1060,6 +1094,25 @@ struct TimeLapseRecorderView: View {
 
             // Bottom controls
             VStack(spacing: 24) {
+                // Resume button (when continuing from existing video and not recording)
+                if continueFrom != nil && !recorder.isRecording && !isContinueMode {
+                    Button {
+                        startContinueRecording()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                            Text("Resume Recording")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .background(Color.green)
+                        .cornerRadius(24)
+                    }
+                }
+
                 // Speed selector
                 speedSelector
 

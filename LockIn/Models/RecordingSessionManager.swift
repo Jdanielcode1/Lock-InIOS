@@ -7,10 +7,18 @@
 
 import SwiftUI
 
+/// Data needed to continue/append to an existing recording
+struct ContinueRecordingData {
+    let videoURL: URL
+    let speedSegmentsJSON: String?
+    let duration: TimeInterval
+    let notes: String?
+}
+
 /// Types of recording sessions
 enum RecordingSessionType {
-    case goalSession(goalId: String, goalTodoId: String?, availableTodos: [GoalTodo])
-    case goalTodoRecording(goalTodo: GoalTodo)
+    case goalSession(goalId: String, goalTodoId: String?, availableTodos: [GoalTodo], continueFrom: ContinueRecordingData?)
+    case goalTodoRecording(goalTodo: GoalTodo, continueFrom: ContinueRecordingData?)
     case todoSession(todoIds: Set<String>)
     case todoRecording(todo: TodoItem)
 }
@@ -31,15 +39,15 @@ class RecordingSessionManager: ObservableObject {
 
     // MARK: - Goal Session
 
-    func startGoalSession(goalId: String, goalTodoId: String? = nil, availableTodos: [GoalTodo] = []) {
-        activeSession = .goalSession(goalId: goalId, goalTodoId: goalTodoId, availableTodos: availableTodos)
+    func startGoalSession(goalId: String, goalTodoId: String? = nil, availableTodos: [GoalTodo] = [], continueFrom: ContinueRecordingData? = nil) {
+        activeSession = .goalSession(goalId: goalId, goalTodoId: goalTodoId, availableTodos: availableTodos, continueFrom: continueFrom)
         isRecordingActive = true
     }
 
     // MARK: - Goal Todo Recording
 
-    func startGoalTodoRecording(goalTodo: GoalTodo) {
-        activeSession = .goalTodoRecording(goalTodo: goalTodo)
+    func startGoalTodoRecording(goalTodo: GoalTodo, continueFrom: ContinueRecordingData? = nil) {
+        activeSession = .goalTodoRecording(goalTodo: goalTodo, continueFrom: continueFrom)
         isRecordingActive = true
     }
 

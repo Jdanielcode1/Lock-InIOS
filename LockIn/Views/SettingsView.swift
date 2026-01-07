@@ -134,11 +134,15 @@ struct SettingsView: View {
 
                 // Storage
                 Section {
-                    HStack {
-                        Label("Videos Storage", systemImage: "folder.fill")
-                        Spacer()
-                        Text(calculateStorageSize())
-                            .foregroundStyle(.secondary)
+                    NavigationLink {
+                        VideoStorageView()
+                    } label: {
+                        HStack {
+                            Label("Manage Videos", systemImage: "folder.fill")
+                            Spacer()
+                            Text(calculateStorageSize())
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     Button(role: .destructive) {

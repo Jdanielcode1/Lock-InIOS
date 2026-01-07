@@ -218,11 +218,11 @@ struct RecordingSessionContainer: View {
         Group {
             if let session = recordingSession.activeSession {
                 switch session {
-                case .goalSession(let goalId, let goalTodoId, let availableTodos):
-                    TimeLapseRecorderView(goalId: goalId, goalTodoId: goalTodoId, availableTodos: availableTodos)
+                case .goalSession(let goalId, let goalTodoId, let availableTodos, let continueFrom):
+                    TimeLapseRecorderView(goalId: goalId, goalTodoId: goalTodoId, availableTodos: availableTodos, continueFrom: continueFrom)
                         .environmentObject(recordingSession)
-                case .goalTodoRecording(let goalTodo):
-                    TimeLapseRecorderView(goalId: goalTodo.goalId, goalTodoId: goalTodo.id)
+                case .goalTodoRecording(let goalTodo, let continueFrom):
+                    TimeLapseRecorderView(goalId: goalTodo.goalId, goalTodoId: goalTodo.id, continueFrom: continueFrom)
                         .environmentObject(recordingSession)
                 case .todoSession(let todoIds):
                     TodoSessionRecorderView(
@@ -252,23 +252,30 @@ struct VideoPlayerSessionContainer: View {
                 switch session {
                 case .studySession(let studySession, let onResume):
                     VideoPlayerView(session: studySession) {
-                        // Close video player first, then trigger resume
+                        // Close video player first, then trigger resume after brief delay
+                        // to allow fullScreenCover to dismiss cleanly
                         videoPlayerSession.endPlayback()
-                        onResume?()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                            onResume?()
+                        }
                     }
                     .environmentObject(videoPlayerSession)
                 case .todoVideo(let todo, let videoURL, let onResume):
                     TodoVideoPlayerView(videoURL: videoURL, todo: todo) {
-                        // Close video player first, then trigger resume recording
+                        // Close video player first, then trigger resume after brief delay
                         videoPlayerSession.endPlayback()
-                        onResume?()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                            onResume?()
+                        }
                     }
                     .environmentObject(videoPlayerSession)
                 case .goalTodoVideo(let goalTodo, let videoURL, let onResume):
                     GoalTodoVideoPlayerView(videoURL: videoURL, goalTodo: goalTodo) {
-                        // Close video player first, then trigger resume recording
+                        // Close video player first, then trigger resume after brief delay
                         videoPlayerSession.endPlayback()
-                        onResume?()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                            onResume?()
+                        }
                     }
                     .environmentObject(videoPlayerSession)
                 }

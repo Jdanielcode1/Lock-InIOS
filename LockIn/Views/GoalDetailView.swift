@@ -111,7 +111,14 @@ struct GoalDetailView: View {
                             onTap: {
                                 if todo.hasVideo, let videoURL = todo.videoURL {
                                     videoPlayerSession.playGoalTodoVideo(goalTodo: todo, videoURL: videoURL) {
-                                        recordingSession.startGoalTodoRecording(goalTodo: todo)
+                                        // Build continue data to resume/append to existing video
+                                        let continueData = ContinueRecordingData(
+                                            videoURL: videoURL,
+                                            speedSegmentsJSON: nil,  // GoalTodo doesn't store speed segments
+                                            duration: (todo.videoDurationMinutes ?? 0) * 60,  // Convert to seconds
+                                            notes: todo.videoNotes
+                                        )
+                                        recordingSession.startGoalTodoRecording(goalTodo: todo, continueFrom: continueData)
                                     }
                                 } else {
                                     onStartSession(
@@ -197,12 +204,28 @@ struct GoalDetailView: View {
                     ForEach(viewModel.studySessions) { session in
                         Button {
                             videoPlayerSession.playStudySession(session) {
-                                // onResume: Open recorder when Resume is tapped
-                                recordingSession.startGoalSession(
-                                    goalId: goal.id,
-                                    goalTodoId: nil,
-                                    availableTodos: viewModel.goalTodos.filter { !$0.isCompleted }
-                                )
+                                // onResume: Build continue data to resume/append to existing video
+                                if let videoURL = session.videoURL {
+                                    let continueData = ContinueRecordingData(
+                                        videoURL: videoURL,
+                                        speedSegmentsJSON: nil,  // Study sessions don't store speed segments
+                                        duration: session.durationMinutes * 60,  // Convert to seconds
+                                        notes: session.notes
+                                    )
+                                    recordingSession.startGoalSession(
+                                        goalId: goal.id,
+                                        goalTodoId: session.goalTodoId,
+                                        availableTodos: viewModel.goalTodos.filter { !$0.isCompleted },
+                                        continueFrom: continueData
+                                    )
+                                } else {
+                                    // Fallback: start fresh session if video URL unavailable
+                                    recordingSession.startGoalSession(
+                                        goalId: goal.id,
+                                        goalTodoId: session.goalTodoId,
+                                        availableTodos: viewModel.goalTodos.filter { !$0.isCompleted }
+                                    )
+                                }
                             }
                         } label: {
                             SessionRow(session: session, goalTodos: viewModel.goalTodos)
