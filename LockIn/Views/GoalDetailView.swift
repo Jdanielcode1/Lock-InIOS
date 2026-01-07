@@ -87,7 +87,7 @@ struct GoalDetailView: View {
                         }
                         .padding(.vertical, 4)
                     }
-                    .listRowBackground(Color.accentColor)
+                    .listRowBackground(AppTheme.accentGreen)
                     .foregroundStyle(.white)
                 }
             }

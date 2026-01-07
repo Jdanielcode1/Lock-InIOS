@@ -8,23 +8,45 @@
 import SwiftUI
 
 struct AppTheme {
-    // MARK: - Primary Action Colors
+    // MARK: - Primary Accent Colors (Apple Notes Yellow)
 
-    // Action Blue - primary actions, buttons, links
-    static let actionBlue = Color(red: 0.25, green: 0.52, blue: 0.96)       // #4085F5
-    static let actionBlueLight = Color(red: 0.35, green: 0.62, blue: 0.98) // Lighter variant
-    static let actionBlueDark = Color(red: 0.18, green: 0.42, blue: 0.82)  // Darker variant
+    /// Primary accent - Apple Notes Yellow #FFD60A
+    static let accentYellow = Color(hex: "FFD60A")
+    static let accentYellowLight = Color(hex: "FFE066")
+    static let accentYellowDark = Color(hex: "E6C009")
+
+    // MARK: - Secondary Accent (FaceTime Green)
+
+    /// Secondary accent - FaceTime Green #34C759
+    static let accentGreen = Color(hex: "34C759")
+    static let accentGreenLight = Color(hex: "4CD964")
+    static let accentGreenDark = Color(hex: "28A745")
+
+    // MARK: - Logo-Inspired Charcoal Palette
+
+    /// Deep charcoal - matches logo background dark areas
+    static let charcoalDeep = Color(hex: "1C1C1E")
+    /// Mid charcoal - logo gradient mid-tones
+    static let charcoalMid = Color(hex: "2C2C2E")
+    /// Light charcoal - elevated surfaces
+    static let charcoalLight = Color(hex: "3A3A3C")
+    /// Silver metallic - like the logo icon
+    static let silverMetallic = Color(hex: "8E8E93")
 
     // MARK: - Semantic Colors
 
-    // Success Green - completed, achieved
-    static let successGreen = Color(red: 0.26, green: 0.70, blue: 0.46)    // #43B376
+    /// Success - use green for completed states
+    static let successGreen = accentGreen
 
-    // Warning Amber - due soon, medium priority
-    static let warningAmber = Color(red: 0.95, green: 0.68, blue: 0.25)    // #F2AD40
+    /// Warning - use yellow for attention/caution
+    static let warningYellow = accentYellow
 
-    // Urgent Red - overdue, high priority (use sparingly)
-    static let urgentRed = Color(red: 0.90, green: 0.35, blue: 0.35)       // #E65959
+    /// Urgent/Error - muted red that works with the palette
+    static let urgentRed = Color(hex: "FF453A")
+    static let urgentRedLight = Color(hex: "FF6961")
+
+    /// Info - subtle blue for informational states
+    static let infoBlue = Color(hex: "64D2FF")
 
     // MARK: - Adaptive Colors (Light/Dark Mode)
 
@@ -35,6 +57,7 @@ struct AppTheme {
     // Text - use system label colors for automatic adaptation
     static let textPrimary = Color(UIColor.label)
     static let textSecondary = Color(UIColor.secondaryLabel)
+    static let textTertiary = Color(UIColor.tertiaryLabel)
 
     // Borders & Dividers - use system separators
     static let borderLight = Color(UIColor.separator)
@@ -45,43 +68,68 @@ struct AppTheme {
 
     // MARK: - Legacy Aliases (for compatibility)
 
-    static let primaryPurple = actionBlue
-    static let lightPurple = actionBlueLight
-    static let darkPurple = actionBlueDark
-    static let primaryYellow = warningAmber
+    static let actionBlue = infoBlue
+    static let actionBlueLight = Color(hex: "70D7FF")
+    static let actionBlueDark = Color(hex: "50C8FF")
+    static let primaryPurple = accentYellow  // Legacy: now yellow
+    static let lightPurple = accentYellowLight
+    static let darkPurple = accentYellowDark
+    static let primaryYellow = accentYellow
     static let primaryRed = urgentRed
-    static let lightRed = urgentRed.opacity(0.7)
-    static let darkRed = Color(red: 0.70, green: 0.25, blue: 0.25)
+    static let lightRed = urgentRedLight
+    static let darkRed = Color(hex: "D32F2F")
 
     // MARK: - Gradients
 
-    // Primary gradient - subtle blue gradient
+    /// Primary gradient - warm yellow glow
     static let primaryGradient = LinearGradient(
-        colors: [actionBlue, actionBlueDark],
+        colors: [accentYellow, accentYellowDark],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
 
-    // Success gradient - for completed states
+    /// Success gradient - for completed states
     static let successGradient = LinearGradient(
-        colors: [successGreen, successGreen.opacity(0.85)],
+        colors: [accentGreen, accentGreenDark],
         startPoint: .leading,
         endPoint: .trailing
     )
 
-    // Energy gradient - for duration/time indicators
+    /// Energy gradient - yellow to green for progress
     static let energyGradient = LinearGradient(
-        colors: [actionBlue, actionBlueLight],
+        colors: [accentYellow, accentGreen],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
 
-    // Calm gradient - subtle background accent
-    static let calmGradient = LinearGradient(
-        colors: [actionBlueLight.opacity(0.3), actionBlue.opacity(0.1)],
+    /// Charcoal gradient - matches logo background
+    static let charcoalGradient = LinearGradient(
+        colors: [charcoalMid, charcoalDeep],
         startPoint: .top,
         endPoint: .bottom
     )
+
+    /// Metallic gradient - subtle silver shine like logo icon
+    static let metallicGradient = LinearGradient(
+        colors: [silverMetallic.opacity(0.8), silverMetallic.opacity(0.4)],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
+    /// Calm gradient - subtle background accent
+    static let calmGradient = LinearGradient(
+        colors: [accentYellow.opacity(0.15), accentGreen.opacity(0.08)],
+        startPoint: .top,
+        endPoint: .bottom
+    )
+
+    // MARK: - Recording State Colors
+
+    /// Recording active - pulsing indicator
+    static let recordingRed = Color(hex: "FF3B30")
+
+    /// Recording paused
+    static let recordingPaused = accentYellow
 
     // MARK: - Typography (Apple SF Pro - system default)
 
@@ -112,6 +160,8 @@ struct AppTheme {
     // MARK: - Shadows
 
     static let cardShadow = Color(UIColor.label).opacity(0.06)
+    static let yellowGlow = accentYellow.opacity(0.3)
+    static let greenGlow = accentGreen.opacity(0.3)
 
     // MARK: - Animations
 
@@ -120,7 +170,7 @@ struct AppTheme {
 
     // MARK: - Privacy Mode Colors
 
-    static let privacyPurple = Color(red: 0.55, green: 0.35, blue: 0.85)
+    static let privacyPurple = Color(hex: "BF5AF2")
     static let privacyPurpleLight = privacyPurple.opacity(0.2)
 }
 
@@ -167,7 +217,7 @@ extension View {
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
             .background(Color.accentColor)
-            .foregroundColor(.white)
+            .foregroundColor(.black)
             .cornerRadius(10)
     }
 
@@ -175,19 +225,41 @@ extension View {
         self
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
-            .background(Color.accentColor.opacity(0.12))
+            .background(Color.accentColor.opacity(0.15))
             .foregroundColor(.accentColor)
             .cornerRadius(10)
     }
 
-    // Apple-native filled button style
+    // Apple-native filled button style - GREEN for primary actions (Start, Create, Submit)
     func appleFilledButton() -> some View {
         self
             .font(.headline)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(Color.accentColor)
+            .background(AppTheme.accentGreen)
             .foregroundColor(.white)
+            .cornerRadius(12)
+    }
+
+    // Neutral button style - GRAY for navigation/secondary actions (Continue, Cancel)
+    func neutralFilledButton() -> some View {
+        self
+            .font(.headline)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(Color(UIColor.systemGray5))
+            .foregroundColor(.primary)
+            .cornerRadius(12)
+    }
+
+    // Yellow accent button - for branded/recording elements
+    func yellowFilledButton() -> some View {
+        self
+            .font(.headline)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(AppTheme.accentYellow)
+            .foregroundColor(.black)
             .cornerRadius(12)
     }
 }
@@ -198,11 +270,11 @@ extension AppTheme {
     static func progressColor(for percentage: Double) -> Color {
         switch percentage {
         case 0..<50:
-            return warningAmber      // In progress - amber
+            return accentYellow       // In progress - yellow
         case 50..<100:
-            return actionBlue        // Good progress - blue
+            return accentGreen        // Good progress - green
         default:
-            return successGreen      // Completed - green
+            return accentGreen        // Completed - green
         }
     }
 

@@ -81,7 +81,7 @@ struct CreateGoalView: View {
                     VStack(spacing: 12) {
                         Image(systemName: "target")
                             .font(.system(size: 48, weight: .light))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(.secondary)
 
                         Text("What's your goal?")
                             .font(.title2.bold())
@@ -124,10 +124,9 @@ struct CreateGoalView: View {
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(isTitleValid ? Color.accentColor : Color(UIColor.systemGray5))
-                    .foregroundStyle(isTitleValid ? .white : .secondary)
+                    .background(isTitleValid ? Color(UIColor.systemGray4) : Color(UIColor.systemGray5))
+                    .foregroundStyle(isTitleValid ? .primary : .secondary)
                     .cornerRadius(12)
-                    .shadow(color: isTitleValid ? Color.accentColor.opacity(0.3) : .clear, radius: 8, x: 0, y: 4)
                 }
                 .disabled(!isTitleValid)
                 .padding(.horizontal, 20)
@@ -152,7 +151,7 @@ struct CreateGoalView: View {
                     VStack(spacing: 12) {
                         Image(systemName: "clock.fill")
                             .font(.system(size: 48, weight: .light))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(.secondary)
 
                         Text("How many hours?")
                             .font(.title2.bold())
@@ -234,10 +233,9 @@ struct CreateGoalView: View {
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(Color.accentColor)
-                    .foregroundStyle(.white)
+                    .background(Color(UIColor.systemGray4))
+                    .foregroundStyle(.primary)
                     .cornerRadius(12)
-                    .shadow(color: Color.accentColor.opacity(0.3), radius: 8, x: 0, y: 4)
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
@@ -261,7 +259,7 @@ struct CreateGoalView: View {
                         ZStack(alignment: .bottomTrailing) {
                             Image(systemName: "checklist")
                                 .font(.system(size: 44, weight: .light))
-                                .foregroundStyle(Color.accentColor)
+                                .foregroundStyle(.secondary)
 
                             Image(systemName: "sparkles")
                                 .font(.system(size: 16))
@@ -351,10 +349,9 @@ struct CreateGoalView: View {
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(isCreating || (addFirstTask && !isFirstTaskValid) ? Color(UIColor.systemGray5) : Color.accentColor)
+                        .background(isCreating || (addFirstTask && !isFirstTaskValid) ? Color(UIColor.systemGray5) : AppTheme.accentGreen)
                         .foregroundStyle(isCreating || (addFirstTask && !isFirstTaskValid) ? Color.secondary : Color.white)
                         .cornerRadius(12)
-                        .shadow(color: isCreating || (addFirstTask && !isFirstTaskValid) ? .clear : Color.accentColor.opacity(0.3), radius: 8, x: 0, y: 4)
                     }
                     .disabled(isCreating || (addFirstTask && !isFirstTaskValid))
 

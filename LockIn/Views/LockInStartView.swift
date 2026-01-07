@@ -16,6 +16,7 @@ struct LockInStartView: View {
 
     @State private var todoTitle = ""
     @State private var isCreatingTodo = false
+    @State private var showingCreateGoal = false
     @FocusState private var isTodoFieldFocused: Bool
 
     private var activeGoals: [Goal] {
@@ -62,13 +63,25 @@ struct LockInStartView: View {
                 // Goals Section
                 Section {
                     if activeGoals.isEmpty {
-                        VStack(spacing: 8) {
+                        VStack(spacing: 12) {
                             Image(systemName: "target")
                                 .font(.title)
                                 .foregroundStyle(.secondary)
                             Text("No active goals")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
+
+                            Button {
+                                showingCreateGoal = true
+                            } label: {
+                                Text("Create Goal")
+                                    .font(.subheadline.weight(.medium))
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 10)
+                                    .background(AppTheme.accentGreen)
+                                    .foregroundStyle(.white)
+                                    .cornerRadius(8)
+                            }
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
@@ -95,6 +108,9 @@ struct LockInStartView: View {
                         dismiss()
                     }
                 }
+            }
+            .sheet(isPresented: $showingCreateGoal) {
+                CreateGoalView(viewModel: goalsViewModel)
             }
         }
     }

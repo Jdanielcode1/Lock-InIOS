@@ -184,7 +184,7 @@ struct GoalsListView: View {
             ZStack(alignment: .bottomTrailing) {
                 Image(systemName: "target")
                     .font(.system(size: 44, weight: .light))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(.secondary)
 
                 Image(systemName: "video.fill")
                     .font(.system(size: 14))
@@ -222,13 +222,7 @@ struct GoalsListView: View {
                 showingCreateGoal = true
             } label: {
                 Text("Create Goal")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color.accentColor)
-                    .foregroundStyle(.white)
-                    .cornerRadius(12)
-                    .shadow(color: Color.accentColor.opacity(0.3), radius: 8, x: 0, y: 4)
+                    .appleFilledButton()
             }
             .padding(.top, 8)
 
@@ -609,7 +603,7 @@ struct GoalsListView: View {
             ZStack(alignment: .bottomTrailing) {
                 Image(systemName: "checklist")
                     .font(.system(size: 44, weight: .light))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(.secondary)
 
                 Image(systemName: "video.fill")
                     .font(.system(size: 14))
@@ -644,13 +638,7 @@ struct GoalsListView: View {
                 showingCreateTodo = true
             } label: {
                 Text("Add To-Do")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color.accentColor)
-                    .foregroundStyle(.white)
-                    .cornerRadius(12)
-                    .shadow(color: Color.accentColor.opacity(0.3), radius: 8, x: 0, y: 4)
+                    .appleFilledButton()
             }
             .padding(.top, 8)
 
@@ -666,7 +654,7 @@ struct GoalsListView: View {
                 .font(.caption.bold())
                 .foregroundStyle(.white)
                 .frame(width: 24, height: 24)
-                .background(Color.accentColor)
+                .background(Color(UIColor.systemGray3))
                 .clipShape(Circle())
 
             Text(text)
