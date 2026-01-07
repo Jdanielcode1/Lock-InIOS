@@ -9,60 +9,71 @@ import SwiftUI
 
 struct ContentView: View {
     @AppStorage("selectedTab") private var selectedTab: Tab = .home
-    @State private var showingCreateGoal = false
-    @State private var showingCreateTodo = false
-    @State private var showingFABMenu = false
+    @State private var showingLockIn = false
+
     @StateObject private var todoViewModel = TodoViewModel()
+    @StateObject private var goalsViewModel = GoalsViewModel()
     @StateObject private var tabBarVisibility = TabBarVisibility()
 
     // Recording session injected from RootView
     @EnvironmentObject private var recordingSession: RecordingSessionManager
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            // Tab content
-            Group {
-                switch selectedTab {
-                case .home:
-                    GoalsListView()
-                case .timeline:
-                    TimelineView()
-                case .stats:
-                    StatsView()
-                case .me:
-                    SettingsView(selectedTab: $selectedTab)
+        TabView(selection: $selectedTab) {
+            GoalsListView()
+                .environmentObject(tabBarVisibility)
+                .tabItem {
+                    Label("Home", systemImage: "house.fill")
                 }
-            }
-            .environmentObject(tabBarVisibility)
+                .tag(Tab.home)
 
-            // Floating tab bar
-            if tabBarVisibility.isVisible {
-                FloatingTabBar(selectedTab: $selectedTab) {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showingFABMenu = true
-                    }
+            TimelineView()
+                .environmentObject(tabBarVisibility)
+                .tabItem {
+                    Label("Timeline", systemImage: "clock.fill")
                 }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+                .tag(Tab.timeline)
 
-            // FAB Popup Menu
-            FABPopupMenu(isPresented: $showingFABMenu) {
-                showingCreateGoal = true
-            } onNewTodo: {
-                showingCreateTodo = true
+            // Center record button placeholder
+            Color.clear
+                .tabItem {
+                    Image(systemName: "plus.circle.fill")
+                }
+                .tag(Tab.record)
+
+            StatsView()
+                .environmentObject(tabBarVisibility)
+                .tabItem {
+                    Label("Stats", systemImage: "chart.bar.fill")
+                }
+                .tag(Tab.stats)
+
+            SettingsView()
+                .tabItem {
+                    Label("Me", systemImage: "person.fill")
+                }
+                .tag(Tab.me)
+        }
+        .tint(.accentColor)
+        .onChange(of: selectedTab) { oldValue, newValue in
+            if newValue == .record {
+                selectedTab = oldValue
+                showingLockIn = true
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: tabBarVisibility.isVisible)
-        .sheet(isPresented: $showingCreateGoal) {
-            CreateGoalView()
+        .sheet(isPresented: $showingLockIn) {
+            LockInStartView(
+                goalsViewModel: goalsViewModel,
+                todoViewModel: todoViewModel
+            )
+            .environmentObject(recordingSession)
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showingCreateTodo) {
-            AddTodoSheet(viewModel: todoViewModel)
-        }
-        // Recording sessions are now presented at RootView level to survive auth state changes
     }
 }
 
 #Preview {
     ContentView()
+        .environmentObject(RecordingSessionManager.shared)
 }

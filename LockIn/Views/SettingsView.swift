@@ -20,9 +20,7 @@ struct SettingsView: View {
     @State private var isClearingCache = false
     @State private var userEmail: String?
     @State private var authStatus: String = "Checking..."
-    @EnvironmentObject private var tabBarVisibility: TabBarVisibility
     @EnvironmentObject private var authModel: AuthModel
-    @Binding var selectedTab: Tab
 
     // URLs for legal pages - replace with your actual URLs
     private let privacyPolicyURL = URL(string: "https://lockinapp.com/privacy")!
@@ -215,23 +213,8 @@ struct SettingsView: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .navigationTitle("Settings")
+            .navigationTitle("Me")
             .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        selectedTab = .home
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.left")
-                                .fontWeight(.semibold)
-                            Text("Back")
-                        }
-                    }
-                }
-            }
-            .onAppear { tabBarVisibility.hide() }
-            .onDisappear { tabBarVisibility.show() }
             .task {
                 await checkAuthStatus()
             }
@@ -469,7 +452,6 @@ enum AppearanceMode: String, CaseIterable {
 }
 
 #Preview {
-    SettingsView(selectedTab: .constant(.me))
-        .environmentObject(TabBarVisibility())
+    SettingsView()
         .environmentObject(AuthModel())
 }
