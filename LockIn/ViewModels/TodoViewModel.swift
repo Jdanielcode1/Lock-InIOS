@@ -17,12 +17,15 @@ class TodoViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private var cancellables = Set<AnyCancellable>()
+    private var todosSubscription: AnyCancellable?  // Separate subscription for data (can be cancelled on auth loss)
+    private var goalTodosSubscription: AnyCancellable?
+    private var isSubscribed = false  // Track subscription state to avoid duplicates
     private let convexService = ConvexService.shared
 
     init() {
         // Load cached data immediately for instant UI
         loadCachedData()
-        waitForAuthThenSubscribe()
+        monitorAuthAndSubscribe()
     }
 
     /// Load cached todos for instant app launch
@@ -43,32 +46,39 @@ class TodoViewModel: ObservableObject {
         }
     }
 
-    /// Wait for authenticated state before subscribing to avoid "Unauthenticated call" errors
-    private func waitForAuthThenSubscribe() {
+    /// Continuously monitor auth state and subscribe/unsubscribe accordingly
+    /// This ensures we recover from auth token expiration
+    private func monitorAuthAndSubscribe() {
         isLoading = true
 
         convexClient.authState
-            .compactMap { state -> Bool? in
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                guard let self = self else { return }
+
                 switch state {
                 case .authenticated:
-                    return true
+                    // Only subscribe if not already subscribed (avoid duplicates)
+                    if !self.isSubscribed {
+                        print("🔄 TodoViewModel: Auth recovered, re-subscribing...")
+                        self.subscribeToTodos()
+                        self.subscribeToGoalTodos()
+                    }
                 case .unauthenticated:
-                    return nil // Keep waiting
+                    // Cancel data subscription on auth loss (will re-subscribe on recovery)
+                    self.cancelDataSubscriptions()
                 case .loading:
-                    return nil // Keep waiting
+                    // Keep current state while loading
+                    break
                 }
-            }
-            .first()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.subscribeToTodos()
-                self?.subscribeToGoalTodos()
             }
             .store(in: &cancellables)
     }
 
     private func subscribeToTodos() {
-        convexService.listTodos()
+        isSubscribed = true
+
+        todosSubscription = convexService.listTodos()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] todos in
                 self?.todos = todos
@@ -79,11 +89,10 @@ class TodoViewModel: ObservableObject {
                     await DataCacheService.shared.save(todos, for: .todos)
                 }
             }
-            .store(in: &cancellables)
     }
 
     private func subscribeToGoalTodos() {
-        convexService.listAllGoalTodos()
+        goalTodosSubscription = convexService.listAllGoalTodos()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] goalTodos in
                 self?.goalTodos = goalTodos
@@ -93,7 +102,16 @@ class TodoViewModel: ObservableObject {
                     await DataCacheService.shared.save(goalTodos, for: .goalTodos)
                 }
             }
-            .store(in: &cancellables)
+    }
+
+    private func cancelDataSubscriptions() {
+        todosSubscription?.cancel()
+        todosSubscription = nil
+        goalTodosSubscription?.cancel()
+        goalTodosSubscription = nil
+        isSubscribed = false
+        // Don't clear data - keep showing cached data
+        print("⚠️ TodoViewModel: Auth lost, subscriptions cancelled (keeping cached data)")
     }
 
     // MARK: - Goal Todo Actions

@@ -16,12 +16,14 @@ class GoalsViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private var cancellables = Set<AnyCancellable>()
+    private var dataSubscription: AnyCancellable?  // Separate subscription for data (can be cancelled on auth loss)
+    private var isSubscribed = false  // Track subscription state to avoid duplicates
     private let convexService = ConvexService.shared
 
     init() {
         // Load cached data immediately for instant UI
         loadCachedGoals()
-        waitForAuthThenSubscribe()
+        monitorAuthAndSubscribe()
     }
 
     /// Load cached goals for instant app launch
@@ -36,31 +38,38 @@ class GoalsViewModel: ObservableObject {
         }
     }
 
-    /// Wait for authenticated state before subscribing to avoid "Unauthenticated call" errors
-    private func waitForAuthThenSubscribe() {
+    /// Continuously monitor auth state and subscribe/unsubscribe accordingly
+    /// This ensures we recover from auth token expiration
+    private func monitorAuthAndSubscribe() {
         isLoading = true
 
         convexClient.authState
-            .compactMap { state -> Bool? in
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                guard let self = self else { return }
+
                 switch state {
                 case .authenticated:
-                    return true
+                    // Only subscribe if not already subscribed (avoid duplicates)
+                    if !self.isSubscribed {
+                        print("🔄 GoalsViewModel: Auth recovered, re-subscribing...")
+                        self.subscribeToGoals()
+                    }
                 case .unauthenticated:
-                    return nil // Keep waiting
+                    // Cancel data subscription on auth loss (will re-subscribe on recovery)
+                    self.cancelDataSubscription()
                 case .loading:
-                    return nil // Keep waiting
+                    // Keep current state while loading
+                    break
                 }
-            }
-            .first()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.subscribeToGoals()
             }
             .store(in: &cancellables)
     }
 
     private func subscribeToGoals() {
-        convexService.listGoals()
+        isSubscribed = true
+
+        dataSubscription = convexService.listGoals()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] goals in
                 self?.goals = goals
@@ -71,7 +80,14 @@ class GoalsViewModel: ObservableObject {
                     await DataCacheService.shared.save(goals, for: .goals)
                 }
             }
-            .store(in: &cancellables)
+    }
+
+    private func cancelDataSubscription() {
+        dataSubscription?.cancel()
+        dataSubscription = nil
+        isSubscribed = false
+        // Don't clear goals - keep showing cached data
+        print("⚠️ GoalsViewModel: Auth lost, subscription cancelled (keeping cached data)")
     }
 
     func createGoal(title: String, description: String, targetHours: Double) async {

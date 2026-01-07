@@ -21,33 +21,45 @@ class PartnersViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private var cancellables = Set<AnyCancellable>()
+    private var dataSubscriptions = Set<AnyCancellable>()  // Separate subscriptions for data (can be cancelled on auth loss)
+    private var isSubscribed = false  // Track subscription state to avoid duplicates
     private let convexService = ConvexService.shared
 
     init() {
-        waitForAuthThenSubscribe()
+        monitorAuthAndSubscribe()
     }
 
-    private func waitForAuthThenSubscribe() {
+    /// Continuously monitor auth state and subscribe/unsubscribe accordingly
+    /// This ensures we recover from auth token expiration
+    private func monitorAuthAndSubscribe() {
         isLoading = true
 
         convexClient.authState
-            .compactMap { state -> Bool? in
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                guard let self = self else { return }
+
                 switch state {
                 case .authenticated:
-                    return true
-                case .unauthenticated, .loading:
-                    return nil
+                    // Only subscribe if not already subscribed (avoid duplicates)
+                    if !self.isSubscribed {
+                        print("🔄 PartnersViewModel: Auth recovered, re-subscribing...")
+                        self.subscribeToPartners()
+                    }
+                case .unauthenticated:
+                    // Cancel data subscriptions on auth loss (will re-subscribe on recovery)
+                    self.cancelDataSubscriptions()
+                case .loading:
+                    // Keep current state while loading
+                    break
                 }
-            }
-            .first()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.subscribeToPartners()
             }
             .store(in: &cancellables)
     }
 
     private func subscribeToPartners() {
+        isSubscribed = true
+
         // Subscribe to active partners
         convexService.listPartners()
             .receive(on: DispatchQueue.main)
@@ -55,7 +67,7 @@ class PartnersViewModel: ObservableObject {
                 self?.partners = partners
                 self?.isLoading = false
             }
-            .store(in: &cancellables)
+            .store(in: &dataSubscriptions)
 
         // Subscribe to sent invites
         convexService.listSentInvites()
@@ -63,7 +75,7 @@ class PartnersViewModel: ObservableObject {
             .sink { [weak self] invites in
                 self?.sentInvites = invites
             }
-            .store(in: &cancellables)
+            .store(in: &dataSubscriptions)
 
         // Subscribe to received invites
         convexService.listReceivedInvites()
@@ -71,7 +83,7 @@ class PartnersViewModel: ObservableObject {
             .sink { [weak self] invites in
                 self?.receivedInvites = invites
             }
-            .store(in: &cancellables)
+            .store(in: &dataSubscriptions)
 
         // Subscribe to pending invite count (for badge)
         convexService.getPendingInviteCount()
@@ -79,7 +91,7 @@ class PartnersViewModel: ObservableObject {
             .sink { [weak self] count in
                 self?.pendingInviteCount = count
             }
-            .store(in: &cancellables)
+            .store(in: &dataSubscriptions)
 
         // Subscribe to videos shared with me
         convexService.listSharedWithMe()
@@ -87,7 +99,14 @@ class PartnersViewModel: ObservableObject {
             .sink { [weak self] videos in
                 self?.sharedWithMe = videos
             }
-            .store(in: &cancellables)
+            .store(in: &dataSubscriptions)
+    }
+
+    private func cancelDataSubscriptions() {
+        dataSubscriptions.removeAll()
+        isSubscribed = false
+        // Don't clear data - keep showing cached data
+        print("⚠️ PartnersViewModel: Auth lost, subscriptions cancelled (keeping cached data)")
     }
 
     // MARK: - Actions
