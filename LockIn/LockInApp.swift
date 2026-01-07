@@ -148,8 +148,9 @@ struct RootView: View {
     @EnvironmentObject var deepLinkManager: DeepLinkManager
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var recordingSession = RecordingSessionManager.shared
-    @StateObject private var videoPlayerSession = VideoPlayerSessionManager.shared
+    // Use @ObservedObject for singletons - we're observing, not owning
+    @ObservedObject private var recordingSession = RecordingSessionManager.shared
+    @ObservedObject private var videoPlayerSession = VideoPlayerSessionManager.shared
 
     var body: some View {
         ZStack {
@@ -161,6 +162,7 @@ struct RootView: View {
                     LoginView(authModel: authModel)
                 case .authenticated(_):
                     ContentView()
+                        .id("authenticated-content")  // Stable identity prevents recreation on auth state re-emission
                         .environmentObject(authModel)
                         .environmentObject(recordingSession)
                         .environmentObject(videoPlayerSession)

@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var selectedTab: Tab = .goals
+    @AppStorage("selectedTab") private var selectedTab: Tab = .goals
     @State private var showingCreateGoal = false
     @State private var showingCreateTodo = false
     @State private var showingFABMenu = false

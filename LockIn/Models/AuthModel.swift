@@ -33,9 +33,22 @@ class AuthModel: ObservableObject {
     private var tokenRefreshTimer: Timer?
     private let tokenRefreshInterval: TimeInterval = 45 * 60 // 45 minutes
 
+    // Throttle token refresh to prevent rapid refreshes on app foreground
+    private var lastRefreshTime: Date?
+    private let refreshCooldown: TimeInterval = 30 // 30 seconds minimum between refreshes
+
     init() {
-        // Subscribe to Convex auth state
-        convexClient.authState.replaceError(with: .unauthenticated)
+        // Subscribe to Convex auth state with error resilience
+        // Keep current state on error instead of flipping to unauthenticated (avoids login flash on network glitch)
+        convexClient.authState
+            .catch { [weak self] error -> AnyPublisher<AuthState<FirebaseAuthResult>, Never> in
+                print("⚠️ Auth state error (keeping current state): \(error)")
+                // Return current state instead of flipping to unauthenticated
+                if let currentState = self?.authState {
+                    return Just(currentState).eraseToAnyPublisher()
+                }
+                return Just(.unauthenticated).eraseToAnyPublisher()
+            }
             .receive(on: DispatchQueue.main)
             .assign(to: &$authState)
 
@@ -96,7 +109,16 @@ class AuthModel: ObservableObject {
     /// Call when app comes to foreground - refresh auth session and restart timer
     func appDidBecomeActive() {
         Task {
+            // Throttle: don't refresh if we just did (prevents rapid refreshes)
+            if let lastRefresh = lastRefreshTime,
+               Date().timeIntervalSince(lastRefresh) < refreshCooldown {
+                print("⏳ Skipping token refresh (cooldown: \(Int(refreshCooldown - Date().timeIntervalSince(lastRefresh)))s remaining)")
+                startTokenRefreshTimer()
+                return
+            }
+
             _ = await forceTokenRefresh()
+            lastRefreshTime = Date()
             startTokenRefreshTimer()
         }
     }
