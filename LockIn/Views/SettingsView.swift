@@ -220,7 +220,7 @@ struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
-                        selectedTab = .goals
+                        selectedTab = .home
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "chevron.left")
@@ -469,7 +469,7 @@ enum AppearanceMode: String, CaseIterable {
 }
 
 #Preview {
-    SettingsView(selectedTab: .constant(.settings))
+    SettingsView(selectedTab: .constant(.me))
         .environmentObject(TabBarVisibility())
         .environmentObject(AuthModel())
 }

@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @AppStorage("selectedTab") private var selectedTab: Tab = .goals
+    @AppStorage("selectedTab") private var selectedTab: Tab = .home
     @State private var showingCreateGoal = false
     @State private var showingCreateTodo = false
     @State private var showingFABMenu = false
@@ -23,13 +23,13 @@ struct ContentView: View {
             // Tab content
             Group {
                 switch selectedTab {
-                case .goals:
+                case .home:
                     GoalsListView()
                 case .timeline:
                     TimelineView()
                 case .stats:
                     StatsView()
-                case .settings:
+                case .me:
                     SettingsView(selectedTab: $selectedTab)
                 }
             }

@@ -28,17 +28,17 @@ class TabBarVisibility: ObservableObject {
 }
 
 enum Tab: String, CaseIterable {
-    case goals = "Goals"
+    case home = "Home"
     case timeline = "Timeline"
     case stats = "Stats"
-    case settings = "Settings"
+    case me = "Me"
 
     var icon: String {
         switch self {
-        case .goals: return "tray.fill"
+        case .home: return "house.fill"
         case .timeline: return "list.bullet.rectangle"
         case .stats: return "chart.bar.fill"
-        case .settings: return "gearshape.fill"
+        case .me: return "person.fill"
         }
     }
 }
@@ -52,13 +52,43 @@ struct FloatingTabBar: View {
         AdaptiveSizing(horizontalSizeClass: sizeClass)
     }
 
+    // Tabs on the left side of FAB
+    private var leftTabs: [Tab] { [.home, .timeline] }
+    // Tabs on the right side of FAB
+    private var rightTabs: [Tab] { [.stats, .me] }
+
     var body: some View {
         HStack(spacing: 0) {
             Spacer(minLength: 0)
 
-            // Tab bar container
+            // Tab bar container with centered FAB
             HStack(spacing: 0) {
-                ForEach(Tab.allCases, id: \.self) { tab in
+                // Left tabs
+                ForEach(leftTabs, id: \.self) { tab in
+                    TabButton(tab: tab, isSelected: selectedTab == tab, buttonWidth: sizing.tabButtonWidth) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selectedTab = tab
+                        }
+                    }
+                }
+
+                // Center FAB
+                Button(action: onPlusTapped) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.accentColor)
+                            .frame(width: 52, height: 52)
+                            .shadow(color: Color.accentColor.opacity(0.4), radius: 8, x: 0, y: 4)
+
+                        Image(systemName: "plus")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .padding(.horizontal, 8)
+
+                // Right tabs
+                ForEach(rightTabs, id: \.self) { tab in
                     TabButton(tab: tab, isSelected: selectedTab == tab, buttonWidth: sizing.tabButtonWidth) {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             selectedTab = tab
@@ -67,23 +97,9 @@ struct FloatingTabBar: View {
                 }
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 12)
+            .padding(.vertical, 8)
             .background(Color(UIColor.secondarySystemBackground))
             .clipShape(Capsule())
-
-            Spacer()
-                .frame(width: 16)
-
-            // FAB Button
-            Button(action: onPlusTapped) {
-                Image(systemName: "plus")
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(.white)
-                    .frame(width: 56, height: 56)
-                    .background(Color.accentColor)
-                    .clipShape(Circle())
-                    .shadow(color: Color.accentColor.opacity(0.3), radius: 8, x: 0, y: 4)
-            }
 
             Spacer(minLength: 0)
         }
