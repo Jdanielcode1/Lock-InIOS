@@ -2,7 +2,7 @@
 //  PartnersView.swift
 //  LockIn
 //
-//  Created by Claude on 02/01/26.
+//  Stories-style partner view with horizontal avatar row
 //
 
 import SwiftUI
@@ -12,212 +12,308 @@ struct PartnersView: View {
     @Environment(\.dismiss) var dismiss
     @State private var showingAddPartner = false
     @State private var showingInvites = false
-    @State private var isPresented = false
+    @State private var showMyStories = false
+    @State private var selectedPartner: Partner?
     @State private var partnerToRemove: Partner?
     @State private var showingRemoveConfirmation = false
 
     var body: some View {
-        NavigationView {
-            List {
-                // Pending invites banner (if any)
-                if !viewModel.receivedInvites.isEmpty {
-                    Section {
-                        Button {
-                            HapticFeedback.light()
-                            showingInvites = true
-                        } label: {
-                            HStack(spacing: 12) {
-                                ZStack {
-                                    Circle()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [.orange.opacity(0.2), .orange.opacity(0.1)],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
-                                        .frame(width: 44, height: 44)
+        ScrollView {
+            VStack(spacing: 0) {
+                // Stories row at top
+                PartnerStoriesRow(
+                    partners: viewModel.partners,
+                    hasNewVideos: { _ in false }, // TODO: Track viewed state
+                    onTapUser: { showMyStories = true },
+                    onTapPartner: { partner in selectedPartner = partner },
+                    onTapAdd: { showingAddPartner = true }
+                )
+                .background(Color(UIColor.systemBackground))
 
-                                    Image(systemName: "envelope.badge.fill")
-                                        .font(.system(size: 18))
-                                        .foregroundStyle(.orange)
-                                        .symbolEffect(.pulse, options: .repeating)
-                                }
+                Divider()
+                    .padding(.horizontal, 16)
 
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text("\(viewModel.receivedInvites.count) Pending Invite\(viewModel.receivedInvites.count == 1 ? "" : "s")")
-                                        .font(.headline)
-                                        .foregroundStyle(.primary)
-
-                                    Text("Tap to review")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                Spacer()
-
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .padding(.vertical, 6)
-                        }
-                        .buttonStyle(PressButtonStyle())
+                // Main content
+                VStack(spacing: 20) {
+                    // Pending invites banner (if any)
+                    if !viewModel.receivedInvites.isEmpty {
+                        PendingInvitesBanner(
+                            count: viewModel.receivedInvites.count,
+                            onTap: { showingInvites = true }
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
                     }
-                }
 
-                // Active partners section
-                Section {
+                    // Partner list section
                     if viewModel.partners.isEmpty && viewModel.sentInvites.isEmpty {
                         PartnersEmptyState(showingAddPartner: $showingAddPartner)
-                            .listRowBackground(Color.clear)
-                            .listRowInsets(EdgeInsets())
+                            .padding(.top, 20)
                     } else {
-                        ForEach(viewModel.partners) { partner in
-                            NavigationLink(destination: PartnerActivityView(partner: partner)) {
-                                PartnerRow(partner: partner)
-                            }
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    HapticFeedback.warning()
-                                    partnerToRemove = partner
-                                    showingRemoveConfirmation = true
-                                } label: {
-                                    Label("Remove", systemImage: "person.badge.minus")
-                                }
-                            }
-                        }
-                    }
-                } header: {
-                    if !viewModel.partners.isEmpty {
-                        Text("My Partners")
-                    }
-                }
-
-                // Pending sent invites section
-                if !viewModel.sentInvites.isEmpty {
-                    Section {
-                        ForEach(viewModel.sentInvites) { invite in
-                            SentInviteRow(invite: invite)
-                                .swipeActions(edge: .trailing) {
-                                    Button(role: .destructive) {
-                                        HapticFeedback.light()
-                                        Task {
-                                            await viewModel.cancelInvite(invite)
-                                        }
-                                    } label: {
-                                        Label("Cancel", systemImage: "xmark")
+                        VStack(spacing: 12) {
+                            // Active partners
+                            if !viewModel.partners.isEmpty {
+                                PartnerListSection(
+                                    title: "My Partners",
+                                    partners: viewModel.partners,
+                                    onTap: { partner in selectedPartner = partner },
+                                    onRemove: { partner in
+                                        partnerToRemove = partner
+                                        showingRemoveConfirmation = true
                                     }
-                                }
-                        }
-                    } header: {
-                        Text("Pending Invites Sent")
-                    }
-                }
-            }
-            .listStyle(.insetGrouped)
-            .navigationTitle("Partners")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
+                                )
+                            }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
+                            // Pending sent invites
+                            if !viewModel.sentInvites.isEmpty {
+                                SentInvitesSection(
+                                    invites: viewModel.sentInvites,
+                                    onCancel: { invite in
+                                        Task { await viewModel.cancelInvite(invite) }
+                                    }
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, viewModel.receivedInvites.isEmpty ? 16 : 0)
+                    }
+                }
+                .padding(.bottom, 32)
+            }
+        }
+        .background(Color(UIColor.systemGroupedBackground))
+        .navigationTitle("Partners")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if !viewModel.receivedInvites.isEmpty {
                     Button {
                         HapticFeedback.light()
-                        showingAddPartner = true
+                        showingInvites = true
                     } label: {
-                        Image(systemName: "plus")
-                            .fontWeight(.semibold)
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "envelope")
+                                .fontWeight(.medium)
+
+                            // Badge
+                            Text("\(viewModel.receivedInvites.count)")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(minWidth: 16, minHeight: 16)
+                                .background(Color.orange)
+                                .clipShape(Circle())
+                                .offset(x: 8, y: -6)
+                        }
                     }
                 }
             }
-            .sheet(isPresented: $showingAddPartner) {
-                AddPartnerSheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: $showingAddPartner) {
+            AddPartnerSheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: $showingInvites) {
+            PartnerInvitesView(viewModel: viewModel)
+        }
+        .fullScreenCover(isPresented: $showMyStories) {
+            MyStoriesViewer()
+        }
+        .fullScreenCover(item: $selectedPartner) { partner in
+            PartnerStoryViewer(partner: partner)
+        }
+        .alert("Remove Partner", isPresented: $showingRemoveConfirmation, presenting: partnerToRemove) { partner in
+            Button("Cancel", role: .cancel) {
+                partnerToRemove = nil
             }
-            .sheet(isPresented: $showingInvites) {
-                PartnerInvitesView(viewModel: viewModel)
-            }
-            .alert("Remove Partner", isPresented: $showingRemoveConfirmation, presenting: partnerToRemove) { partner in
-                Button("Cancel", role: .cancel) {
+            Button("Remove", role: .destructive) {
+                Task {
+                    await viewModel.removePartner(partner)
                     partnerToRemove = nil
                 }
-                Button("Remove", role: .destructive) {
-                    Task {
-                        await viewModel.removePartner(partner)
-                        partnerToRemove = nil
-                    }
-                }
-            } message: { partner in
-                Text("Are you sure you want to remove \(partner.displayName) as your accountability partner? You won't be able to see their shared sessions anymore.")
             }
-            .overlay {
-                if viewModel.isLoading {
-                    ProgressView()
-                }
-            }
-            .onAppear {
-                withAnimation(.smooth.delay(0.1)) {
-                    isPresented = true
-                }
+        } message: { partner in
+            Text("Are you sure you want to remove \(partner.displayName)? You won't see their shared sessions anymore.")
+        }
+        .overlay {
+            if viewModel.isLoading {
+                ProgressView()
             }
         }
     }
 }
 
-// MARK: - Partner Row
+// MARK: - Pending Invites Banner
 
-struct PartnerRow: View {
-    let partner: Partner
+private struct PendingInvitesBanner: View {
+    let count: Int
+    let onTap: () -> Void
 
     var body: some View {
-        HStack(spacing: 14) {
-            // Gradient avatar
-            PartnerAvatar(partner: partner, size: 52)
+        Button(action: {
+            HapticFeedback.light()
+            onTap()
+        }) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [.orange.opacity(0.2), .orange.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 44, height: 44)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(partner.displayName)
-                    .font(.body.weight(.medium))
+                    Image(systemName: "envelope.badge.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.orange)
+                        .symbolEffect(.pulse, options: .repeating)
+                }
 
-                Text(partner.partnerEmail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("\(count) Pending Invite\(count == 1 ? "" : "s")")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+
+                    Text("Tap to review")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.tertiary)
             }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.tertiary)
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color(UIColor.secondarySystemGroupedBackground))
+            )
         }
-        .padding(.vertical, 6)
+        .buttonStyle(PressButtonStyle())
+    }
+}
+
+// MARK: - Partner List Section
+
+private struct PartnerListSection: View {
+    let title: String
+    let partners: [Partner]
+    let onTap: (Partner) -> Void
+    let onRemove: (Partner) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.leading, 4)
+
+            VStack(spacing: 1) {
+                ForEach(partners) { partner in
+                    PartnerListRow(partner: partner, onTap: { onTap(partner) })
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                HapticFeedback.warning()
+                                onRemove(partner)
+                            } label: {
+                                Label("Remove Partner", systemImage: "person.badge.minus")
+                            }
+                        }
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color(UIColor.secondarySystemGroupedBackground))
+            )
+        }
+    }
+}
+
+// MARK: - Partner List Row
+
+private struct PartnerListRow: View {
+    let partner: Partner
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: {
+            HapticFeedback.light()
+            onTap()
+        }) {
+            HStack(spacing: 14) {
+                PartnerAvatar(partner: partner, size: 44)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(partner.displayName)
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.primary)
+
+                    Text(partner.partnerEmail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Image(systemName: "play.circle.fill")
+                    .font(.system(size: 24))
+                    .foregroundStyle(Color.accentColor)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+        }
+        .buttonStyle(PressButtonStyle(scale: 0.98))
+    }
+}
+
+// MARK: - Sent Invites Section
+
+private struct SentInvitesSection: View {
+    let invites: [PartnerInvite]
+    let onCancel: (PartnerInvite) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Pending Invites Sent")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.leading, 4)
+
+            VStack(spacing: 1) {
+                ForEach(invites) { invite in
+                    SentInviteRow(invite: invite)
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                HapticFeedback.light()
+                                onCancel(invite)
+                            } label: {
+                                Label("Cancel Invite", systemImage: "xmark")
+                            }
+                        }
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color(UIColor.secondarySystemGroupedBackground))
+            )
+        }
     }
 }
 
 // MARK: - Sent Invite Row
 
-struct SentInviteRow: View {
+private struct SentInviteRow: View {
     let invite: PartnerInvite
 
     var body: some View {
         HStack(spacing: 14) {
-            // Invite avatar with animated icon
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(UIColor.tertiarySystemFill),
-                                Color(UIColor.quaternarySystemFill)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(Color(UIColor.tertiarySystemFill))
                     .frame(width: 44, height: 44)
 
                 Image(systemName: "paperplane.fill")
@@ -225,9 +321,10 @@ struct SentInviteRow: View {
                     .foregroundStyle(.secondary)
             }
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(invite.toEmail)
                     .font(.body)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
 
                 Text(invite.expiryDescription)
@@ -237,7 +334,6 @@ struct SentInviteRow: View {
 
             Spacer()
 
-            // Status badge
             Text("Pending")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.orange)
@@ -248,7 +344,8 @@ struct SentInviteRow: View {
                         .fill(Color.orange.opacity(0.12))
                 )
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
 }
 
@@ -262,7 +359,6 @@ struct PartnersEmptyState: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            // Animated concentric circles
             ZStack {
                 ForEach(0..<circleCount, id: \.self) { index in
                     Circle()
@@ -285,7 +381,6 @@ struct PartnersEmptyState: View {
                         )
                 }
 
-                // Center icon
                 ZStack {
                     Circle()
                         .fill(
@@ -305,7 +400,6 @@ struct PartnersEmptyState: View {
             }
             .padding(.vertical, 8)
 
-            // Text content
             VStack(spacing: 8) {
                 Text("Better Together")
                     .font(.title3.weight(.semibold))
@@ -317,7 +411,6 @@ struct PartnersEmptyState: View {
                     .lineSpacing(2)
             }
 
-            // CTA Button
             Button {
                 HapticFeedback.medium()
                 showingAddPartner = true
@@ -355,11 +448,8 @@ struct PartnersEmptyState: View {
     }
 }
 
+// MARK: - Preview
+
 #Preview {
     PartnersView()
-}
-
-#Preview("Empty State") {
-    PartnersEmptyState(showingAddPartner: .constant(false))
-        .padding()
 }

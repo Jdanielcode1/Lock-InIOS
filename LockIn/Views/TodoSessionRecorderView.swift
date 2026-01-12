@@ -1456,76 +1456,36 @@ struct TodoSessionRecorderView: View {
             return
         }
 
-        do {
-            // Generate thumbnail from first frame
-            var thumbnailR2Key: String? = nil
-            if let thumbnail = try? await videoService.generateThumbnail(from: videoURL),
-               let thumbnailData = thumbnail.jpegData(compressionQuality: 0.8) {
-                // Get upload URL for thumbnail
-                let thumbUploadResponse = try await ConvexService.shared.generateUploadUrl()
+        // Generate thumbnail locally
+        var thumbnailURL: URL? = nil
+        if let thumbnail = try? await videoService.generateThumbnail(from: videoURL),
+           let thumbnailData = thumbnail.jpegData(compressionQuality: 0.8) {
+            let tempDir = FileManager.default.temporaryDirectory
+            let thumbPath = tempDir.appendingPathComponent(UUID().uuidString + "_thumb.jpg")
+            try? thumbnailData.write(to: thumbPath)
+            thumbnailURL = thumbPath
+        }
 
-                var thumbRequest = URLRequest(url: URL(string: thumbUploadResponse.url)!)
-                thumbRequest.httpMethod = "PUT"
-                thumbRequest.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
-                thumbRequest.httpBody = thumbnailData
+        // Create combined title from completed todos
+        let completedTodoTitles = selectedTodos
+            .filter { checkedTodoIds.contains($0.id) }
+            .map { $0.title }
+        let todoTitle = completedTodoTitles.isEmpty ? nil : completedTodoTitles.joined(separator: ", ")
 
-                let (_, thumbResponse) = try await URLSession.shared.data(for: thumbRequest)
-                if let httpResponse = thumbResponse as? HTTPURLResponse,
-                   httpResponse.statusCode == 200 {
-                    thumbnailR2Key = thumbUploadResponse.key
-                    try? await ConvexService.shared.syncR2Metadata(key: thumbUploadResponse.key)
-                }
-            }
+        // Enqueue for background upload
+        BackgroundUploadManager.shared.enqueueUpload(
+            videoURL: videoURL,
+            thumbnailURL: thumbnailURL,
+            partnerIds: partnerIds,
+            durationMinutes: recorder.recordingDuration / 60.0,
+            goalTitle: nil,
+            todoTitle: todoTitle,
+            notes: pendingNotes.isEmpty ? nil : pendingNotes
+        )
 
-            // Get upload URL and key from Convex
-            let uploadResponse = try await ConvexService.shared.generateUploadUrl()
-
-            // Upload video to R2
-            let videoData = try Data(contentsOf: videoURL)
-            var request = URLRequest(url: URL(string: uploadResponse.url)!)
-            request.httpMethod = "PUT"
-            request.setValue("video/quicktime", forHTTPHeaderField: "Content-Type")
-            request.httpBody = videoData
-
-            let (_, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200 else {
-                throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Upload failed"])
-            }
-
-            // Use the key from the response
-            let r2Key = uploadResponse.key
-
-            // Sync metadata with Convex
-            try await ConvexService.shared.syncR2Metadata(key: r2Key)
-
-            // Create combined title from completed todos
-            let completedTodoTitles = selectedTodos
-                .filter { checkedTodoIds.contains($0.id) }
-                .map { $0.title }
-            let todoTitle = completedTodoTitles.isEmpty ? nil : completedTodoTitles.joined(separator: ", ")
-
-            // Create shared video record
-            _ = try await ConvexService.shared.shareVideo(
-                r2Key: r2Key,
-                thumbnailR2Key: thumbnailR2Key,
-                durationMinutes: recorder.recordingDuration / 60.0,
-                goalTitle: nil,
-                todoTitle: todoTitle,
-                notes: pendingNotes.isEmpty ? nil : pendingNotes,
-                partnerIds: partnerIds
-            )
-
-            await MainActor.run {
-                let generator = UINotificationFeedbackGenerator()
-                generator.notificationOccurred(.success)
-                showShareWithPartners = false
-            }
-        } catch {
-            await MainActor.run {
-                errorMessage = "Failed to share: \(error.localizedDescription)"
-                showShareWithPartners = false
-            }
+        // Dismiss immediately - upload continues in background
+        await MainActor.run {
+            showShareWithPartners = false
         }
     }
 }

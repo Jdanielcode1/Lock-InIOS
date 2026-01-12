@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 import ConvexMobile
 import FirebaseCore
 import GoogleSignIn
@@ -16,6 +17,33 @@ struct LockInApp: App {
     @StateObject private var authModel = AuthModel()
     @StateObject private var deepLinkManager = DeepLinkManager.shared
 
+    let modelContainer: ModelContainer
+
+    init() {
+        do {
+            let schema = Schema([
+                SDGoal.self,
+                SDGoalTodo.self,
+                SDTodoItem.self,
+                SDStudySession.self,
+                SDPartner.self
+            ])
+            let modelConfiguration = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: false
+            )
+            modelContainer = try ModelContainer(for: schema, configurations: [modelConfiguration])
+
+            // Configure the SwiftData service with the container
+            let container = modelContainer
+            Task { @MainActor in
+                SwiftDataService.shared.configure(with: container)
+            }
+        } catch {
+            fatalError("Could not create ModelContainer: \(error)")
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView(authModel: authModel)
@@ -24,6 +52,7 @@ struct LockInApp: App {
                     deepLinkManager.handleURL(url)
                 }
         }
+        .modelContainer(modelContainer)
     }
 }
 

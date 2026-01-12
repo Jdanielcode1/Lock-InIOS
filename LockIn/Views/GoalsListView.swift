@@ -30,7 +30,6 @@ struct GoalsListView: View {
     @State private var selectedTodoIdsForSession: Set<String> = []
 
     // Partners
-    @State private var showingPartners = false
     @StateObject private var partnersViewModel = PartnersViewModel()
 
     // iPad adaptation
@@ -64,9 +63,7 @@ struct GoalsListView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showingPartners = true
-                    } label: {
+                    NavigationLink(destination: PartnersView()) {
                         ZStack(alignment: .topTrailing) {
                             Image(systemName: "person.2")
 
@@ -80,9 +77,6 @@ struct GoalsListView: View {
                         }
                     }
                 }
-            }
-            .sheet(isPresented: $showingPartners) {
-                PartnersView()
             }
             .sheet(isPresented: $showingCreateGoal) {
                 CreateGoalView(viewModel: goalsViewModel)

@@ -7,15 +7,15 @@
 
 import SwiftUI
 
-/// A floating toast notification for deletion confirmations with undo support
+/// A floating toast notification with support for different types
 struct ToastView: View {
     @ObservedObject var toastManager = ToastManager.shared
 
     var body: some View {
         if let toast = toastManager.currentToast, toastManager.isVisible {
             HStack(spacing: 12) {
-                // Icon
-                Image(systemName: "trash.fill")
+                // Icon (based on type)
+                Image(systemName: toast.type.icon)
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(.white.opacity(0.9))
 
@@ -27,12 +27,12 @@ struct ToastView: View {
 
                 Spacer()
 
-                // Undo button (if action available)
-                if toast.undoAction != nil {
+                // Action button (if action available)
+                if let actionLabel = toast.actionLabel, toast.action != nil {
                     Button {
-                        toastManager.undo()
+                        toastManager.performAction()
                     } label: {
-                        Text("Undo")
+                        Text(actionLabel)
                             .font(.subheadline)
                             .fontWeight(.semibold)
                             .foregroundStyle(.white)
@@ -47,7 +47,7 @@ struct ToastView: View {
             .padding(.vertical, 14)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(Color(UIColor.darkGray))
+                    .fill(Color(toast.type.backgroundColor))
                     .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 4)
             )
             .padding(.horizontal, 16)

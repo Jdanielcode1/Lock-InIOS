@@ -26,14 +26,17 @@ class GoalsViewModel: ObservableObject {
         monitorAuthAndSubscribe()
     }
 
-    /// Load cached goals for instant app launch
+    /// Load cached goals from SwiftData for instant app launch
     private func loadCachedGoals() {
         Task {
-            if let cached: [Goal] = await DataCacheService.shared.load(.goals) {
+            do {
+                let cached = try await SwiftDataService.shared.fetchGoals()
                 // Only set if we don't have data yet (avoid flicker)
-                if self.goals.isEmpty {
+                if self.goals.isEmpty && !cached.isEmpty {
                     self.goals = cached
                 }
+            } catch {
+                print("⚠️ GoalsViewModel: Failed to load cached goals: \(error)")
             }
         }
     }
@@ -75,9 +78,9 @@ class GoalsViewModel: ObservableObject {
                 self?.goals = goals
                 self?.isLoading = false
 
-                // Update cache in background
+                // Sync to SwiftData in background
                 Task {
-                    await DataCacheService.shared.save(goals, for: .goals)
+                    try? await SwiftDataService.shared.syncGoals(goals)
                 }
             }
     }

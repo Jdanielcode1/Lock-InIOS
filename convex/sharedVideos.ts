@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { userMutation, userQuery } from "./auth";
 import { action, internalQuery, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { S3Client, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 // Shared S3 client factory to avoid duplication
@@ -171,6 +171,18 @@ export const getViewUrl = action({
     }
 
     const s3Client = createR2Client();
+
+    // Verify the video file exists in R2 before generating URL
+    try {
+      await s3Client.send(new HeadObjectCommand({
+        Bucket: process.env.R2_BUCKET,
+        Key: video.r2Key,
+      }));
+    } catch (error) {
+      // File doesn't exist in R2
+      throw new Error("VIDEO_UNAVAILABLE");
+    }
+
     const command = new GetObjectCommand({
       Bucket: process.env.R2_BUCKET,
       Key: video.r2Key,

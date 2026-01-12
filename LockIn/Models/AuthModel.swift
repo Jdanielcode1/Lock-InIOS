@@ -189,8 +189,8 @@ class AuthModel: ObservableObject {
     /// Sign out of Firebase and Convex
     func logout() {
         Task {
-            // Clear local data cache
-            await DataCacheService.shared.clearAll()
+            // Clear SwiftData local cache
+            try? await SwiftDataService.shared.clearAllData()
 
             await convexClient.logout()
             print("Logged out successfully")

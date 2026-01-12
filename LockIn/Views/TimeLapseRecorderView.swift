@@ -422,50 +422,20 @@ struct TimeLapseRecorderView: View {
             return
         }
 
-        do {
-            // Get upload URL and key from Convex
-            let uploadResponse = try await ConvexService.shared.generateUploadUrl()
+        // Enqueue for background upload (no thumbnail for timelapse)
+        BackgroundUploadManager.shared.enqueueUpload(
+            videoURL: videoURL,
+            thumbnailURL: nil,
+            partnerIds: partnerIds,
+            durationMinutes: recorder.recordingDuration / 60.0,
+            goalTitle: nil,
+            todoTitle: nil,
+            notes: pendingNotes.isEmpty ? nil : pendingNotes
+        )
 
-            // Upload video to R2
-            let videoData = try Data(contentsOf: videoURL)
-            var request = URLRequest(url: URL(string: uploadResponse.url)!)
-            request.httpMethod = "PUT"
-            request.setValue("video/quicktime", forHTTPHeaderField: "Content-Type")
-            request.httpBody = videoData
-
-            let (_, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200 else {
-                throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Upload failed"])
-            }
-
-            // Use the key from the response
-            let r2Key = uploadResponse.key
-
-            // Sync metadata with Convex
-            try await ConvexService.shared.syncR2Metadata(key: r2Key)
-
-            // Create shared video record
-            _ = try await ConvexService.shared.shareVideo(
-                r2Key: r2Key,
-                thumbnailR2Key: nil,
-                durationMinutes: recorder.recordingDuration / 60.0,
-                goalTitle: nil,
-                todoTitle: nil,
-                notes: pendingNotes.isEmpty ? nil : pendingNotes,
-                partnerIds: partnerIds
-            )
-
-            await MainActor.run {
-                let generator = UINotificationFeedbackGenerator()
-                generator.notificationOccurred(.success)
-                showShareWithPartners = false
-            }
-        } catch {
-            await MainActor.run {
-                errorMessage = "Failed to share: \(error.localizedDescription)"
-                showShareWithPartners = false
-            }
+        // Dismiss immediately - upload continues in background
+        await MainActor.run {
+            showShareWithPartners = false
         }
     }
 

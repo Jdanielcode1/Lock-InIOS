@@ -28,20 +28,23 @@ class TodoViewModel: ObservableObject {
         monitorAuthAndSubscribe()
     }
 
-    /// Load cached todos for instant app launch
+    /// Load cached todos from SwiftData for instant app launch
     private func loadCachedData() {
         Task {
-            // Load todos
-            if let cachedTodos: [TodoItem] = await DataCacheService.shared.load(.todos) {
-                if self.todos.isEmpty {
+            do {
+                // Load todos from SwiftData
+                let cachedTodos = try await SwiftDataService.shared.fetchTodos()
+                if self.todos.isEmpty && !cachedTodos.isEmpty {
                     self.todos = cachedTodos
                 }
-            }
-            // Load goal todos
-            if let cachedGoalTodos: [GoalTodo] = await DataCacheService.shared.load(.goalTodos) {
-                if self.goalTodos.isEmpty {
+
+                // Load goal todos from SwiftData
+                let cachedGoalTodos = try await SwiftDataService.shared.fetchGoalTodos()
+                if self.goalTodos.isEmpty && !cachedGoalTodos.isEmpty {
                     self.goalTodos = cachedGoalTodos
                 }
+            } catch {
+                print("⚠️ TodoViewModel: Failed to load cached data: \(error)")
             }
         }
     }
@@ -84,9 +87,9 @@ class TodoViewModel: ObservableObject {
                 self?.todos = todos
                 self?.isLoading = false
 
-                // Update cache in background
+                // Sync to SwiftData in background
                 Task {
-                    await DataCacheService.shared.save(todos, for: .todos)
+                    try? await SwiftDataService.shared.syncTodos(todos)
                 }
             }
     }
@@ -97,9 +100,9 @@ class TodoViewModel: ObservableObject {
             .sink { [weak self] goalTodos in
                 self?.goalTodos = goalTodos
 
-                // Update cache in background
+                // Sync to SwiftData in background
                 Task {
-                    await DataCacheService.shared.save(goalTodos, for: .goalTodos)
+                    try? await SwiftDataService.shared.syncGoalTodos(goalTodos)
                 }
             }
     }
