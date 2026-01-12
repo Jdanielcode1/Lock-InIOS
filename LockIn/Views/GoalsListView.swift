@@ -131,7 +131,7 @@ struct GoalsListView: View {
                                     Label("Archive", systemImage: "archivebox")
                                 }
                                 Button(role: .destructive) {
-                                    Task { await goalsViewModel.deleteGoal(goal) }
+                                    Task { await goalsViewModel.deleteGoalWithUndo(goal) }
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
@@ -162,7 +162,7 @@ struct GoalsListView: View {
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {
                                 Task {
-                                    await goalsViewModel.deleteGoal(goal)
+                                    await goalsViewModel.deleteGoalWithUndo(goal)
                                 }
                             } label: {
                                 Label("Delete", systemImage: "trash")
@@ -376,7 +376,7 @@ struct GoalsListView: View {
                                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                         Button(role: .destructive) {
                                             Task {
-                                                await todoViewModel.deleteTodo(todo)
+                                                await todoViewModel.deleteTodoWithUndo(todo)
                                             }
                                         } label: {
                                             Label("Delete", systemImage: "trash")
@@ -423,7 +423,7 @@ struct GoalsListView: View {
                                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                         Button(role: .destructive) {
                                             Task {
-                                                await todoViewModel.deleteGoalTodo(goalTodo)
+                                                await todoViewModel.deleteGoalTodoWithUndo(goalTodo)
                                             }
                                         } label: {
                                             Label("Delete", systemImage: "trash")
@@ -522,7 +522,7 @@ struct GoalsListView: View {
                 Label("Archive", systemImage: "archivebox")
             }
             Button(role: .destructive) {
-                Task { await todoViewModel.deleteTodo(todo) }
+                Task { await todoViewModel.deleteTodoWithUndo(todo) }
             } label: {
                 Label("Delete", systemImage: "trash")
             }
@@ -555,7 +555,7 @@ struct GoalsListView: View {
                       systemImage: goalTodo.isCompleted ? "arrow.uturn.backward" : "checkmark")
             }
             Button(role: .destructive) {
-                Task { await todoViewModel.deleteGoalTodo(goalTodo) }
+                Task { await todoViewModel.deleteGoalTodoWithUndo(goalTodo) }
             } label: {
                 Label("Delete", systemImage: "trash")
             }

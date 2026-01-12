@@ -36,6 +36,11 @@ struct GoalDetailView: View {
         viewModel.goal ?? initialGoal
     }
 
+    // Detect if goal was deleted (viewModel.goal becomes nil after initial subscription)
+    private var isGoalDeleted: Bool {
+        viewModel.goal == nil && viewModel.hasReceivedInitialData
+    }
+
     init(goal: Goal, onStartSession: @escaping (String, String?, [GoalTodo]) -> Void) {
         self.initialGoal = goal
         self.onStartSession = onStartSession
@@ -132,7 +137,19 @@ struct GoalDetailView: View {
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {
                                 Task {
-                                    try? await ConvexService.shared.deleteGoalTodo(id: todo.id)
+                                    // Archive first, then hard delete after undo window
+                                    try? await ConvexService.shared.archiveGoalTodo(id: todo.id)
+
+                                    // Show toast with undo
+                                    ToastManager.shared.showDeleted(
+                                        "Task",
+                                        undoAction: {
+                                            Task { try? await ConvexService.shared.unarchiveGoalTodo(id: todo.id) }
+                                        },
+                                        hardDeleteAction: {
+                                            Task { try? await ConvexService.shared.deleteGoalTodo(id: todo.id) }
+                                        }
+                                    )
                                 }
                             } label: {
                                 Label("Delete", systemImage: "trash")
@@ -295,8 +312,20 @@ struct GoalDetailView: View {
 
                     Button(role: .destructive) {
                         Task {
-                            try? await ConvexService.shared.deleteGoal(id: goal.id)
+                            // Archive first, then hard delete after undo window
+                            try? await ConvexService.shared.archiveGoal(id: goal.id)
                             dismiss()
+
+                            // Show toast with undo, hard delete after 4 seconds
+                            ToastManager.shared.showDeleted(
+                                "Goal",
+                                undoAction: {
+                                    Task { try? await ConvexService.shared.unarchiveGoal(id: goal.id) }
+                                },
+                                hardDeleteAction: {
+                                    Task { try? await ConvexService.shared.deleteGoal(id: goal.id) }
+                                }
+                            )
                         }
                     } label: {
                         Label("Delete Goal", systemImage: "trash")
@@ -314,6 +343,13 @@ struct GoalDetailView: View {
         }
         .task {
             try? await ConvexService.shared.checkAndResetRecurringTodos(goalId: goal.id)
+        }
+        .onChange(of: isGoalDeleted) { _, deleted in
+            if deleted {
+                // Goal was deleted (e.g., from another device or via sync)
+                ToastManager.shared.showDeleted("Goal")
+                dismiss()
+            }
         }
         .overlay(alignment: .bottom) {
             if showUndoToast, let archivedTodo = recentlyArchivedTodo {
@@ -662,6 +698,7 @@ class GoalDetailViewModel: ObservableObject {
     @Published var goalTodos: [GoalTodo] = []
     @Published var isLoadingSessions = false
     @Published var canLoadMoreSessions = true
+    @Published var hasReceivedInitialData = false
 
     private var cancellables = Set<AnyCancellable>()
     private let convexService = ConvexService.shared
@@ -678,9 +715,8 @@ class GoalDetailViewModel: ObservableObject {
         convexService.subscribeToGoal(id: goalId)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] goal in
-                if let goal = goal {
-                    self?.goal = goal
-                }
+                self?.hasReceivedInitialData = true
+                self?.goal = goal  // Will be nil if deleted
             }
             .store(in: &cancellables)
 

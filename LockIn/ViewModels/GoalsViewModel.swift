@@ -127,6 +127,32 @@ class GoalsViewModel: ObservableObject {
         }
     }
 
+    /// Delete goal with undo support - archives first, then hard deletes after 4 seconds
+    func deleteGoalWithUndo(_ goal: Goal) async {
+        do {
+            // 1. Archive immediately (soft delete - item disappears from list)
+            try await convexService.archiveGoal(id: goal.id)
+
+            // 2. Show toast with undo option
+            ToastManager.shared.showDeleted(
+                "Goal",
+                undoAction: { [weak self] in
+                    Task {
+                        try? await self?.convexService.unarchiveGoal(id: goal.id)
+                    }
+                },
+                hardDeleteAction: { [weak self] in
+                    Task {
+                        try? await self?.convexService.deleteGoal(id: goal.id)
+                    }
+                }
+            )
+        } catch {
+            errorMessage = "Failed to delete goal: \(error.localizedDescription)"
+            ErrorAlertManager.shared.show(.saveFailed("Couldn't delete goal. Please try again."))
+        }
+    }
+
     func updateGoalStatus(_ goal: Goal, status: GoalStatus) async {
         do {
             try await convexService.updateGoalStatus(id: goal.id, status: status)

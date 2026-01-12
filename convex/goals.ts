@@ -181,7 +181,7 @@ export const unarchive = userMutation({
   },
 });
 
-// Mutation: Delete a goal
+// Mutation: Delete a goal (with cascade deletion of goal todos)
 export const remove = userMutation({
   args: { id: v.id("goals") },
   handler: async (ctx, args) => {
@@ -190,6 +190,17 @@ export const remove = userMutation({
     if (!goal) throw new Error("Goal not found");
     if (goal.userId !== userId) throw new Error("Not authorized");
 
+    // CASCADE: Delete all goal todos associated with this goal
+    const goalTodos = await ctx.db
+      .query("goalTodos")
+      .withIndex("by_goal", (q) => q.eq("goalId", args.id))
+      .collect();
+
+    for (const todo of goalTodos) {
+      await ctx.db.delete(todo._id);
+    }
+
+    // Delete the goal
     await ctx.db.delete(args.id);
   },
 });

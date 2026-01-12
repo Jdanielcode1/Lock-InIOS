@@ -178,6 +178,14 @@ struct RootView: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .zIndex(100)
             }
+
+            // Toast notifications for deletion undo (overlays content at bottom)
+            VStack {
+                Spacer()
+                ToastView()
+                    .padding(.bottom, 100)  // Above tab bar
+            }
+            .zIndex(99)
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: deepLinkManager.showReferralBanner)
         .withErrorAlerts()  // Global error alert handling

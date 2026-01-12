@@ -134,6 +134,32 @@ class TodoViewModel: ObservableObject {
         }
     }
 
+    /// Delete goal todo with undo support - archives first, then hard deletes after 4 seconds
+    func deleteGoalTodoWithUndo(_ todo: GoalTodo) async {
+        do {
+            // 1. Archive immediately (soft delete - item disappears from list)
+            try await convexService.archiveGoalTodo(id: todo.id)
+
+            // 2. Show toast with undo option
+            ToastManager.shared.showDeleted(
+                "Task",
+                undoAction: { [weak self] in
+                    Task {
+                        try? await self?.convexService.unarchiveGoalTodo(id: todo.id)
+                    }
+                },
+                hardDeleteAction: { [weak self] in
+                    Task {
+                        try? await self?.convexService.deleteGoalTodo(id: todo.id)
+                    }
+                }
+            )
+        } catch {
+            errorMessage = "Failed to delete task: \(error.localizedDescription)"
+            ErrorAlertManager.shared.show(.saveFailed("Couldn't delete task. Please try again."))
+        }
+    }
+
     func createTodo(title: String, description: String?) async {
         do {
             _ = try await convexService.createTodo(
@@ -200,6 +226,36 @@ class TodoViewModel: ObservableObject {
                 id: todo.id,
                 localVideoPath: todo.localVideoPath,
                 localThumbnailPath: todo.localThumbnailPath
+            )
+        } catch {
+            errorMessage = "Failed to delete todo: \(error.localizedDescription)"
+            ErrorAlertManager.shared.show(.saveFailed("Couldn't delete todo. Please try again."))
+        }
+    }
+
+    /// Delete todo with undo support - archives first, then hard deletes after 4 seconds
+    func deleteTodoWithUndo(_ todo: TodoItem) async {
+        do {
+            // 1. Archive immediately (soft delete - item disappears from list)
+            try await convexService.archiveTodo(id: todo.id)
+
+            // 2. Show toast with undo option
+            ToastManager.shared.showDeleted(
+                "To-do",
+                undoAction: { [weak self] in
+                    Task {
+                        try? await self?.convexService.unarchiveTodo(id: todo.id)
+                    }
+                },
+                hardDeleteAction: { [weak self] in
+                    Task {
+                        try? await self?.convexService.deleteTodo(
+                            id: todo.id,
+                            localVideoPath: todo.localVideoPath,
+                            localThumbnailPath: todo.localThumbnailPath
+                        )
+                    }
+                }
             )
         } catch {
             errorMessage = "Failed to delete todo: \(error.localizedDescription)"

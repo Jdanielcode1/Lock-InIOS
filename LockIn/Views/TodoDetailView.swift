@@ -30,6 +30,11 @@ struct TodoDetailView: View {
         todoViewModel.todos.first(where: { $0.id == initialTodo.id }) ?? initialTodo
     }
 
+    // Detect if todo was deleted (no longer in the subscription list)
+    private var isTodoDeleted: Bool {
+        !todoViewModel.isLoading && !todoViewModel.todos.isEmpty && todoViewModel.todos.first(where: { $0.id == initialTodo.id }) == nil
+    }
+
     init(todo: TodoItem) {
         self.initialTodo = todo
         _title = State(initialValue: todo.title)
@@ -237,7 +242,7 @@ struct TodoDetailView: View {
                     Task { await deleteTodo() }
                 }
             } message: {
-                Text("This can't be undone.")
+                Text("You can undo this for a few seconds after deleting.")
             }
             .onChange(of: todo.isCompleted) { _, newValue in
                 isCompleted = newValue
@@ -247,6 +252,13 @@ struct TodoDetailView: View {
             }
             .onChange(of: todo.localThumbnailPath) { _, _ in
                 loadThumbnail()
+            }
+            .onChange(of: isTodoDeleted) { _, deleted in
+                if deleted {
+                    // Todo was deleted (e.g., from another device or via sync)
+                    ToastManager.shared.showDeleted("To-do")
+                    dismiss()
+                }
             }
         }
     }
@@ -287,13 +299,28 @@ struct TodoDetailView: View {
     }
 
     private func deleteTodo() async {
+        let todoToDelete = todo
         do {
-            try await convexService.deleteTodo(
-                id: todo.id,
-                localVideoPath: todo.localVideoPath,
-                localThumbnailPath: todo.localThumbnailPath
-            )
+            // Archive first (soft delete - item disappears from list)
+            try await convexService.archiveTodo(id: todoToDelete.id)
             dismiss()
+
+            // Show toast with undo, hard delete after 4 seconds
+            ToastManager.shared.showDeleted(
+                "To-do",
+                undoAction: {
+                    Task { try? await convexService.unarchiveTodo(id: todoToDelete.id) }
+                },
+                hardDeleteAction: {
+                    Task {
+                        try? await convexService.deleteTodo(
+                            id: todoToDelete.id,
+                            localVideoPath: todoToDelete.localVideoPath,
+                            localThumbnailPath: todoToDelete.localThumbnailPath
+                        )
+                    }
+                }
+            )
         } catch {
             print("Failed to delete: \(error)")
         }
