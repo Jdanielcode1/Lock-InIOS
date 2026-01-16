@@ -13,30 +13,39 @@ import AudioToolbox
 // Timelapse speed options
 enum TimelapseSpeed: String, CaseIterable {
     case normal = "Normal"
+    case iphoneMode = "iPhone"
     case timelapse = "Timelapse"
     case ultraFast = "Ultra Fast"
-    case iphoneMode = "iPhone"
 
     var captureInterval: TimeInterval {
         switch self {
         case .normal: return 0.0         // Capture every camera frame (true real-time ~30fps)
+        case .iphoneMode: return 0.5     // Initial interval (auto-adjusts over time)
         case .timelapse: return 0.5      // 2 fps - 15x speedup
         case .ultraFast: return 2.0      // 0.5 fps - 60x speedup
-        case .iphoneMode: return 0.5     // Initial interval (auto-adjusts over time)
         }
     }
 
     var rateLabel: String {
         switch self {
         case .normal: return "30 fps"
+        case .iphoneMode: return "Auto"
         case .timelapse: return "2 fps"
         case .ultraFast: return "0.5 fps"
-        case .iphoneMode: return "Auto"
         }
     }
 
     var isDynamicInterval: Bool {
         return self == .iphoneMode
+    }
+
+    /// Returns visible modes based on whether advanced modes are enabled
+    static func visibleCases(showAdvanced: Bool) -> [TimelapseSpeed] {
+        if showAdvanced {
+            return allCases
+        } else {
+            return [.normal, .iphoneMode]
+        }
     }
 }
 
@@ -50,6 +59,7 @@ struct TimeLapseRecorderView: View {
     @Environment(\.horizontalSizeClass) var sizeClass
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var recordingSession: RecordingSessionManager
+    @AppStorage("showAdvancedTimelapseModes") private var showAdvancedTimelapseModes = false
     private var sizing: AdaptiveSizing {
         AdaptiveSizing(horizontalSizeClass: sizeClass)
     }
@@ -60,7 +70,7 @@ struct TimeLapseRecorderView: View {
     @State private var errorMessage: String?
     @State private var previewThumbnail: UIImage?
     @State private var player: AVPlayer?
-    @State private var selectedSpeed: TimelapseSpeed = .timelapse
+    @State private var selectedSpeed: TimelapseSpeed = .iphoneMode
     @State private var showMicUnavailableMessage = false
 
     // Countdown timer state
@@ -1387,7 +1397,7 @@ struct TimeLapseRecorderView: View {
 
     var speedSelector: some View {
         HStack(spacing: 12) {
-            ForEach(TimelapseSpeed.allCases, id: \.self) { speed in
+            ForEach(TimelapseSpeed.visibleCases(showAdvanced: showAdvancedTimelapseModes), id: \.self) { speed in
                 Button {
                     selectedSpeed = speed
                     recorder.setCaptureInterval(

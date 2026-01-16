@@ -2,6 +2,9 @@
 .convex/
 node_modules/
 
+# Build
+build/
+
 # Xcode
 *.xcodeproj/xcuserdata/
 *.xcworkspace/xcuserdata/

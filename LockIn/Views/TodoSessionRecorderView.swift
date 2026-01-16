@@ -19,6 +19,7 @@ struct TodoSessionRecorderView: View {
     @Environment(\.horizontalSizeClass) var sizeClass
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var recordingSession: RecordingSessionManager
+    @AppStorage("showAdvancedTimelapseModes") private var showAdvancedTimelapseModes = false
     private var sizing: AdaptiveSizing {
         AdaptiveSizing(horizontalSizeClass: sizeClass)
     }
@@ -27,7 +28,7 @@ struct TodoSessionRecorderView: View {
     @State private var uploadProgress: Double = 0
     @State private var errorMessage: String?
     @State private var player: AVPlayer?
-    @State private var selectedSpeed: TimelapseSpeed = .timelapse
+    @State private var selectedSpeed: TimelapseSpeed = .iphoneMode
 
     // Todo tracking during session
     @State private var checkedTodoIds: Set<String> = []
@@ -1210,7 +1211,7 @@ struct TodoSessionRecorderView: View {
 
     var speedSelector: some View {
         HStack(spacing: 12) {
-            ForEach(TimelapseSpeed.allCases, id: \.self) { speed in
+            ForEach(TimelapseSpeed.visibleCases(showAdvanced: showAdvancedTimelapseModes), id: \.self) { speed in
                 Button {
                     selectedSpeed = speed
                     recorder.setCaptureInterval(

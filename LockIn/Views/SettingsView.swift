@@ -13,6 +13,7 @@ struct SettingsView: View {
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
     @AppStorage("hapticFeedback") private var hapticFeedback = true
+    @AppStorage("showAdvancedTimelapseModes") private var showAdvancedTimelapseModes = false
     @State private var showingLogoutAlert = false
     @State private var showingDeleteAccountAlert = false
     @State private var showingClearCacheAlert = false
@@ -126,8 +127,14 @@ struct SettingsView: View {
                     Toggle(isOn: $hapticFeedback) {
                         Label("Haptic Feedback", systemImage: "hand.tap.fill")
                     }
+
+                    Toggle(isOn: $showAdvancedTimelapseModes) {
+                        Label("Advanced Recording Modes", systemImage: "film.stack.fill")
+                    }
                 } header: {
                     Text("Preferences")
+                } footer: {
+                    Text("Shows Timelapse and Ultra Fast options in the recorder")
                 }
 
                 // Storage
