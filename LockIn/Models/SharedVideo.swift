@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct SharedVideo: Identifiable, Codable {
+struct SharedVideo: Identifiable, Codable, Equatable {
     let _id: String
     let userId: String
     let r2Key: String

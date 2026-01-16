@@ -159,12 +159,16 @@ struct MyStoriesViewer: View {
 
     private func loadVideos() {
         ConvexService.shared.listMySharedVideos()
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { videos in
-                self.videos = videos
+                // Deduplicate by ID to prevent any duplicate entries
+                var seen = Set<String>()
+                let uniqueVideos = videos.filter { seen.insert($0.id).inserted }
+                self.videos = uniqueVideos
                 self.isLoading = false
-                if !videos.isEmpty {
-                    loadVideo(at: 0)
+                if !uniqueVideos.isEmpty {
+                    self.loadVideo(at: 0)
                 }
             }
             .store(in: &cancellableHolder.cancellables)

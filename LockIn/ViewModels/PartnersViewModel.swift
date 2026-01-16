@@ -95,9 +95,13 @@ class PartnersViewModel: ObservableObject {
 
         // Subscribe to videos shared with me
         convexService.listSharedWithMe()
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] videos in
-                self?.sharedWithMe = videos
+                // Deduplicate by ID to prevent any duplicate entries
+                var seen = Set<String>()
+                let uniqueVideos = videos.filter { seen.insert($0.id).inserted }
+                self?.sharedWithMe = uniqueVideos
             }
             .store(in: &dataSubscriptions)
     }

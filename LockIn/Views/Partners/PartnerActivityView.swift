@@ -82,6 +82,10 @@ struct PartnerActivityView: View {
             }
             subscribeToPartnerVideos()
         }
+        .onDisappear {
+            // Cancel subscriptions when view disappears to prevent accumulation
+            cancellableHolder.cancellables.removeAll()
+        }
         .fullScreenCover(isPresented: $showVideoPlayer) {
             if let url = videoURL {
                 SharedVideoPlayerView(videoURL: url, title: selectedVideo?.contextDescription ?? "Shared Video")
@@ -91,9 +95,13 @@ struct PartnerActivityView: View {
 
     private func subscribeToPartnerVideos() {
         ConvexService.shared.getPartnerActivity(partnerId: partner.partnerId)
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { videos in
-                self.partnerVideos = videos
+                // Deduplicate by ID to prevent any duplicate entries
+                var seen = Set<String>()
+                let uniqueVideos = videos.filter { seen.insert($0.id).inserted }
+                self.partnerVideos = uniqueVideos
                 self.isLoading = false
             }
             .store(in: &cancellableHolder.cancellables)
